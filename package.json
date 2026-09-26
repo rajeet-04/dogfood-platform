@@ -1,0 +1,43 @@
+{
+  "name": "dogfood",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @dogfood/web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:acceptance": "playwright test",
+    "test:all": "vitest run && playwright test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @dogfood/db generate",
+    "db:migrate": "pnpm --filter @dogfood/db migrate",
+    "db:seed": "pnpm --filter @dogfood/db seed"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@dogfood/audit": "workspace:*",
+    "@dogfood/auth": "workspace:*",
+    "@dogfood/db": "workspace:*",
+    "@dogfood/events": "workspace:*",
+    "@dogfood/judging": "workspace:*",
+    "@dogfood/normalization": "workspace:*",
+    "@dogfood/permissions": "workspace:*",
+    "@dogfood/ranking": "workspace:*",
+    "@dogfood/scoring": "workspace:*",
+    "@dogfood/shared": "workspace:*",
+    "@dogfood/submissions": "workspace:*",
+    "@dogfood/teams": "workspace:*",
+    "@dogfood/validation": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

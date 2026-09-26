@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.log
+.env
+.env.*
+!.env.example
+data/
+tmp/
+.drizzle/
+*.tsbuildinfo
+.DS_Store
