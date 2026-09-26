@@ -4,3 +4,4 @@ export type { EventRole, EventState } from "./enums";
 export { users } from "./users";
 export { sessions } from "./sessions";
 export { events, eventMemberships, eventRole, eventState } from "./events";
+export { teamMembers, teams, teamInvites } from "./teams";
