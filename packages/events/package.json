@@ -12,6 +12,7 @@
   "dependencies": {
     "@dogfood/db": "workspace:*",
     "@dogfood/validation": "workspace:*",
-    "@dogfood/shared": "workspace:*"
+    "@dogfood/shared": "workspace:*",
+    "@dogfood/permissions": "workspace:*"
   }
 }

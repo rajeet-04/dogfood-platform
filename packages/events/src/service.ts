@@ -1,4 +1,5 @@
 import { and, db, eq, schema, type EventRole, type EventState } from "@dogfood/db";
+import { ACTION, requirePermission, type Action } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
 
@@ -19,6 +20,37 @@ export type CreateEventInput = {
 
 export type EventRow = typeof schema.events.$inferSelect;
 export type MembershipRow = typeof schema.eventMemberships.$inferSelect;
+
+async function membershipRoles(
+  userId: string,
+  eventId: string,
+): Promise<EventRole[]> {
+  const rows = await db
+    .select({ role: schema.eventMemberships.role })
+    .from(schema.eventMemberships)
+    .where(
+      and(
+        eq(schema.eventMemberships.userId, userId),
+        eq(schema.eventMemberships.eventId, eventId),
+      ),
+    );
+  return rows.map((row) => row.role);
+}
+
+async function requireEventPermission(
+  actor: Actor,
+  eventId: string,
+  eventState: EventState,
+  action: Action,
+): Promise<void> {
+  const roles = await membershipRoles(actor.userId, eventId);
+  requirePermission(actor, action, {
+    eventId,
+    resourceEventId: eventId,
+    roles,
+    eventState,
+  });
+}
 
 export async function createEvent(
   actor: Actor,
@@ -51,72 +83,90 @@ export async function createEvent(
 }
 
 export async function transitionEvent(
-  _actor: Actor,
+  actor: Actor,
   eventId: string,
   toState: EventState,
 ): Promise<EventRow> {
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(schema.events)
-      .where(eq(schema.events.id, eventId))
-      .limit(1);
-    const event = rows[0];
-    if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  const rows = await db
+    .select()
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  const event = rows[0];
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
 
-    assertEventTransition(event.state as EventState, toState);
+  await requireEventPermission(
+    actor,
+    event.id,
+    event.state as EventState,
+    ACTION.EVENT_TRANSITION,
+  );
 
-    const [updated] = await tx
-      .update(schema.events)
-      .set({ state: toState, updatedAt: new Date() })
-      .where(eq(schema.events.id, eventId))
-      .returning();
-    return updated;
-  });
+  assertEventTransition(event.state as EventState, toState);
+
+  const [updated] = await db
+    .update(schema.events)
+    .set({ state: toState, updatedAt: new Date() })
+    .where(eq(schema.events.id, eventId))
+    .returning();
+  return updated;
 }
 
 export async function grantEventMembership(
-  _actor: Actor,
+  actor: Actor,
   eventId: string,
   userId: string,
   role: EventRole,
 ): Promise<MembershipRow> {
-  return db.transaction(async (tx) => {
-    const existing = await tx
-      .select()
-      .from(schema.eventMemberships)
-      .where(
-        and(
-          eq(schema.eventMemberships.eventId, eventId),
-          eq(schema.eventMemberships.userId, userId),
-        ),
-      )
-      .limit(1);
-    const current = existing[0];
+  const events = await db
+    .select({ state: schema.events.state })
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  const event = events[0];
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
 
-    if (current) {
-      if (current.role === role) return current;
-      const conflict =
-        (current.role === "ORGANIZER" && role === "JUDGE") ||
-        (current.role === "JUDGE" && role === "ORGANIZER");
-      if (conflict) {
-        throw new DogfoodError(
-          "FORBIDDEN",
-          "A user cannot be both organizer and judge in the same event",
-        );
-      }
-      const [updated] = await tx
-        .update(schema.eventMemberships)
-        .set({ role })
-        .where(eq(schema.eventMemberships.id, current.id))
-        .returning();
-      return updated;
+  await requireEventPermission(
+    actor,
+    eventId,
+    event.state as EventState,
+    ACTION.MEMBER_INVITE,
+  );
+
+  const existing = await db
+    .select()
+    .from(schema.eventMemberships)
+    .where(
+      and(
+        eq(schema.eventMemberships.eventId, eventId),
+        eq(schema.eventMemberships.userId, userId),
+      ),
+    )
+    .limit(1);
+  const current = existing[0];
+
+  if (current) {
+    if (current.role === role) return current;
+    const conflict =
+      (current.role === "ORGANIZER" && role === "JUDGE") ||
+      (current.role === "JUDGE" && role === "ORGANIZER");
+    if (conflict) {
+      throw new DogfoodError(
+        "FORBIDDEN",
+        "A user cannot be both organizer and judge in the same event",
+      );
     }
-
-    const [created] = await tx
-      .insert(schema.eventMemberships)
-      .values({ eventId, userId, role })
+    const [updated] = await db
+      .update(schema.eventMemberships)
+      .set({ role })
+      .where(eq(schema.eventMemberships.id, current.id))
       .returning();
-    return created;
-  });
+    return updated;
+  }
+
+  const [created] = await db
+    .insert(schema.eventMemberships)
+    .values({ eventId, userId, role })
+    .returning();
+  return created;
 }
