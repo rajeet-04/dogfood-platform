@@ -148,6 +148,21 @@ async function loadProjectById(projectId: string): Promise<ProjectRow | undefine
   return rows[0];
 }
 
+async function isUserOnProjectTeam(userId: string, projectId: string): Promise<boolean> {
+  const project = await loadProjectById(projectId);
+  if (!project?.teamId) return false;
+  const rows = await db
+    .select({ teamId: schema.teamMembers.teamId })
+    .from(schema.teamMembers)
+    .where(
+      and(
+        eq(schema.teamMembers.teamId, project.teamId),
+        eq(schema.teamMembers.userId, userId),
+      ),
+    );
+  return rows.length > 0;
+}
+
 async function loadRevisionById(
   revisionId: string | null,
 ): Promise<RevisionRow | undefined> {
@@ -346,6 +361,13 @@ export async function assignJudge(
     );
   }
 
+  if (await isUserOnProjectTeam(input.judgeId, project.id)) {
+    throw new DogfoodError(
+      "CONFLICT",
+      "A judge cannot be assigned to a project from their own team",
+    );
+  }
+
   try {
     const assignment = await db.transaction(async (tx) => {
       const [assignment] = await tx
@@ -378,6 +400,47 @@ export async function assignJudge(
     }
     throw error;
   }
+}
+
+export async function unassignJudge(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+): Promise<void> {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+
+  await requireEventPermission(
+    actor,
+    eventId,
+    event.state as EventState,
+    ACTION.EVENT_CONFIGURE,
+  );
+
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+  if (assignment.status !== "ASSIGNED") {
+    throw new DogfoodError(
+      "VALIDATION_FAILED",
+      `Cannot unassign an assignment in "${assignment.status}" state`,
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(schema.judgeAssignments)
+      .where(eq(schema.judgeAssignments.id, assignment.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "judge.unassign",
+      resourceType: "judge_assignment",
+      resourceId: assignment.id,
+      metadata: { judgeId: assignment.judgeId, projectId: assignment.projectId },
+    });
+  });
 }
 
 export async function getJudgeQueue(
@@ -604,6 +667,13 @@ export async function startEvaluation(
     assignment,
     ACTION.EVALUATION_SUBMIT,
   );
+
+  if (await isUserOnProjectTeam(actor.userId, assignment.projectId)) {
+    throw new DogfoodError(
+      "CONFLICT",
+      "A judge cannot evaluate a project from their own team",
+    );
+  }
 
   const rubric = await loadActiveRubric(eventId);
   if (!rubric) {

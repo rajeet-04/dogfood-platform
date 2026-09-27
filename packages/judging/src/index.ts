@@ -18,6 +18,7 @@ export {
   addCriterion,
   activateRubric,
   assignJudge,
+  unassignJudge,
   getJudgeQueue,
   getJudgeQueueItem,
   getAssignedProject,

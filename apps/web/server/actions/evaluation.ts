@@ -7,6 +7,7 @@ import {
   saveEvaluationDraft,
   startEvaluation,
   submitEvaluation,
+  unassignJudge,
   type EvaluationScoreInput,
 } from "@dogfood/judging";
 
@@ -82,6 +83,19 @@ export async function submitEvaluationAction(
       overallComment,
     });
     revalidatePath(`/events/${eventId}/judge`);
+  });
+}
+
+export async function unassignJudgeAction(
+  eventId: string,
+  assignmentId: string,
+  _prev: FormState | undefined,
+  _formData: FormData,
+): Promise<FormState | undefined> {
+  const actor = await requireActor();
+  return runAction(async () => {
+    await unassignJudge(actor, eventId, assignmentId);
+    revalidatePath(`/events/${eventId}/organizer`);
   });
 }
 
