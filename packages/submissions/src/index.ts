@@ -1,2 +1,13 @@
-// Projects, immutable revisions, deadline enforcement. Implemented in the phase documents; present here as a stable module boundary.
-export {};
+export {
+  createProject,
+  reviseProject,
+  submitProject,
+  withdrawProject,
+  assertSubmissionWindow,
+  validateSubmissionCompleteness,
+} from "./service";
+export type {
+  CreateProjectInput,
+  ProjectDetail,
+  RevisionInput,
+} from "./service";
