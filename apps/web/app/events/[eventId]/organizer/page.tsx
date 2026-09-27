@@ -21,6 +21,11 @@ import {
   lockAllSubmissionsAction,
 } from "../../../../server/actions/evaluation";
 import {
+  addMemberAction,
+  changeMemberRoleAction,
+  removeMemberAction,
+} from "../../../../server/actions/members";
+import {
   generateRankingAction,
   publishRankingAction,
 } from "../../../../server/actions/ranking";
@@ -134,6 +139,99 @@ export default async function OrganizerPage({
           <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
             Scores are visible after results are ready.
           </p>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 text-lg font-semibold">Members</h2>
+        <div className="mb-4 rounded-md border border-dashed border-slate-300 p-4">
+          <h3 className="mb-3 text-sm font-semibold">
+            Add a member by email
+          </h3>
+          <ActionForm
+            action={addMemberAction.bind(null, eventId)}
+            submitLabel="Add member"
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block text-sm font-medium">
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder="someone@example.com"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Role
+                <select
+                  name="role"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="PARTICIPANT">Participant</option>
+                  <option value="JUDGE">Judge</option>
+                </select>
+              </label>
+            </div>
+          </ActionForm>
+        </div>
+        {doc.members.length === 0 ? (
+          <p className="text-sm text-slate-500">No members yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {doc.members.map((member) => (
+              <li
+                key={member.userId}
+                data-testid="member-row"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {member.displayName}{" "}
+                    <span className="text-xs text-slate-400">
+                      ({member.email})
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Current role: {member.role}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ActionForm
+                    action={changeMemberRoleAction.bind(
+                      null,
+                      eventId,
+                      member.userId,
+                    )}
+                    submitLabel="Update role"
+                    submitDisabled={actor.userId === member.userId}
+                    className="flex items-end gap-2"
+                  >
+                    <select
+                      name="role"
+                      defaultValue={member.role}
+                      aria-label={`Role for ${member.displayName}`}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    >
+                      <option value="PARTICIPANT">Participant</option>
+                      <option value="JUDGE">Judge</option>
+                    </select>
+                  </ActionForm>
+                  {actor.userId !== member.userId ? (
+                    <ActionForm
+                      action={removeMemberAction.bind(
+                        null,
+                        eventId,
+                        member.userId,
+                      )}
+                      submitLabel="Remove"
+                    />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

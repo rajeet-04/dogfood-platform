@@ -155,4 +155,19 @@ describe("permission matrix", () => {
       requirePermission(actor("o1"), ACTION.EVENT_CONFIGURE, ctx({ roles: ["ORGANIZER"] })),
     ).toBeUndefined();
   });
+
+  it("allows any signed-in actor to join an event at the policy level", () => {
+    expect(can(actor("u1"), ACTION.EVENT_JOIN, ctx({ roles: [] }))).toBe(true);
+    expect(can(actor("u1"), ACTION.EVENT_JOIN, ctx({ roles: ["PARTICIPANT"] }))).toBe(true);
+    expect(can(actor("o1"), ACTION.EVENT_JOIN, ctx({ roles: ["ORGANIZER"] }))).toBe(true);
+    expect(can(actor("j1"), ACTION.EVENT_JOIN, ctx({ roles: ["JUDGE"] }))).toBe(true);
+  });
+
+  it("keeps member management organizer-only", () => {
+    expect(can(actor("o1"), ACTION.MEMBER_INVITE, ctx({ roles: ["ORGANIZER"] }))).toBe(true);
+    expect(can(actor("o1"), ACTION.MEMBER_REMOVE, ctx({ roles: ["ORGANIZER"] }))).toBe(true);
+    expect(can(actor("p1"), ACTION.MEMBER_INVITE, ctx({ roles: ["PARTICIPANT"] }))).toBe(false);
+    expect(can(actor("j1"), ACTION.MEMBER_REMOVE, ctx({ roles: ["JUDGE"] }))).toBe(false);
+    expect(can(actor("u1"), ACTION.MEMBER_INVITE, ctx({ roles: [] }))).toBe(false);
+  });
 });

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, db, eq, schema } from "@dogfood/db";
 
+import { ActionForm } from "../../../components/action-form";
 import { EVENT_STATE_LABEL } from "../../../lib/event-flow";
+import { joinEventAction } from "../../../server/actions/members";
 import { getActor } from "../../../server/session";
 
 export const dynamic = "force-dynamic";
@@ -74,9 +76,21 @@ export default async function EventLandingPage({
           ))}
         </ul>
       ) : (
-        <p className="text-slate-500">
-          You are not part of this event yet.
-        </p>
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6">
+          <p className="text-slate-500">
+            {actor
+              ? "You are not part of this event yet."
+              : "Sign in to join this event."}
+          </p>
+          {actor && event.state === "REGISTRATION" ? (
+            <div className="mt-4">
+              <ActionForm
+                action={joinEventAction.bind(null, eventId)}
+                submitLabel="Join as participant"
+              />
+            </div>
+          ) : null}
+        </div>
       )}
     </main>
   );
