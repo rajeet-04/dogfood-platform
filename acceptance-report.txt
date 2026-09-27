@@ -1,0 +1,63 @@
+DOGFOOD Acceptance Report
+=========================
+Date:      2026-09-25
+Commit:    c0619fb (+ 11d037b hardening)  [final tag recorded at submission]
+Platform:  Windows 11, Node v22.15.0, pnpm 12.5.1, PostgreSQL 17 (portable)
+
+Result: PASS for all exercised gates. No required-T1/T2 failures.
+
+Suite results
+-------------
+unit        65/65  green   (9 files)
+integration 71/71  green   (12 files; 137 tests total across the suites)
+playwright   3/3   green   (participant, judge, organizer end-to-end)
+
+Total vitest: 21 files, 137 tests, all passing. pnpm typecheck: green across
+all 16 workspace packages.
+
+Clean boot (no Docker on this machine; adapted with portable PostgreSQL)
+-----------------------------------------------------------------------
+Created a fresh scratch database, applied the 7 committed migrations from
+empty, booted the app, and verified:
+
+  GET /api/health -> 200 {"status":"ok"}
+  GET /api/ready  -> 200 {"status":"ready","database":"ok","migrations":"applied"}
+
+Scratch database destroyed afterwards. In a Docker environment the same flow
+is `docker compose up` (db health gate precedes web) + `pnpm db:migrate`.
+
+Authorization abuse matrix (all automated and passing)
+------------------------------------------------------
+- participant -> organizer endpoint                     FORBIDDEN 403 (api-v1, exports route)
+- judge -> unassigned project read / other judge eval  FORBIDDEN  (permissions, evaluation, isolation)
+- event A IDs under event B                            NOT_FOUND/FORBIDDEN (cross-event, scoping)
+- organizer raw-score read during JUDGING              FORBIDDEN until evaluation locked
+- direct service/API submission after deadline         DEADLINE_PASSED (unit + integration)
+
+Other hardened gates (green)
+----------------------------
+- Transactional rollback: mutation + audit event roll back together.
+- Ranking reproducibility: same inputs generate byte-identical results;
+  re-reading a snapshot never recomputes it.
+- CSV exports: RFC4180 escaping, empty-result header-only output, organizer-only.
+- Deadline boundaries: writes at/after close rejected; server time authoritative.
+- Audit: append-only, event-scoped reads.
+
+Notes
+-----
+- The official/released acceptance suite is not published yet (it ships with
+  the hackathon release artifacts). This report covers the local suite; the
+  official suite will be run against this commit when released.
+- Network-off smoke test and the Compose boot were not literally exercised
+  because Docker is unavailable on this machine; the required path has no
+  third-party cloud dependency by design (only app + PostgreSQL).
+
+How to reproduce
+----------------
+  pnpm install
+  docker compose up -d db          # or portable Postgres per README
+  pnpm db:migrate
+  pnpm dev                         # then: curl /api/health and /api/ready
+  pnpm test                        # vitest (unit + integration)
+  pnpm test:acceptance             # playwright
+  pnpm typecheck
