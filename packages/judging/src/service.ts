@@ -10,6 +10,7 @@ import {
 import { ACTION, requirePermission, type Action } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { appendAuditEvent } from "@dogfood/audit";
 
 import {
   assertCriterionInput,
@@ -301,16 +302,27 @@ export async function assignJudge(
   }
 
   try {
-    const [assignment] = await db
-      .insert(schema.judgeAssignments)
-      .values({
+    const assignment = await db.transaction(async (tx) => {
+      const [assignment] = await tx
+        .insert(schema.judgeAssignments)
+        .values({
+          eventId,
+          judgeId: input.judgeId,
+          projectId: project.id,
+          status: "ASSIGNED",
+          assignedBy: actor.userId,
+        })
+        .returning();
+      await appendAuditEvent(tx, {
         eventId,
-        judgeId: input.judgeId,
-        projectId: project.id,
-        status: "ASSIGNED",
-        assignedBy: actor.userId,
-      })
-      .returning();
+        actorId: actor.userId,
+        action: "judge.assign",
+        resourceType: "judge_assignment",
+        resourceId: assignment.id,
+        metadata: { judgeId: input.judgeId, projectId: project.id },
+      });
+      return assignment;
+    });
     return assignment;
   } catch (error) {
     if (sqlState(error) === "23505") {

@@ -10,3 +10,5 @@ if (!url) {
 
 export const client = postgres(url, { max: 5, prepare: false });
 export const db = drizzle(client, { schema });
+
+export type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];

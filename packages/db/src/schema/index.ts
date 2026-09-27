@@ -12,3 +12,4 @@ export {
   judgeAssignments,
   judgeTrackScopes,
 } from "./judging";
+export { auditEvents } from "./audit";

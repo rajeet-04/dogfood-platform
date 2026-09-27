@@ -1,18 +1,19 @@
 {
-  "name": "@dogfood/submissions",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@dogfood/db": "workspace:*",
-    "@dogfood/permissions": "workspace:*",
-    "@dogfood/validation": "workspace:*",
-    "@dogfood/shared": "workspace:*"
-  }
+    "name":  "@dogfood/submissions",
+    "private":  true,
+    "version":  "0.1.0",
+    "type":  "module",
+    "exports":  {
+                    ".":  "./src/index.ts"
+                },
+    "scripts":  {
+                    "typecheck":  "tsc --noEmit"
+                },
+    "dependencies":  {
+                         "@dogfood/db":  "workspace:*",
+                         "@dogfood/permissions":  "workspace:*",
+                         "@dogfood/validation":  "workspace:*",
+                         "@dogfood/shared":  "workspace:*",
+                         "@dogfood/audit":  "workspace:*"
+                     }
 }

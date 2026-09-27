@@ -4,6 +4,7 @@ import { db, desc, eq, schema, sqlState, type EventState } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { appendAuditEvent } from "@dogfood/audit";
 
 import { assertSubmissionWindow, validateSubmissionCompleteness } from "./domain";
 import {
@@ -234,6 +235,14 @@ export async function reviseProject(
       .update(schema.projects)
       .set({ currentRevisionId: revision.id })
       .where(eq(schema.projects.id, projectId));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "project.revise",
+      resourceType: "project",
+      resourceId: projectId,
+      metadata: { revisionNumber: next, revisionId: revision.id },
+    });
   });
 
   const updated = await getProjectById(projectId);
@@ -269,7 +278,19 @@ export async function submitProject(
     );
   }
 
-  await setProjectSubmissionState(project.id, "SUBMITTED", new Date());
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.projects)
+      .set({ state: "SUBMITTED", submittedAt: new Date() })
+      .where(eq(schema.projects.id, project.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "project.submit",
+      resourceType: "project",
+      resourceId: project.id,
+    });
+  });
   const updated = await getProjectById(project.id);
   if (!updated) throw new DogfoodError("NOT_FOUND", "Project not found");
   return toProjectDetail(updated);

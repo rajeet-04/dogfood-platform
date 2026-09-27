@@ -1,2 +1,6 @@
-// Append-only transactional audit trail. Implemented in the phase documents; present here as a stable module boundary.
-export {};
+export { appendAuditEvent, queryAudit } from "./service";
+export type {
+  AuditEventFilter,
+  AuditEventInput,
+  AuditEventRow,
+} from "./service";
