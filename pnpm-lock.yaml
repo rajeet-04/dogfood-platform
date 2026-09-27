@@ -398,7 +398,11 @@ importers:
 
   packages/ranking: {}
 
-  packages/scoring: {}
+  packages/scoring:
+    dependencies:
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/shared: {}
 
