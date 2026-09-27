@@ -43,6 +43,13 @@
       "when": 1790066579418,
       "tag": "0005_silent_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790268306881,
+      "tag": "0006_fat_sandman",
+      "breakpoints": true
     }
   ]
 }

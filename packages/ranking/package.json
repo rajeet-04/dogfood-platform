@@ -8,5 +8,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dogfood/audit": "workspace:*",
+    "@dogfood/db": "workspace:*",
+    "@dogfood/normalization": "workspace:*",
+    "@dogfood/permissions": "workspace:*",
+    "@dogfood/scoring": "workspace:*",
+    "@dogfood/shared": "workspace:*",
+    "@dogfood/validation": "workspace:*"
   }
 }
