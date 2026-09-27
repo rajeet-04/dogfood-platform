@@ -1,0 +1,27 @@
+name = "DOGFOOD"
+description = "Self-hosted hackathon submission and judging platform"
+version = "0.1.0"
+license = "MIT"
+repository = "public"
+
+[tiers]
+T1 = true
+T2 = true
+
+[claims]
+# T1/T2 required path: participant submit -> judge evaluation -> normalized
+# ranking -> publication, with event-scoped authorization, audit trail,
+# immutable revisions, exports, and operational readiness.
+participant_submission = true
+judge_evaluation = true
+normalization = true
+ranking_snapshots = true
+authorization_isolation = true
+transactional_audit = true
+csv_exports = true
+health_ready_endpoints = true
+
+[notes]
+# Reconcile `tiers`/`claims` with the official `.dogfood.toml` schema when the
+# released spec ships. See acceptance-report.txt for verification evidence and
+# ARCHITECTURE.md / JUDGING.md / DATA-MODEL.md for the technical narrative.

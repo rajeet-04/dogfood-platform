@@ -2,11 +2,17 @@
 
 Self-hosted hackathon submission and judging platform. Modular monolith: Next.js + TypeScript + PostgreSQL + Drizzle.
 
+**Docs:** see [ARCHITECTURE.md](./ARCHITECTURE.md) (components, boundaries,
+security), [DATA-MODEL.md](./DATA-MODEL.md) (tables and constraints),
+[JUDGING.md](./JUDGING.md) (scoring/normalization/ranking math and
+"verify this yourself" isolation proofs), and
+[acceptance-report.txt](./acceptance-report.txt) (pass/fail evidence).
+
 ## Stack
 
 - **App:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4
 - **Database:** PostgreSQL 17 + Drizzle ORM
-- **Packages:** pnpm workspaces (14 domain/db packages)
+- **Packages:** pnpm workspaces (15 domain/db packages)
 - **Tests:** Vitest (unit/integration), Playwright (acceptance)
 - **Runtime contract:** Docker Compose (`web` + `db`) with no mandatory third-party cloud service
 
@@ -18,9 +24,21 @@ Self-hosted hackathon submission and judging platform. Modular monolith: Next.js
 
 ## Quick start
 
+One command for the full stack (database + web):
+
+```bash
+docker compose up
+```
+
+Then open http://localhost:3000. Docker Compose starts PostgreSQL, waits for
+its health check, and boots the web app. Migrations are applied before startup
+is considered ready (`GET /api/ready`).
+
+For local development instead:
+
 ```bash
 pnpm install            # install workspace
-docker compose up -d db # start postgres (or: docker compose up for web + db full stack)
+docker compose up -d db # start postgres (or bootstrap a local PG)
 pnpm db:migrate         # apply migrations
 pnpm dev                # run web app at http://localhost:3000
 pnpm test               # vitest (unit + integration)
@@ -38,6 +56,15 @@ and is the fixture baseline the test suite assumes.
 **No Docker?** A managed local PostgreSQL can be booted with
 `powershell -File scripts/dev-db.ps1 start` (expects a portable PG install on
 this machine; see the script header for paths).
+
+## Accounts and ports
+
+- Web app runs on **port 3000** (`PORT`), PostgreSQL on **port 5432**.
+- There are no built-in fixture accounts: the organizer registers through the
+  UI, creates an event, and invites/granted members act as participants and
+  judges. Every user authenticates with an email + password (Argon2id).
+- Test suite uses a separate database (`DATABASE_URL_TEST`, defaults to
+  `dogfood_test`) so it never clobbers development data.
 
 ## Repository layout
 
@@ -63,7 +90,10 @@ tests/
   integration/     DB-backed integration tests
   acceptance/      Playwright end-to-end flows
   fixtures/        Shared test fixtures
-docs/              Architecture and judging documentation (written as phases land)
+ARCHITECTURE.md    Components, boundaries, transactions, security assumptions
+DATA-MODEL.md      Tables, constraints, indexes, fixture/export paths
+JUDGING.md         Scoring math, normalization, ties, "verify this yourself"
+acceptance-report.txt  Pass/fail evidence for the acceptance gates
 ```
 
 Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pure scoring/normalization/ranking packages never import framework or database code.
@@ -77,3 +107,13 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   (`participants`, `teams`, `projects`, `judge-assignments`, `evaluations`,
   `results`) served as `text/csv; charset=utf-8`. Results export returns 404 until
   a ranking snapshot has been published.
+
+## Known limits
+
+- Normalization offers `z-score` and `none` strategies only (per-judge batch).
+- Track features are out of scope for T1/T2 (schema rows exist for scoped
+  judging; no track UI/API).
+- No built-in fixture users; organizers/signups create their own accounts.
+- The official released acceptance suite and `.dogfood.toml` schema are
+  expected from the hackathon release; when they arrive, run them against this
+  commit and reconcile the tier claim file.
