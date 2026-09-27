@@ -39,6 +39,29 @@ const STATUS_LABEL: Record<string, string> = {
   LOCKED: "Locked",
 };
 
+const ROLE_LABEL: Record<string, string> = {
+  PARTICIPANT: "Participant",
+  JUDGE: "Judge",
+  ORGANIZER: "Organizer",
+};
+
+const ROLE_PILL: Record<string, string> = {
+  PARTICIPANT: "bg-sky-50 text-sky-700",
+  JUDGE: "bg-indigo-50 text-indigo-700",
+  ORGANIZER: "bg-violet-50 text-violet-700",
+};
+
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  );
+}
+
 function formatDate(value: Date | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -142,72 +165,91 @@ export default async function OrganizerPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Members</h2>
-        <div className="mb-4 rounded-md border border-dashed border-slate-300 p-4">
-          <h3 className="mb-3 text-sm font-semibold">
-            Add a member by email
-          </h3>
+      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-lg font-semibold">Members</h2>
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+            {doc.members.length} total
+          </span>
+        </div>
+
+        <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-4">
           <ActionForm
             action={addMemberAction.bind(null, eventId)}
             submitLabel="Add member"
+            className="flex flex-wrap items-end gap-3 [&_button]:mt-0 [&_button]:rounded-lg [&_button]:bg-indigo-600 [&_button]:hover:bg-indigo-500"
           >
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="block text-sm font-medium">
-                Email
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder="someone@example.com"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="block text-sm font-medium">
-                Role
-                <select
-                  name="role"
-                  aria-label="Role for new member"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                >
-                  <option value="PARTICIPANT">Participant</option>
-                  <option value="JUDGE">Judge</option>
-                </select>
-              </label>
-            </div>
+            <label className="block min-w-56 flex-1 text-sm font-medium">
+              Email
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="someone@example.com"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Role
+              <select
+                name="role"
+                aria-label="Role for new member"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="PARTICIPANT">Participant</option>
+                <option value="JUDGE">Judge</option>
+              </select>
+            </label>
           </ActionForm>
+          <p className="mt-2 text-xs text-slate-500">
+            Invite someone by email, or let participants self-join from the
+            event page while registration is open.
+          </p>
         </div>
+
         {doc.members.length === 0 ? (
-          <p className="text-sm text-slate-500">No members yet.</p>
+          <p className="px-6 py-10 text-center text-sm text-slate-500">
+            No members yet.
+          </p>
         ) : (
-          <ul className="space-y-2">
+          <ul>
             {doc.members.map((member) => (
               <li
                 key={member.userId}
                 data-testid="member-row"
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 p-3"
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-50 px-6 py-4 last:border-0"
               >
-                <div>
-                  <p className="text-sm font-medium">
-                    {member.displayName}{" "}
-                    <span className="text-xs text-slate-400">
-                      ({member.email})
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Current role: {member.role}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">
+                    {initials(member.displayName)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-800">
+                      {member.displayName}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {member.email}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    data-testid="member-role"
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      ROLE_PILL[member.role] ?? "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {ROLE_LABEL[member.role] ?? member.role}
+                  </span>
                   <ActionForm
                     action={changeMemberRoleAction.bind(
                       null,
                       eventId,
                       member.userId,
                     )}
-                    submitLabel="Update role"
+                    submitLabel="Update"
                     submitDisabled={actor.userId === member.userId}
-                    className="flex items-end gap-2"
+                    className="flex items-end gap-2 [&_button]:mb-0.5 [&_button]:mt-0"
                   >
                     <select
                       name="role"
@@ -227,6 +269,7 @@ export default async function OrganizerPage({
                         member.userId,
                       )}
                       submitLabel="Remove"
+                      className="[&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600 [&_button]:mt-0"
                     />
                   ) : null}
                 </div>
