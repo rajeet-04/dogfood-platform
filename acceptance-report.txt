@@ -1,7 +1,7 @@
 DOGFOOD Acceptance Report
 =========================
 Date:      2026-09-25
-Commit:    c0619fb (+ 11d037b hardening)  [final tag recorded at submission]
+Commit:    ec8eeb3 (final tag v0.1.0; evidence commits c0619fb, 11d037b)
 Platform:  Windows 11, Node v22.15.0, pnpm 12.5.1, PostgreSQL 17 (portable)
 
 Result: PASS for all exercised gates. No required-T1/T2 failures.
