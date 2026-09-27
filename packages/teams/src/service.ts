@@ -4,6 +4,7 @@ import { db, schema, sql, sqlState, type EventState } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { appendAuditEvent } from "@dogfood/audit";
 
 import {
   deleteTeamMember,
@@ -89,6 +90,14 @@ export async function createTeam(
         userId: actor.userId,
         isOwner: true,
       });
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "team.create",
+        resourceType: "team",
+        resourceId: team.id,
+        metadata: { name: input.name },
+      });
       return team.id;
     });
   } catch (error) {
@@ -160,6 +169,14 @@ export async function joinTeam(
         .where(
           sql`${schema.teamInvites.id} = ${invite.id}`,
         );
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "team.join",
+        resourceType: "team",
+        resourceId: team.id,
+        metadata: { inviteId: invite.id },
+      });
     });
   } catch (error) {
     if (sqlState(error) === "23505") {

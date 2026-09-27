@@ -296,6 +296,9 @@ importers:
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@dogfood/shared':
         specifier: workspace:*
         version: link:../shared
@@ -336,6 +339,9 @@ importers:
 
   packages/events:
     dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
@@ -351,6 +357,9 @@ importers:
 
   packages/judging:
     dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
@@ -395,6 +404,9 @@ importers:
 
   packages/submissions:
     dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
@@ -410,6 +422,9 @@ importers:
 
   packages/teams:
     dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db

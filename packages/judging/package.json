@@ -1,21 +1,22 @@
 {
-  "name": "@dogfood/judging",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@dogfood/db": "workspace:*",
-    "@dogfood/permissions": "workspace:*",
-    "@dogfood/validation": "workspace:*",
-    "@dogfood/shared": "workspace:*",
-    "@dogfood/scoring": "workspace:*",
-    "@dogfood/normalization": "workspace:*",
-    "@dogfood/ranking": "workspace:*"
-  }
+    "name":  "@dogfood/judging",
+    "private":  true,
+    "version":  "0.1.0",
+    "type":  "module",
+    "exports":  {
+                    ".":  "./src/index.ts"
+                },
+    "scripts":  {
+                    "typecheck":  "tsc --noEmit"
+                },
+    "dependencies":  {
+                         "@dogfood/db":  "workspace:*",
+                         "@dogfood/permissions":  "workspace:*",
+                         "@dogfood/validation":  "workspace:*",
+                         "@dogfood/shared":  "workspace:*",
+                         "@dogfood/scoring":  "workspace:*",
+                         "@dogfood/normalization":  "workspace:*",
+                         "@dogfood/ranking":  "workspace:*",
+                         "@dogfood/audit":  "workspace:*"
+                     }
 }

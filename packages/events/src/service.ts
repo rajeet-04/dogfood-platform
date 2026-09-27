@@ -2,6 +2,7 @@ import { and, db, eq, schema, type EventRole, type EventState } from "@dogfood/d
 import { ACTION, requirePermission, type Action } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { appendAuditEvent } from "@dogfood/audit";
 
 import { assertEventTransition } from "./domain";
 
@@ -104,11 +105,22 @@ export async function transitionEvent(
 
   assertEventTransition(event.state as EventState, toState);
 
-  const [updated] = await db
-    .update(schema.events)
-    .set({ state: toState, updatedAt: new Date() })
-    .where(eq(schema.events.id, eventId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.events)
+      .set({ state: toState, updatedAt: new Date() })
+      .where(eq(schema.events.id, eventId))
+      .returning();
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "event.transition",
+      resourceType: "event",
+      resourceId: event.id,
+      metadata: { from: event.state, to: toState },
+    });
+    return row;
+  });
   return updated;
 }
 
