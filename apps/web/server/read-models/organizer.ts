@@ -67,6 +67,16 @@ export type OrganizerDocument = {
   }>;
   publishedRankingSnapshotId: string | null;
   scoresHidden: boolean;
+  certificates: Array<{
+    id: string;
+    displayName: string;
+    projectTitle: string;
+    teamName: string | null;
+    tier: string;
+    rank: number | null;
+    issuedAt: Date;
+  }>;
+  certificatesCount: number;
 };
 
 export async function getOrganizerDocument(
@@ -200,6 +210,12 @@ export async function getOrganizerDocument(
 
   const projectById = new Map(projects.map((project) => [project.id, project]));
 
+  const certificateRows = await db
+    .select()
+    .from(schema.certificates)
+    .where(eq(schema.certificates.eventId, eventId))
+    .orderBy(desc(schema.certificates.issuedAt));
+
   return {
     event: {
       id: event.id,
@@ -296,5 +312,15 @@ export async function getOrganizerDocument(
     })),
     publishedRankingSnapshotId: event.publishedRankingSnapshotId,
     scoresHidden: event.state === "JUDGING",
+    certificates: certificateRows.map((certificate) => ({
+      id: certificate.id,
+      displayName: certificate.displayName,
+      projectTitle: certificate.projectTitle,
+      teamName: certificate.teamName,
+      tier: certificate.tier,
+      rank: certificate.rank,
+      issuedAt: certificate.issuedAt,
+    })),
+    certificatesCount: certificateRows.length,
   };
 }

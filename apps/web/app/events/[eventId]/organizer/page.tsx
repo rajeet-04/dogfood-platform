@@ -31,6 +31,11 @@ import {
   lockProjectAction,
 } from "../../../../server/actions/submissions";
 import {
+  issueCertificatesAction,
+  revokeCertificatesAction,
+} from "../../../../server/actions/certificates";
+import { CERTIFICATE_TIER_LABEL } from "@dogfood/certificates";
+import {
   generateRankingAction,
   publishRankingAction,
 } from "../../../../server/actions/ranking";
@@ -647,6 +652,80 @@ export default async function OrganizerPage({
                     submitLabel="Publish results"
                   />
                 ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Certificates</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {doc.certificatesCount} certificate
+              {doc.certificatesCount === 1 ? "" : "s"} issued for this event.
+              Issued certificates are public via shareable links.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <ActionForm
+              action={issueCertificatesAction.bind(null, eventId)}
+              submitLabel="Issue certificates"
+            />
+            {doc.certificatesCount > 0 ? (
+              <>
+                <ActionForm
+                  action={revokeCertificatesAction.bind(null, eventId)}
+                  submitLabel="Revoke all"
+                  className="[&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
+                />
+                <Link
+                  href={`/events/${eventId}/certificates`}
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  Open certificates
+                </Link>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {doc.certificatesCount === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">
+            No certificates yet. Issuing becomes available once results are
+            ready.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-slate-100">
+            {doc.certificates.map((certificate) => (
+              <li
+                key={certificate.id}
+                className="flex items-center justify-between gap-3 py-3 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-slate-800">
+                    {certificate.displayName}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {certificate.projectTitle}
+                    {certificate.teamName
+                      ? ` · ${certificate.teamName}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span
+                    data-testid="certificate-tier"
+                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                  >
+                    {CERTIFICATE_TIER_LABEL[certificate.tier as keyof typeof CERTIFICATE_TIER_LABEL] ??
+                      certificate.tier}
+                    {certificate.rank ? ` · #${certificate.rank}` : ""}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {formatDate(certificate.issuedAt)}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

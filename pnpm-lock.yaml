@@ -172,6 +172,9 @@ importers:
       '@dogfood/auth':
         specifier: workspace:*
         version: link:packages/auth
+      '@dogfood/certificates':
+        specifier: workspace:*
+        version: link:packages/certificates
       '@dogfood/db':
         specifier: workspace:*
         version: link:packages/db
@@ -226,6 +229,9 @@ importers:
       '@dogfood/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@dogfood/certificates':
+        specifier: workspace:*
+        version: link:../../packages/certificates
       '@dogfood/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -323,6 +329,24 @@ importers:
       argon2:
         specifier: ^0.45.1
         version: 0.45.1
+
+  packages/certificates:
+    dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@dogfood/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@dogfood/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/db:
     dependencies:

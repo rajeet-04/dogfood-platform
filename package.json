@@ -24,6 +24,7 @@
   "devDependencies": {
     "@dogfood/audit": "workspace:*",
     "@dogfood/auth": "workspace:*",
+    "@dogfood/certificates": "workspace:*",
     "@dogfood/db": "workspace:*",
     "@dogfood/events": "workspace:*",
     "@dogfood/judging": "workspace:*",
