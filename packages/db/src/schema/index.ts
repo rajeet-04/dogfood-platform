@@ -6,3 +6,9 @@ export { sessions } from "./sessions";
 export { events, eventMemberships, eventRole, eventState } from "./events";
 export { teamMembers, teams, teamInvites } from "./teams";
 export { projectRevisions, projects, projectState } from "./projects";
+export { rubricCriteria, rubrics } from "./rubrics";
+export {
+  judgeAssignmentState,
+  judgeAssignments,
+  judgeTrackScopes,
+} from "./judging";

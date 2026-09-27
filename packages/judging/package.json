@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@dogfood/db": "workspace:*",
+    "@dogfood/permissions": "workspace:*",
     "@dogfood/validation": "workspace:*",
     "@dogfood/shared": "workspace:*",
     "@dogfood/scoring": "workspace:*",

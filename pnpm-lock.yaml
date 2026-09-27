@@ -357,6 +357,9 @@ importers:
       '@dogfood/normalization':
         specifier: workspace:*
         version: link:../normalization
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@dogfood/ranking':
         specifier: workspace:*
         version: link:../ranking
