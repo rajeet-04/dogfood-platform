@@ -396,6 +396,49 @@ describe("ranking snapshots", () => {
     void judgeB;
   });
 
+  it("produces identical results across two generations from the same inputs", async () => {
+    const {
+      event,
+      organizer,
+      judgeA,
+      judgeB,
+      projectAId,
+      projectBId,
+      assignments,
+    } = await scenario();
+
+    await submitBoth(
+      judgeA,
+      event.id,
+      { projectA: 9, projectB: 4 },
+      assignments,
+      judgeA.userId,
+      projectAId,
+      projectBId,
+    );
+    await submitBoth(
+      judgeB,
+      event.id,
+      { projectA: 8, projectB: 5 },
+      assignments,
+      judgeB.userId,
+      projectAId,
+      projectBId,
+    );
+
+    const first = await generateRankingSnapshot(organizer, event.id, rankingConfig);
+    const second = await generateRankingSnapshot(organizer, event.id, rankingConfig);
+
+    expect(second.id).not.toBe(first.id);
+    expect(JSON.stringify(second.results)).toBe(JSON.stringify(first.results));
+    expect(second.results.ranked[0].projectId).toBe(
+      first.results.ranked[0].projectId,
+    );
+    expect(second.results.ranked[1].projectId).toBe(
+      first.results.ranked[1].projectId,
+    );
+  });
+
   it("blocks non-organizers from reading unpublished results", async () => {
     const {
       event,
