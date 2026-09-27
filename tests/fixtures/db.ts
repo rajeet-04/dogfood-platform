@@ -1,6 +1,17 @@
-import { db, sql } from "@dogfood/db";
+import { join } from "node:path";
+
+import { db, migrate, sql } from "@dogfood/db";
 
 export async function resetDb(): Promise<void> {
+  await migrate(db, {
+    migrationsFolder: join(
+      process.cwd(),
+      "packages",
+      "db",
+      "src",
+      "migrations",
+    ),
+  });
   const result = await db.execute(
     sql`select tablename from pg_tables where schemaname = 'public'`,
   );

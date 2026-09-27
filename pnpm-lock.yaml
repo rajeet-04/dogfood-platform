@@ -407,6 +407,9 @@ importers:
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@dogfood/shared':
         specifier: workspace:*
         version: link:../shared
