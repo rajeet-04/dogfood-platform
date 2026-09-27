@@ -5,3 +5,4 @@ export { users } from "./users";
 export { sessions } from "./sessions";
 export { events, eventMemberships, eventRole, eventState } from "./events";
 export { teamMembers, teams, teamInvites } from "./teams";
+export { projectRevisions, projects, projectState } from "./projects";
