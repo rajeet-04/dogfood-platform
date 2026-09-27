@@ -41,6 +41,7 @@ export const rubricCriteria = pgTable(
     weight: numeric("weight", { precision: 10, scale: 5 }).notNull(),
     minScore: numeric("min_score", { precision: 10, scale: 3 }).notNull(),
     maxScore: numeric("max_score", { precision: 10, scale: 3 }).notNull(),
+    isOptional: boolean("is_optional").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (t) => [

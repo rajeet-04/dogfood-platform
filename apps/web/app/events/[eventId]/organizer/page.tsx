@@ -400,7 +400,11 @@ export default async function OrganizerPage({
                   <ul className="mt-3 space-y-1 text-sm text-slate-600">
                     {rubric.criteria.map((criterion) => (
                       <li key={criterion.id}>
-                        {criterion.name} — weight {criterion.weight}, range{" "}
+                        {criterion.name}{" "}
+                        {criterion.optional ? (
+                          <span className="text-slate-400">(optional)</span>
+                        ) : null}{" "}
+                        — weight {criterion.weight}, range{" "}
                         {criterion.minScore}–{criterion.maxScore}
                       </li>
                     ))}
@@ -464,6 +468,21 @@ export default async function OrganizerPage({
                           />
                         </label>
                       </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        id={`optional-${rubric.id}`}
+                        type="checkbox"
+                        name="optional"
+                        value="on"
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      <label
+                        htmlFor={`optional-${rubric.id}`}
+                        className="text-sm text-slate-600"
+                      >
+                        Optional (judges may skip)
+                      </label>
+                    </div>
                     </div>
                   </ActionForm>
                 </div>

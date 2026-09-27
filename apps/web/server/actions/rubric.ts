@@ -23,6 +23,10 @@ const criterionSchema = z.object({
   weight: z.preprocess((v) => Number(v), z.number().finite()),
   minScore: z.preprocess((v) => Number(v), z.number().finite()),
   maxScore: z.preprocess((v) => Number(v), z.number().finite()),
+  optional: z
+    .union([z.literal("on"), z.literal("true")])
+    .optional()
+    .transform((v) => v !== undefined),
 });
 
 const assignmentSchema = z.object({
@@ -62,6 +66,7 @@ export async function addCriterionAction(
     weight: formData.get("weight"),
     minScore: formData.get("minScore"),
     maxScore: formData.get("maxScore"),
+    optional: formData.get("optional"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };

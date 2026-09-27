@@ -183,7 +183,16 @@ export async function generateRankingSnapshot(
       score: Number.parseFloat(s.score),
       weight: weightByCriterion.get(s.criterionId) ?? 0,
     }));
-    const { total } = calculateWeightedScore(scored);
+    const { total: rawTotal } = calculateWeightedScore(scored);
+    const scoredWeight = scored.reduce((sum, s) => sum + s.weight, 0);
+    const targetWeight = criteria.reduce(
+      (sum, c) => sum + Number.parseFloat(c.weight),
+      0,
+    );
+    const total =
+      scoredWeight > 0 && targetWeight > 0
+        ? rawTotal * (targetWeight / scoredWeight)
+        : rawTotal;
     contributions.push({
       judgeId: assignment.judgeId,
       projectId: assignment.projectId,

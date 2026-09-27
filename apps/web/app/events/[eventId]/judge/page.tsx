@@ -258,7 +258,10 @@ function EvaluationForm({
             className="mb-4 rounded-md border border-slate-200 p-4"
           >
             <legend className="px-1 text-sm font-medium">
-              {criterion.name}{" "}
+              {criterion.name}
+              {criterion.optional ? (
+                <span className="text-slate-400"> (optional)</span>
+              ) : null}{" "}
               <span className="text-slate-500">
                 (weight {criterion.weight}, {criterion.minScore}–
                 {criterion.maxScore})
@@ -272,7 +275,7 @@ function EvaluationForm({
                 min={criterion.minScore}
                 max={criterion.maxScore}
                 step="any"
-                required
+                required={!criterion.optional}
                 disabled={locked}
                 defaultValue={
                   criterion.score === null ? "" : String(criterion.score)
