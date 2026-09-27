@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { resolveSession } from "@dogfood/auth";
 import type { Actor } from "@dogfood/shared";
 
-export const SESSION_COOKIE = "dogfood_session";
-const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+import { SESSION_COOKIE, SESSION_MAX_AGE } from "../lib/session-cookie";
 
 export async function getActor(): Promise<Actor | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
