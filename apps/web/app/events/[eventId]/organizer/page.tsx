@@ -167,6 +167,7 @@ export default async function OrganizerPage({
                 Role
                 <select
                   name="role"
+                  aria-label="Role for new member"
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 >
                   <option value="PARTICIPANT">Participant</option>
