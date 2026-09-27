@@ -312,9 +312,15 @@ describe("api/v1", () => {
       { eventId },
     );
     expect(resultsAfter.res.status).toBe(200);
-    expect(resultsAfter.body.results.rankings).toEqual([
-      { rank: 1, projectId },
-    ]);
+    expect(resultsAfter.body.results.rankings).toHaveLength(1);
+    expect(resultsAfter.body.results.rankings[0]).toMatchObject({
+      rank: 1,
+      projectId,
+    });
+    expect(resultsAfter.body.results.rankings[0].criteria.length).toBe(1);
+    expect(
+      resultsAfter.body.results.rankings[0].criteria[0].criterionId,
+    ).toBe(criterionId);
   });
 
   it("rejects direct authorization bypass attempts", async () => {

@@ -244,6 +244,54 @@ describe("ranking snapshots", () => {
     ]);
   });
 
+  it("persists a per-criterion breakdown for every ranked project", async () => {
+    const {
+      event,
+      organizer,
+      judgeA,
+      judgeB,
+      projectAId,
+      projectBId,
+      assignments,
+    } = await scenario();
+
+    await submitBoth(
+      judgeA,
+      event.id,
+      { projectA: 9, projectB: 4 },
+      assignments,
+      judgeA.userId,
+      projectAId,
+      projectBId,
+    );
+    await submitBoth(
+      judgeB,
+      event.id,
+      { projectA: 8, projectB: 5 },
+      assignments,
+      judgeB.userId,
+      projectAId,
+      projectBId,
+    );
+
+    const snapshot = await generateRankingSnapshot(
+      organizer,
+      event.id,
+      rankingConfig,
+    );
+    const criteria = snapshot.results.criteria!;
+
+    expect(Object.keys(criteria)).toHaveLength(2);
+    expect(Object.keys(criteria[projectAId])).toHaveLength(1);
+    const novelA = Object.values(criteria[projectAId])[0];
+    expect(novelA.name).toBe("Novelty");
+    expect(novelA.meanWeightedScore).toBe(850);
+    expect(novelA.scoredBy).toBe(2);
+
+    const novelB = Object.values(criteria[projectBId])[0];
+    expect(novelB.meanWeightedScore).toBe(450);
+  });
+
   it("rejects generation outside the JUDGING state", async () => {
     const organizer = await registerUser({
       email: "org@rangate.test",
