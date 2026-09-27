@@ -34,6 +34,7 @@ export const events = pgTable("events", {
   }),
   judgingOpensAt: timestamp("judging_opens_at", { withTimezone: true }),
   judgingClosesAt: timestamp("judging_closes_at", { withTimezone: true }),
+  publishedRankingSnapshotId: uuid("published_ranking_snapshot_id"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),

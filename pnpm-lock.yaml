@@ -400,7 +400,29 @@ importers:
         specifier: workspace:*
         version: link:../validation
 
-  packages/ranking: {}
+  packages/ranking:
+    dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@dogfood/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dogfood/normalization':
+        specifier: workspace:*
+        version: link:../normalization
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@dogfood/scoring':
+        specifier: workspace:*
+        version: link:../scoring
+      '@dogfood/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/scoring:
     dependencies:
