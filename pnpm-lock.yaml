@@ -382,7 +382,11 @@ importers:
         specifier: workspace:*
         version: link:../validation
 
-  packages/normalization: {}
+  packages/normalization:
+    dependencies:
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/permissions:
     dependencies:
