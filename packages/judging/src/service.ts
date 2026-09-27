@@ -723,10 +723,12 @@ export async function saveEvaluationDraft(
         })),
       );
     }
-    await tx
-      .update(schema.evaluations)
-      .set(values)
-      .where(eq(schema.evaluations.id, evaluation.id));
+    if (Object.keys(values).length > 0) {
+      await tx
+        .update(schema.evaluations)
+        .set(values)
+        .where(eq(schema.evaluations.id, evaluation.id));
+    }
     if (reopening) {
       await tx
         .update(schema.judgeAssignments)
