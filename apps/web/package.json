@@ -13,6 +13,7 @@
     "@dogfood/auth": "workspace:*",
     "@dogfood/db": "workspace:*",
     "@dogfood/events": "workspace:*",
+    "@dogfood/exports": "workspace:*",
     "@dogfood/judging": "workspace:*",
     "@dogfood/normalization": "workspace:*",
     "@dogfood/permissions": "workspace:*",
