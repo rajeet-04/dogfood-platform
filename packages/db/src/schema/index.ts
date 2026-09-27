@@ -8,6 +8,10 @@ export { teamMembers, teams, teamInvites } from "./teams";
 export { projectRevisions, projects, projectState } from "./projects";
 export { rubricCriteria, rubrics } from "./rubrics";
 export {
+  evaluationRevisions,
+  evaluationScores,
+  evaluationState,
+  evaluations,
   judgeAssignmentState,
   judgeAssignments,
   judgeTrackScopes,

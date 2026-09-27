@@ -14,9 +14,12 @@ import { appendAuditEvent } from "@dogfood/audit";
 
 import {
   assertCriterionInput,
+  assertEvaluationTransition,
   assertRubricActivatable,
   toNumber,
+  validateSubmittedScores,
   type CriterionInput,
+  type EvaluationState,
 } from "./domain";
 
 export type CreateRubricInput = {
@@ -33,6 +36,8 @@ type CriterionRow = typeof schema.rubricCriteria.$inferSelect;
 type AssignmentRow = typeof schema.judgeAssignments.$inferSelect;
 type ProjectRow = typeof schema.projects.$inferSelect;
 type RevisionRow = typeof schema.projectRevisions.$inferSelect;
+type EvaluationRow = typeof schema.evaluations.$inferSelect;
+type ScoreRow = typeof schema.evaluationScores.$inferSelect;
 
 export type AssignedProjectDetail = {
   projectId: string;
@@ -55,6 +60,46 @@ export type JudgeQueueItem = {
   status: AssignmentRow["status"];
   assignedAt: Date;
   project: AssignedProjectDetail;
+};
+
+export type EvaluationScoreInput = {
+  criterionId: string;
+  score: number;
+  comment?: string | null;
+};
+
+export type SaveEvaluationDraftInput = {
+  scores?: EvaluationScoreInput[];
+  overallComment?: string | null;
+};
+
+export type SubmitEvaluationInput = SaveEvaluationDraftInput;
+
+type StoredScore = {
+  criterionId: string;
+  score: string | number;
+  comment: string | null;
+};
+
+export type EvaluationDetail = {
+  assignmentId: string;
+  state: EvaluationState;
+  status: AssignmentRow["status"];
+  rubricId: string;
+  currentRevision: number;
+  overallComment: string | null;
+  startedAt: Date;
+  submittedAt: Date | null;
+  lockedAt: Date | null;
+  criteria: Array<{
+    criterionId: string;
+    name: string;
+    weight: number;
+    minScore: number;
+    maxScore: number;
+    score: number | null;
+    comment: string | null;
+  }>;
 };
 
 async function eventRoles(userId: string, eventId: string): Promise<EventRole[]> {
@@ -436,4 +481,486 @@ export async function getAssignedProject(
   });
 
   return toAssignedProjectDetail(project);
+}
+
+function toEvaluationDetail(
+  evaluation: EvaluationRow,
+  assignment: AssignmentRow,
+  criteria: CriterionRow[],
+  scores: ScoreRow[] | StoredScore[],
+): EvaluationDetail {
+  const scoreByCriterion = new Map(
+    scores.map((score) => [score.criterionId, score]),
+  );
+  return {
+    assignmentId: assignment.id,
+    state: evaluation.state,
+    status: assignment.status,
+    rubricId: evaluation.rubricId,
+    currentRevision: evaluation.currentRevision,
+    overallComment: evaluation.overallComment,
+    startedAt: evaluation.startedAt,
+    submittedAt: evaluation.submittedAt,
+    lockedAt: evaluation.lockedAt,
+    criteria: criteria.map((criterion) => {
+      const row = scoreByCriterion.get(criterion.id);
+      return {
+        criterionId: criterion.id,
+        name: criterion.name,
+        weight: toNumber(criterion.weight),
+        minScore: toNumber(criterion.minScore),
+        maxScore: toNumber(criterion.maxScore),
+        score: row ? toNumber(row.score) : null,
+        comment: row ? row.comment : null,
+      };
+    }),
+  };
+}
+
+async function loadAssignmentById(
+  assignmentId: string,
+): Promise<AssignmentRow | undefined> {
+  const rows = await db
+    .select()
+    .from(schema.judgeAssignments)
+    .where(eq(schema.judgeAssignments.id, assignmentId))
+    .limit(1);
+  return rows[0];
+}
+
+async function loadEvaluationByAssignment(
+  assignmentId: string,
+): Promise<EvaluationRow | undefined> {
+  const rows = await db
+    .select()
+    .from(schema.evaluations)
+    .where(eq(schema.evaluations.assignmentId, assignmentId))
+    .limit(1);
+  return rows[0];
+}
+
+async function loadActiveRubric(eventId: string) {
+  const rows = await db
+    .select()
+    .from(schema.rubrics)
+    .where(
+      and(
+        eq(schema.rubrics.eventId, eventId),
+        eq(schema.rubrics.active, true),
+      ),
+    )
+    .limit(1);
+  return rows[0];
+}
+
+async function loadCriteria(rubricId: string): Promise<CriterionRow[]> {
+  return db
+    .select()
+    .from(schema.rubricCriteria)
+    .where(eq(schema.rubricCriteria.rubricId, rubricId))
+    .orderBy(schema.rubricCriteria.sortOrder);
+}
+
+async function loadScores(
+  evaluationId: string,
+): Promise<Array<StoredScore & { evaluationId: string }>> {
+  return db
+    .select()
+    .from(schema.evaluationScores)
+    .where(eq(schema.evaluationScores.evaluationId, evaluationId));
+}
+
+async function requireAssignmentPermission(
+  actor: Actor,
+  eventId: string,
+  assignment: AssignmentRow,
+  action: Action,
+): Promise<void> {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  const roles = await eventRoles(actor.userId, eventId);
+  requirePermission(actor, action, {
+    eventId,
+    resourceEventId: eventId,
+    roles,
+    eventState: event.state as EventState,
+    isAssigned: assignment.judgeId === actor.userId,
+  });
+}
+
+export async function startEvaluation(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  await requireAssignmentPermission(
+    actor,
+    eventId,
+    assignment,
+    ACTION.EVALUATION_SUBMIT,
+  );
+
+  const rubric = await loadActiveRubric(eventId);
+  if (!rubric) {
+    throw new DogfoodError("RUBRIC_INCOMPLETE", "No active rubric for event");
+  }
+
+  const existing = await loadEvaluationByAssignment(assignmentId);
+  if (existing) {
+    if (existing.state === "LOCKED") {
+      throw new DogfoodError("EVALUATION_LOCKED", "Evaluation is locked");
+    }
+    const criteria = await loadCriteria(existing.rubricId);
+    return toEvaluationDetail(existing, assignment, criteria, []);
+  }
+
+  await db.transaction(async (tx) => {
+    const [evaluation] = await tx
+      .insert(schema.evaluations)
+      .values({
+        assignmentId,
+        rubricId: rubric.id,
+        state: "IN_PROGRESS",
+        startedAt: new Date(),
+      })
+      .returning();
+    await tx
+      .update(schema.judgeAssignments)
+      .set({ status: "IN_PROGRESS" })
+      .where(eq(schema.judgeAssignments.id, assignment.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "evaluation.start",
+      resourceType: "evaluation",
+      resourceId: evaluation.id,
+      metadata: { assignmentId, rubricId: rubric.id },
+    });
+  });
+
+  const starter = await loadAssignmentById(assignmentId);
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!starter) throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not found");
+  }
+  const criteria = await loadCriteria(rubric.id);
+  return toEvaluationDetail(evaluation, starter, criteria, []);
+}
+
+export async function saveEvaluationDraft(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+  input: SaveEvaluationDraftInput = {},
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  await requireAssignmentPermission(
+    actor,
+    eventId,
+    assignment,
+    ACTION.EVALUATION_SUBMIT,
+  );
+
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not started");
+  }
+  if (evaluation.state === "LOCKED") {
+    throw new DogfoodError(
+      "EVALUATION_LOCKED",
+      "Cannot edit a locked evaluation",
+    );
+  }
+
+  const criteria = await loadCriteria(evaluation.rubricId);
+  if (input.scores) {
+    for (const item of input.scores) {
+      const known = criteria.some((c) => c.id === item.criterionId);
+      if (!known) {
+        throw new DogfoodError(
+          "VALIDATION_FAILED",
+          "Score for unknown criterion",
+        );
+      }
+    }
+  }
+
+  const reopening = evaluation.state === "SUBMITTED";
+  const values: Partial<{
+    overallComment: string | null;
+    state: EvaluationState;
+    submittedAt: Date | null;
+  }> = {};
+  if (input.overallComment !== undefined) {
+    values.overallComment = input.overallComment;
+  }
+  if (reopening) {
+    values.state = "IN_PROGRESS";
+    values.submittedAt = null;
+  }
+
+  await db.transaction(async (tx) => {
+    if (input.scores) {
+      await tx
+        .delete(schema.evaluationScores)
+        .where(eq(schema.evaluationScores.evaluationId, evaluation.id));
+      await tx.insert(schema.evaluationScores).values(
+        input.scores.map((item) => ({
+          evaluationId: evaluation.id,
+          criterionId: item.criterionId,
+          score: String(item.score),
+          comment: item.comment ?? null,
+        })),
+      );
+    }
+    await tx
+      .update(schema.evaluations)
+      .set(values)
+      .where(eq(schema.evaluations.id, evaluation.id));
+    if (reopening) {
+      await tx
+        .update(schema.judgeAssignments)
+        .set({ status: "IN_PROGRESS" })
+        .where(eq(schema.judgeAssignments.id, assignment.id));
+    }
+  });
+
+  const fresh = await loadEvaluationByAssignment(assignmentId);
+  const freshAssignment = await loadAssignmentById(assignmentId);
+  const scores = await loadScores(evaluation.id);
+  if (!fresh || !freshAssignment) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not found");
+  }
+  return toEvaluationDetail(fresh, freshAssignment, criteria, scores);
+}
+
+export async function submitEvaluation(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+  input: SubmitEvaluationInput = {},
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+
+  await requireAssignmentPermission(
+    actor,
+    eventId,
+    assignment,
+    ACTION.EVALUATION_SUBMIT,
+  );
+
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not started");
+  }
+  if (evaluation.state === "LOCKED") {
+    throw new DogfoodError(
+      "EVALUATION_LOCKED",
+      "Cannot submit a locked evaluation",
+    );
+  }
+
+  const criteria = await loadCriteria(evaluation.rubricId);
+  const bounds = criteria.map((c) => ({
+    criterionId: c.id,
+    minScore: toNumber(c.minScore),
+    maxScore: toNumber(c.maxScore),
+  }));
+
+  let storedScores: StoredScore[];
+  if (input.scores) {
+    validateSubmittedScores(bounds, input.scores);
+    storedScores = input.scores.map((item) => ({
+      criterionId: item.criterionId,
+      score: String(item.score),
+      comment: item.comment ?? null,
+    }));
+  } else {
+    const current = await loadScores(evaluation.id);
+    const mapped = current.map((score) => ({
+      criterionId: score.criterionId,
+      score: toNumber(score.score),
+      comment: score.comment,
+    }));
+    validateSubmittedScores(bounds, mapped);
+    storedScores = mapped;
+  }
+
+  const finalComment =
+    input.overallComment !== undefined
+      ? input.overallComment
+      : evaluation.overallComment;
+  const revisionNumber = evaluation.currentRevision + 1;
+  const scoresJson = storedScores.map((score) => ({
+    criterionId: score.criterionId,
+    score: toNumber(score.score),
+    comment: score.comment,
+  }));
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(schema.evaluationScores)
+      .where(eq(schema.evaluationScores.evaluationId, evaluation.id));
+    await tx.insert(schema.evaluationScores).values(
+      storedScores.map((score) => ({
+        evaluationId: evaluation.id,
+        criterionId: score.criterionId,
+        score: String(score.score),
+        comment: score.comment,
+      })),
+    );
+    await tx.insert(schema.evaluationRevisions).values({
+      evaluationId: evaluation.id,
+      revisionNumber,
+      scoresJson,
+      overallComment: finalComment,
+      changedBy: actor.userId,
+    });
+    await tx
+      .update(schema.evaluations)
+      .set({
+        state: "SUBMITTED",
+        currentRevision: revisionNumber,
+        overallComment: finalComment,
+        submittedAt: new Date(),
+      })
+      .where(eq(schema.evaluations.id, evaluation.id));
+    await tx
+      .update(schema.judgeAssignments)
+      .set({ status: "SUBMITTED" })
+      .where(eq(schema.judgeAssignments.id, assignment.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "evaluation.submit",
+      resourceType: "evaluation",
+      resourceId: evaluation.id,
+      metadata: { assignmentId, revisionNumber },
+    });
+  });
+
+  const fresh = await loadEvaluationByAssignment(assignmentId);
+  const freshAssignment = await loadAssignmentById(assignmentId);
+  if (!fresh || !freshAssignment) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not found");
+  }
+  return toEvaluationDetail(fresh, freshAssignment, criteria, storedScores);
+}
+
+export async function lockEvaluation(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+
+  const roles = await eventRoles(actor.userId, eventId);
+  requirePermission(actor, ACTION.EVENT_CONFIGURE, {
+    eventId,
+    resourceEventId: eventId,
+    roles,
+    eventState: event.state as EventState,
+  });
+
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not started");
+  }
+  assertEvaluationTransition(evaluation.state, "LOCKED");
+
+  const criteria = await loadCriteria(evaluation.rubricId);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.evaluations)
+      .set({ state: "LOCKED", lockedAt: new Date() })
+      .where(eq(schema.evaluations.id, evaluation.id));
+    await tx
+      .update(schema.judgeAssignments)
+      .set({ status: "LOCKED" })
+      .where(eq(schema.judgeAssignments.id, assignment.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "evaluation.lock",
+      resourceType: "evaluation",
+      resourceId: evaluation.id,
+      metadata: { assignmentId },
+    });
+  });
+
+  const fresh = await loadEvaluationByAssignment(assignmentId);
+  const freshAssignment = await loadAssignmentById(assignmentId);
+  const scores = await loadScores(evaluation.id);
+  if (!fresh || !freshAssignment) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not found");
+  }
+  return toEvaluationDetail(fresh, freshAssignment, criteria, scores);
+}
+
+export async function getEvaluation(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+
+  const roles = await eventRoles(actor.userId, eventId);
+  const isOrganizer = roles.includes("ORGANIZER");
+  if (!isOrganizer) {
+    requirePermission(actor, ACTION.EVALUATION_READ, {
+      eventId,
+      resourceEventId: eventId,
+      roles,
+      eventState: event.state as EventState,
+      ownsEvaluation: assignment.judgeId === actor.userId,
+      judgingLocked: false,
+    });
+  }
+
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not started");
+  }
+
+  requirePermission(actor, ACTION.EVALUATION_READ, {
+    eventId,
+    resourceEventId: eventId,
+    roles,
+    eventState: event.state as EventState,
+    ownsEvaluation: assignment.judgeId === actor.userId,
+    judgingLocked: evaluation.state === "LOCKED",
+  });
+
+  const criteria = await loadCriteria(evaluation.rubricId);
+  const scores = await loadScores(evaluation.id);
+  return toEvaluationDetail(evaluation, assignment, criteria, scores);
 }
