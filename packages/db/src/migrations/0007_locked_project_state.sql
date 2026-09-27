@@ -1,0 +1,1 @@
+ALTER TYPE "project_state" ADD VALUE 'LOCKED';--> statement-breakpoint

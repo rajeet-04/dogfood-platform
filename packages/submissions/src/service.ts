@@ -6,7 +6,11 @@ import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
 import { appendAuditEvent } from "@dogfood/audit";
 
-import { assertSubmissionWindow, validateSubmissionCompleteness } from "./domain";
+import {
+  assertProjectUnlocked,
+  assertSubmissionWindow,
+  validateSubmissionCompleteness,
+} from "./domain";
 import {
   eventMembershipRoles,
   getEventById,
@@ -208,6 +212,7 @@ export async function reviseProject(
     event.state,
   );
 
+  assertProjectUnlocked(project);
   assertSubmissionWindow(new Date(), event);
 
   const content = toRevisionContent(input);
@@ -268,6 +273,7 @@ export async function submitProject(
     event.state,
   );
 
+  assertProjectUnlocked(project);
   assertSubmissionWindow(new Date(), event);
 
   const revision = await getRevisionById(project.currentRevisionId);
@@ -296,6 +302,86 @@ export async function submitProject(
   return toProjectDetail(updated);
 }
 
+async function requireEventConfigurePermission(
+  actor: Actor,
+  eventId: string,
+  eventState: EventState,
+): Promise<void> {
+  const roles = await eventMembershipRoles(actor.userId, eventId);
+  requirePermission(actor, ACTION.EVENT_CONFIGURE, {
+    eventId,
+    resourceEventId: eventId,
+    roles,
+    eventState,
+  });
+}
+
+export async function lockProject(
+  actor: Actor,
+  eventId: string,
+  projectId: string,
+): Promise<void> {
+  const event = await getEventById(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventConfigurePermission(actor, eventId, event.state);
+
+  const project = await getProjectById(projectId);
+  if (!project || project.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Project not found");
+  }
+  if (project.state === "LOCKED") return;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.projects)
+      .set({ state: "LOCKED", lockedAt: new Date() })
+      .where(eq(schema.projects.id, project.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "project.lock",
+      resourceType: "project",
+      resourceId: project.id,
+      metadata: { previousState: project.state },
+    });
+  });
+}
+
+export async function lockAllProjects(
+  actor: Actor,
+  eventId: string,
+): Promise<number> {
+  const event = await getEventById(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventConfigurePermission(actor, eventId, event.state);
+
+  const rows = await db
+    .select({ id: schema.projects.id })
+    .from(schema.projects)
+    .where(eq(schema.projects.eventId, eventId));
+
+  const locked: string[] = [];
+  for (const row of rows) {
+    const project = await getProjectById(row.id);
+    if (project && project.state !== "LOCKED") {
+      await lockProject(actor, eventId, project.id);
+      locked.push(project.id);
+    }
+  }
+  if (locked.length > 0) {
+    await db.transaction(async (tx) => {
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "project.lock_all",
+        resourceType: "project",
+        metadata: { projectIds: locked },
+      });
+    });
+  }
+  return locked.length;
+}
+
 export async function withdrawProject(
   actor: Actor,
   eventId: string,
@@ -314,12 +400,7 @@ export async function withdrawProject(
     event.state,
   );
 
-  if (project.lockedAt) {
-    throw new DogfoodError(
-      "FORBIDDEN",
-      "[FORBIDDEN] Submissions are locked and cannot be withdrawn",
-    );
-  }
+  assertProjectUnlocked(project);
 
   assertSubmissionWindow(new Date(), event);
 
@@ -329,4 +410,4 @@ export async function withdrawProject(
   return toProjectDetail(updated);
 }
 
-export { assertSubmissionWindow, validateSubmissionCompleteness } from "./domain";
+export { assertSubmissionWindow, assertProjectUnlocked, validateSubmissionCompleteness } from "./domain";
