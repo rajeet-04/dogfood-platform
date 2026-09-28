@@ -40,4 +40,8 @@ describe("event state machine", () => {
   it("allows same-state no-op transitions", () => {
     expect(() => assertEventTransition("DRAFT", "DRAFT")).not.toThrow();
   });
+
+  it("allows unarchiving via the reverse edge", () => {
+    expect(() => assertEventTransition("ARCHIVED", "PUBLISHED")).not.toThrow();
+  });
 });

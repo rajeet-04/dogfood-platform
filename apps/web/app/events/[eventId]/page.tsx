@@ -115,6 +115,15 @@ export default async function EventLandingPage({
         </div>
       </header>
 
+      {event.state === "ARCHIVED" ? (
+        <div
+          data-testid="archived-notice"
+          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-800"
+        >
+          This event has been archived and is no longer active.
+        </div>
+      ) : null}
+
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0">
           {event.description ? (

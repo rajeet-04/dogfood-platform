@@ -147,8 +147,20 @@ export default async function OrganizerPage({
           <ActionForm
             action={transitionEventAction.bind(null, eventId)}
             submitLabel={`Advance to ${EVENT_STATE_LABEL[nextState]}`}
+            className={
+              nextState === "ARCHIVED"
+                ? "[&_button]:bg-amber-600 [&_button]:text-white [&_button]:hover:bg-amber-500"
+                : undefined
+            }
           >
             <input type="hidden" name="toState" value={nextState} />
+          </ActionForm>
+        ) : doc.event.state === "ARCHIVED" ? (
+          <ActionForm
+            action={transitionEventAction.bind(null, eventId)}
+            submitLabel="Unarchive event"
+          >
+            <input type="hidden" name="toState" value="PUBLISHED" />
           </ActionForm>
         ) : null}
       </div>

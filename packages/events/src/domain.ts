@@ -11,7 +11,7 @@ const TRANSITIONS: Record<EventState, readonly EventState[]> = {
   JUDGING: ["RESULTS_READY"],
   RESULTS_READY: ["PUBLISHED"],
   PUBLISHED: ["ARCHIVED"],
-  ARCHIVED: [],
+  ARCHIVED: ["PUBLISHED"],
 };
 
 export function assertEventTransition(from: EventState, to: EventState): void {

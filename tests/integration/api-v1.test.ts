@@ -177,7 +177,10 @@ describe("api/v1", () => {
     expect(createResponse.res.status).toBe(201);
     const eventId = createResponse.body.event.id;
 
-    const listResponse = await invoke(eventsRoute.GET, request("GET", "/api/v1/events?q=Hackathon"));
+    const listResponse = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events?q=Hackathon", organizer.cookie),
+    );
     expect(listResponse.res.status).toBe(200);
     expect(listResponse.body.events.some((e: any) => e.slug === "hackathon-thin")).toBe(true);
 
@@ -321,6 +324,67 @@ describe("api/v1", () => {
     expect(
       resultsAfter.body.results.rankings[0].criteria[0].criterionId,
     ).toBe(criterionId);
+  });
+
+  it("lists only public events and validates query params", async () => {
+    await resetDb();
+
+    const organizer = await seedAuthUser(uniqueEmail("org"));
+    const pub = await createEvent(organizer.actor, {
+      name: "Public Hack",
+      slug: "public-hack",
+      timezone: "UTC",
+    });
+    const draft = await createEvent(organizer.actor, {
+      name: "Hidden Draft",
+      slug: "hidden-draft",
+      timezone: "UTC",
+    });
+    const archived = await createEvent(organizer.actor, {
+      name: "Old Hack",
+      slug: "old-hack",
+      timezone: "UTC",
+    });
+    await transitionEvent(organizer.actor, pub.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, archived.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, archived.id, "SUBMISSIONS_OPEN");
+    await transitionEvent(organizer.actor, archived.id, "SUBMISSIONS_CLOSED");
+    await transitionEvent(organizer.actor, archived.id, "JUDGING");
+    await transitionEvent(organizer.actor, archived.id, "RESULTS_READY");
+    await transitionEvent(organizer.actor, archived.id, "PUBLISHED");
+    await transitionEvent(organizer.actor, archived.id, "ARCHIVED");
+
+    const anonymous = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events"),
+    );
+    expect(anonymous.res.status).toBe(200);
+    const anonSlugs = anonymous.body.events.map((e: any) => e.slug);
+    expect(anonSlugs).toContain("public-hack");
+    expect(anonSlugs).not.toContain("hidden-draft");
+    expect(anonSlugs).not.toContain("old-hack");
+
+    const owner = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events", organizer.cookie),
+    );
+    expect(owner.body.events.map((e: any) => e.slug)).toContain("hidden-draft");
+    expect(owner.body.events.map((e: any) => e.slug)).not.toContain("old-hack");
+
+    const stateFilter = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events?state=REGISTRATION", organizer.cookie),
+    );
+    expect(stateFilter.body.events.map((e: any) => e.slug)).toEqual([
+      "public-hack",
+    ]);
+
+    const invalidState = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events?state=banana"),
+    );
+    expect(invalidState.res.status).toBe(422);
+    expect(invalidState.body.error.code).toBe("VALIDATION_FAILED");
   });
 
   it("rejects direct authorization bypass attempts", async () => {
