@@ -28,9 +28,7 @@ export const teams = pgTable("teams", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-}, (t) => [
-  uniqueIndex("teams_event_name_unique").on(t.eventId, t.name),
-]);
+});
 
 export const teamMembers = pgTable(
   "team_members",

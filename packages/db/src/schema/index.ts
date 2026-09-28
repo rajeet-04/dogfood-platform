@@ -3,9 +3,12 @@ export type { EventRole, EventState } from "./enums";
 
 export { users } from "./users";
 export { sessions } from "./sessions";
-export { events, eventMemberships, eventRole, eventState } from "./events";
+export { events, eventMemberships, eventRole, eventState, eventTracks } from "./events";
+export type { CustomQuestion } from "./events";
+export { assets } from "./assets";
+export { fixtureImportAnomalies } from "./fixtureImports";
 export { teamMembers, teams, teamInvites } from "./teams";
-export { projectRevisions, projects, projectState } from "./projects";
+export { projectRevisions, projectRevisionImages, projects, projectState } from "./projects";
 export { rubricCriteria, rubrics } from "./rubrics";
 export {
   evaluationRevisions,

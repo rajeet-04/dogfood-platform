@@ -11,9 +11,11 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
-import { events } from "./events";
+import { assets } from "./assets";
+import { events, eventTracks, type CustomQuestion } from "./events";
 import { teams } from "./teams";
 import { users } from "./users";
 
@@ -63,12 +65,20 @@ export const projectRevisions = pgTable(
     repositoryUrl: text("repository_url"),
     liveUrl: text("live_url"),
     demoVideoUrl: text("demo_video_url"),
-    thumbnailAssetId: uuid("thumbnail_asset_id"),
-    trackId: uuid("track_id"),
+    thumbnailAssetId: uuid("thumbnail_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    trackId: uuid("track_id").references(() => eventTracks.id, { onDelete: "set null" }),
     techTags: jsonb("tech_tags")
       .$type<string[]>()
       .notNull()
       .$defaultFn(() => []),
+    customAnswers: jsonb("custom_answers")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    questionSnapshot: jsonb("question_snapshot")
+      .$type<CustomQuestion[]>()
+      .notNull()
+      .default([]),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),
@@ -85,5 +95,23 @@ export const projectRevisions = pgTable(
       t.projectId,
       desc(t.revisionNumber),
     ),
+  ],
+);
+
+export const projectRevisionImages = pgTable(
+  "project_revision_images",
+  {
+    revisionId: uuid("revision_id")
+      .notNull()
+      .references(() => projectRevisions.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.revisionId, t.assetId] }),
+    uniqueIndex("project_revision_images_position_unique").on(t.revisionId, t.position),
+    index("project_revision_images_asset_idx").on(t.assetId),
   ],
 );

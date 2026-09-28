@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -15,6 +16,14 @@ import { users } from "./users";
 
 export const eventState = pgEnum("event_state", EVENT_STATES);
 export const eventRole = pgEnum("event_role", EVENT_ROLES);
+
+export type CustomQuestion = {
+  id: string;
+  prompt: string;
+  required: boolean;
+  visibility: "PUBLIC" | "ORGANIZER_ONLY";
+  order: number;
+};
 
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -41,6 +50,10 @@ export const events = pgTable("events", {
   schedule: text("schedule"),
   rules: text("rules"),
   maxTeamSize: integer("max_team_size"),
+  customQuestions: jsonb("custom_questions")
+    .$type<CustomQuestion[]>()
+    .notNull()
+    .default([]),
   publishedRankingSnapshotId: uuid("published_ranking_snapshot_id"),
   createdBy: uuid("created_by")
     .notNull()
@@ -52,6 +65,22 @@ export const events = pgTable("events", {
     .notNull()
     .defaultNow(),
 });
+
+export const eventTracks = pgTable(
+  "event_tracks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("event_tracks_event_name_unique").on(t.eventId, t.name),
+    index("event_tracks_event_order_idx").on(t.eventId, t.sortOrder),
+  ],
+);
 
 export const eventMemberships = pgTable(
   "event_memberships",
