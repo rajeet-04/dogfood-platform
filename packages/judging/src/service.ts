@@ -2,6 +2,7 @@ import {
   and,
   db,
   eq,
+  inArray,
   schema,
   sqlState,
   type EventRole,
@@ -30,6 +31,21 @@ export type AssignJudgeInput = {
   judgeId: string;
   projectId: string;
 };
+
+export type GenerateAssignmentInput = {
+  judgeIds: string[];
+  trackIds?: string[];
+  reviewsPerProject: number;
+  strategy: "round_robin" | "balanced_by_track";
+};
+
+export type JudgeRecusalInput = {
+  judgeId: string;
+  projectId: string;
+  reason: string;
+};
+
+type AssignmentProposal = Array<{ judgeId: string; projectId: string }>;
 
 type RubricRow = typeof schema.rubrics.$inferSelect;
 type CriterionRow = typeof schema.rubricCriteria.$inferSelect;
@@ -111,6 +127,7 @@ async function eventRoles(userId: string, eventId: string): Promise<EventRole[]>
       and(
         eq(schema.eventMemberships.userId, userId),
         eq(schema.eventMemberships.eventId, eventId),
+        eq(schema.eventMemberships.isActive, true),
       ),
     );
   return rows.map((row) => row.role);
@@ -412,6 +429,18 @@ export async function assignJudge(
   eventId: string,
   input: AssignJudgeInput,
 ): Promise<AssignmentRow> {
+  const [assignment] = await assignJudges(actor, eventId, [input]);
+  return assignment;
+}
+
+export async function assignJudges(
+  actor: Actor,
+  eventId: string,
+  inputs: AssignJudgeInput[],
+): Promise<AssignmentRow[]> {
+  if (!inputs.length || new Set(inputs.map(({ judgeId, projectId }) => `${judgeId}:${projectId}`)).size !== inputs.length) {
+    throw new DogfoodError("VALIDATION_FAILED", "Assignments must be non-empty and unique");
+  }
   const event = await loadEvent(eventId);
   if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
 
@@ -421,40 +450,495 @@ export async function assignJudge(
     event.state as EventState,
     ACTION.EVENT_CONFIGURE,
   );
+  await assertJudgingOpen(eventId);
+  const projectIds = [...new Set(inputs.map(({ projectId }) => projectId))].sort();
+  try {
+    return await db.transaction(async (tx) => {
+      const [lockedEvent] = await tx
+        .select({ state: schema.events.state })
+        .from(schema.events)
+        .where(eq(schema.events.id, eventId))
+        .for("update")
+        .limit(1);
+      if (!lockedEvent) throw new DogfoodError("NOT_FOUND", "Event not found");
+      if (isJudgingClosed(lockedEvent.state as EventState)) {
+        throw new DogfoodError("CONFLICT", "Judging for this event is closed because results have already been generated");
+      }
+      const lockedProjects = await tx
+        .select({ id: schema.projects.id })
+        .from(schema.projects)
+        .where(and(eq(schema.projects.eventId, eventId), inArray(schema.projects.id, projectIds)))
+        .orderBy(schema.projects.id)
+        .for("update");
+      if (lockedProjects.length !== projectIds.length) {
+        throw new DogfoodError("NOT_FOUND", "Project not found");
+      }
+      const assignments: AssignmentRow[] = [];
+      for (const input of inputs) {
+        const [project] = await tx
+          .select()
+          .from(schema.projects)
+          .where(and(eq(schema.projects.id, input.projectId), eq(schema.projects.eventId, eventId)))
+          .limit(1);
+        const roles = await tx
+          .select({ role: schema.eventMemberships.role })
+          .from(schema.eventMemberships)
+          .where(
+            and(
+              eq(schema.eventMemberships.eventId, eventId),
+              eq(schema.eventMemberships.userId, input.judgeId),
+              eq(schema.eventMemberships.isActive, true),
+            ),
+          );
+        if (!project) throw new DogfoodError("NOT_FOUND", "Project not found");
+        if (!roles.some((row) => row.role === "JUDGE")) {
+          throw new DogfoodError("VALIDATION_FAILED", "Judge is not an active judge of this event");
+        }
+        const [revision] = project.currentRevisionId
+          ? await tx.select({ trackId: schema.projectRevisions.trackId })
+              .from(schema.projectRevisions)
+              .where(eq(schema.projectRevisions.id, project.currentRevisionId))
+              .limit(1)
+          : [];
+        const scopes = await tx
+          .select({ trackId: schema.judgeTrackScopes.trackId })
+          .from(schema.judgeTrackScopes)
+          .where(and(
+            eq(schema.judgeTrackScopes.eventId, eventId),
+            eq(schema.judgeTrackScopes.judgeId, input.judgeId),
+          ));
+        if (scopes.length && !scopes.some((scope) => scope.trackId === revision?.trackId)) {
+          throw new DogfoodError("TRACK_SCOPE_VIOLATION", "Judge is not scoped to this project's track");
+        }
+        const teamConflicts = await tx
+          .select({ userId: schema.teamMembers.userId })
+          .from(schema.teamMembers)
+          .where(and(
+            eq(schema.teamMembers.teamId, project.teamId),
+            eq(schema.teamMembers.userId, input.judgeId),
+          ))
+          .limit(1);
+        const recusals = await tx
+          .select({ id: schema.judgeRecusals.id })
+          .from(schema.judgeRecusals)
+          .where(and(
+            eq(schema.judgeRecusals.eventId, eventId),
+            eq(schema.judgeRecusals.judgeId, input.judgeId),
+            eq(schema.judgeRecusals.projectId, input.projectId),
+          ))
+          .limit(1);
+        if (teamConflicts.length) {
+          throw new DogfoodError("CONFLICT", "A judge cannot be assigned to a project from their own team");
+        }
+        if (recusals.length) throw new DogfoodError("CONFLICT", "A recused judge cannot be assigned to this project");
+        const [assignment] = await tx
+          .insert(schema.judgeAssignments)
+          .values({ eventId, judgeId: input.judgeId, projectId: project.id, status: "ASSIGNED", assignedBy: actor.userId })
+          .returning();
+        await appendAuditEvent(tx, {
+          eventId,
+          actorId: actor.userId,
+          action: "judge.assign",
+          resourceType: "judge_assignment",
+          resourceId: assignment.id,
+          metadata: { judgeId: input.judgeId, projectId: project.id },
+        });
+        assignments.push(assignment);
+      }
+      return assignments;
+    });
+  } catch (error) {
+    if (sqlState(error) === "23505") {
+      throw new DogfoodError(
+        "CONFLICT",
+        "A judge is already assigned to a project in the event",
+      );
+    }
+    throw error;
+  }
+}
 
-  const project = await loadProjectById(input.projectId);
-  if (!project || project.eventId !== eventId) {
-    throw new DogfoodError("NOT_FOUND", "Project not found");
+async function createAssignmentProposal(
+  eventId: string,
+  input: GenerateAssignmentInput,
+): Promise<{
+  proposal: AssignmentProposal;
+  coverage: {
+    projectCount: number;
+    requiredReviews: number;
+    coveredReviews: number;
+    completeProjects: number;
+    underCovered: Array<{
+      projectId: string;
+      title: string;
+      assignedReviews: number;
+      requiredReviews: number;
+    }>;
+    judgeLoads: Array<{ judgeId: string; assignments: number }>;
+  };
+  warnings: string[];
+}> {
+  if (
+    !Number.isInteger(input.reviewsPerProject) ||
+    input.reviewsPerProject < 1 ||
+    input.judgeIds.length === 0 ||
+    new Set(input.judgeIds).size !== input.judgeIds.length
+  ) {
+    throw new DogfoodError("VALIDATION_FAILED", "Invalid assignment generation input");
   }
 
-  const judgeRoles = await eventRoles(input.judgeId, eventId);
-  if (!judgeRoles.includes("JUDGE")) {
-    throw new DogfoodError(
-      "VALIDATION_FAILED",
-      "[VALIDATION_FAILED] Judge is not a judge of this event",
+  const [event] = await db
+    .select()
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await assertJudgingOpen(eventId);
+
+  const judgeRoles = await db
+    .select({ userId: schema.eventMemberships.userId, role: schema.eventMemberships.role })
+    .from(schema.eventMemberships)
+    .where(
+      and(
+        eq(schema.eventMemberships.eventId, eventId),
+        inArray(schema.eventMemberships.userId, input.judgeIds),
+        eq(schema.eventMemberships.isActive, true),
+      ),
     );
+  const roleByJudge = new Map(judgeRoles.map((row) => [row.userId, row.role]));
+  if (input.judgeIds.some((judgeId) => roleByJudge.get(judgeId) !== "JUDGE")) {
+    throw new DogfoodError("VALIDATION_FAILED", "Every selected user must be an active event judge");
   }
 
-  await requireProjectWithinJudgeTrackScope(input.judgeId, eventId, project);
+  const trackIds = [...new Set(input.trackIds ?? [])];
+  if (trackIds.length) {
+    const tracks = await db
+      .select({ id: schema.eventTracks.id })
+      .from(schema.eventTracks)
+      .where(
+        and(
+          eq(schema.eventTracks.eventId, eventId),
+          inArray(schema.eventTracks.id, trackIds),
+        ),
+      );
+    if (tracks.length !== trackIds.length) {
+      throw new DogfoodError("VALIDATION_FAILED", "Every track must belong to this event");
+    }
+  }
 
-  if (await isUserOnProjectTeam(input.judgeId, project.id)) {
+  const joinedProjects = await db
+    .select({
+      id: schema.projects.id,
+      teamId: schema.projects.teamId,
+      currentRevisionId: schema.projects.currentRevisionId,
+      trackId: schema.projectRevisions.trackId,
+      title: schema.projectRevisions.title,
+    })
+    .from(schema.projects)
+    .leftJoin(
+      schema.projectRevisions,
+      eq(schema.projects.currentRevisionId, schema.projectRevisions.id),
+    )
+    .where(
+      and(
+        eq(schema.projects.eventId, eventId),
+        eq(schema.projects.state, "SUBMITTED"),
+      ),
+    );
+  const projects = joinedProjects
+    .filter((project) => trackIds.length === 0 || (project.trackId && trackIds.includes(project.trackId)))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const projectIds = projects.map((project) => project.id);
+  const assignmentRows = projectIds.length
+    ? await db
+        .select({ judgeId: schema.judgeAssignments.judgeId, projectId: schema.judgeAssignments.projectId })
+        .from(schema.judgeAssignments)
+        .where(
+          and(
+            eq(schema.judgeAssignments.eventId, eventId),
+            inArray(schema.judgeAssignments.projectId, projectIds),
+          ),
+        )
+    : [];
+  const allJudgeAssignments = await db
+    .select({ judgeId: schema.judgeAssignments.judgeId })
+    .from(schema.judgeAssignments)
+    .where(
+      and(
+        eq(schema.judgeAssignments.eventId, eventId),
+        inArray(schema.judgeAssignments.judgeId, input.judgeIds),
+      ),
+    );
+  const scopeRows = await db
+    .select({ judgeId: schema.judgeTrackScopes.judgeId, trackId: schema.judgeTrackScopes.trackId })
+    .from(schema.judgeTrackScopes)
+    .where(
+      and(
+        eq(schema.judgeTrackScopes.eventId, eventId),
+        inArray(schema.judgeTrackScopes.judgeId, input.judgeIds),
+      ),
+    );
+  const scopesByJudge = new Map<string, Set<string>>();
+  for (const row of scopeRows) {
+    const scopes = scopesByJudge.get(row.judgeId) ?? new Set<string>();
+    scopes.add(row.trackId);
+    scopesByJudge.set(row.judgeId, scopes);
+  }
+  const teamRows = await db
+    .select({ userId: schema.teamMembers.userId, teamId: schema.teamMembers.teamId })
+    .from(schema.teamMembers)
+    .where(
+      and(
+        eq(schema.teamMembers.eventId, eventId),
+        inArray(schema.teamMembers.userId, input.judgeIds),
+      ),
+    );
+  const teamsByJudge = new Map(teamRows.map((row) => [row.userId, row.teamId]));
+  const recusalRows = projectIds.length
+    ? await db
+        .select({ judgeId: schema.judgeRecusals.judgeId, projectId: schema.judgeRecusals.projectId })
+        .from(schema.judgeRecusals)
+        .where(
+          and(
+            eq(schema.judgeRecusals.eventId, eventId),
+            inArray(schema.judgeRecusals.projectId, projectIds),
+          ),
+        )
+    : [];
+  const recusals = new Set(recusalRows.map((row) => `${row.judgeId}:${row.projectId}`));
+  const assignedPairs = new Set(assignmentRows.map((row) => `${row.judgeId}:${row.projectId}`));
+  const assignedByProject = new Map<string, number>();
+  for (const row of assignmentRows) {
+    assignedByProject.set(row.projectId, (assignedByProject.get(row.projectId) ?? 0) + 1);
+  }
+
+  const proposal: AssignmentProposal = [];
+  const judgeLoads = new Map(input.judgeIds.map((judgeId) => [
+    judgeId,
+    allJudgeAssignments.filter((row) => row.judgeId === judgeId).length,
+  ]));
+  const trackLoads = new Map<string, Map<string, number>>();
+  const warnings: string[] = [];
+  if (projects.length === 0) warnings.push("No submitted projects match the selected tracks");
+  let roundRobinIndex = 0;
+
+  for (const project of projects) {
+    let assigned = assignedByProject.get(project.id) ?? 0;
+    while (assigned < input.reviewsPerProject) {
+      const eligible = input.judgeIds.filter((judgeId) => {
+        const scopes = scopesByJudge.get(judgeId);
+        return !assignedPairs.has(`${judgeId}:${project.id}`) &&
+          !recusals.has(`${judgeId}:${project.id}`) &&
+          teamsByJudge.get(judgeId) !== project.teamId &&
+          (!scopes?.size || Boolean(project.trackId && scopes.has(project.trackId)));
+      });
+      if (!eligible.length) {
+        warnings.push(`Project ${project.id} has insufficient eligible judges`);
+        break;
+      }
+
+      let judgeId: string;
+      if (input.strategy === "round_robin") {
+        const next = Array.from({ length: input.judgeIds.length }, (_, offset) =>
+          input.judgeIds[(roundRobinIndex + offset) % input.judgeIds.length],
+        ).find((candidate) => eligible.includes(candidate));
+        if (!next) break;
+        judgeId = next;
+        roundRobinIndex = (input.judgeIds.indexOf(judgeId) + 1) % input.judgeIds.length;
+      } else {
+        const loads = trackLoads.get(project.trackId ?? "untracked") ?? new Map<string, number>();
+        judgeId = [...eligible].sort((a, b) =>
+          (loads.get(a) ?? 0) - (loads.get(b) ?? 0) ||
+          (judgeLoads.get(a) ?? 0) - (judgeLoads.get(b) ?? 0) ||
+          a.localeCompare(b),
+        )[0];
+      }
+
+      proposal.push({ judgeId, projectId: project.id });
+      assignedPairs.add(`${judgeId}:${project.id}`);
+      assignedByProject.set(project.id, ++assigned);
+      judgeLoads.set(judgeId, (judgeLoads.get(judgeId) ?? 0) + 1);
+      const loads = trackLoads.get(project.trackId ?? "untracked") ?? new Map<string, number>();
+      loads.set(judgeId, (loads.get(judgeId) ?? 0) + 1);
+      trackLoads.set(project.trackId ?? "untracked", loads);
+    }
+  }
+
+  const underCovered = projects.flatMap((project) => {
+    const assignedReviews = assignedByProject.get(project.id) ?? 0;
+    return assignedReviews < input.reviewsPerProject
+      ? [{ projectId: project.id, title: project.title ?? "", assignedReviews, requiredReviews: input.reviewsPerProject }]
+      : [];
+  });
+  if (underCovered.length && !warnings.length) warnings.push("Some projects do not have enough eligible judges");
+
+  return {
+    proposal,
+    coverage: {
+      projectCount: projects.length,
+      requiredReviews: projects.length * input.reviewsPerProject,
+      coveredReviews: projects.reduce(
+        (sum, project) => sum + Math.min(assignedByProject.get(project.id) ?? 0, input.reviewsPerProject),
+        0,
+      ),
+      completeProjects: projects.length - underCovered.length,
+      underCovered,
+      judgeLoads: input.judgeIds.map((judgeId) => ({ judgeId, assignments: judgeLoads.get(judgeId) ?? 0 })),
+    },
+    warnings: [...new Set(warnings)],
+  };
+}
+
+export async function generateAssignmentProposal(
+  actor: Actor,
+  eventId: string,
+  input: GenerateAssignmentInput,
+) {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
+  return createAssignmentProposal(eventId, input);
+}
+
+export async function commitAssignmentProposal(
+  actor: Actor,
+  eventId: string,
+  input: GenerateAssignmentInput & { expectedProposal?: AssignmentProposal },
+) {
+  const { expectedProposal, ...generationInput } = input;
+  if (!expectedProposal) {
+    throw new DogfoodError("VALIDATION_FAILED", "A reviewed proposal is required before committing");
+  }
+  const result = await generateAssignmentProposal(actor, eventId, generationInput);
+  if (JSON.stringify(expectedProposal) !== JSON.stringify(result.proposal)) {
     throw new DogfoodError(
       "CONFLICT",
-      "A judge cannot be assigned to a project from their own team",
+      "The assignment proposal changed; review a new preview before committing",
     );
   }
-
-  try {
-    const assignment = await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(schema.events)
+      .where(eq(schema.events.id, eventId))
+      .for("update")
+      .limit(1);
+    if (!event || isJudgingClosed(event.state as EventState)) {
+      throw new DogfoodError("CONFLICT", "Judging changed before assignments could be committed");
+    }
+    const trackIds = [...new Set(generationInput.trackIds ?? [])];
+    if (trackIds.length) {
+      const tracks = await tx
+        .select({ id: schema.eventTracks.id })
+        .from(schema.eventTracks)
+        .where(and(eq(schema.eventTracks.eventId, eventId), inArray(schema.eventTracks.id, trackIds)));
+      if (tracks.length !== trackIds.length) {
+        throw new DogfoodError("CONFLICT", "Selected tracks changed; generate a new proposal");
+      }
+    }
+    const projectIds = [...new Set(result.proposal.map((item) => item.projectId))].sort();
+    const proposedByProject = new Map<string, number>();
+    for (const item of result.proposal) {
+      proposedByProject.set(item.projectId, (proposedByProject.get(item.projectId) ?? 0) + 1);
+    }
+    const lockedProjects = projectIds.length
+      ? await tx
+          .select()
+          .from(schema.projects)
+          .where(and(eq(schema.projects.eventId, eventId), inArray(schema.projects.id, projectIds)))
+          .orderBy(schema.projects.id)
+          .for("update")
+      : [];
+    if (lockedProjects.length !== projectIds.length) {
+      throw new DogfoodError("CONFLICT", "A target project changed; generate a new proposal");
+    }
+    const projectsById = new Map(lockedProjects.map((project) => [project.id, project]));
+    const currentAssignments = projectIds.length
+      ? await tx
+          .select({ judgeId: schema.judgeAssignments.judgeId, projectId: schema.judgeAssignments.projectId })
+          .from(schema.judgeAssignments)
+          .where(and(eq(schema.judgeAssignments.eventId, eventId), inArray(schema.judgeAssignments.projectId, projectIds)))
+      : [];
+    const existingCounts = new Map<string, number>();
+    const existingPairs = new Set(currentAssignments.map((row) => `${row.judgeId}:${row.projectId}`));
+    for (const row of currentAssignments) existingCounts.set(row.projectId, (existingCounts.get(row.projectId) ?? 0) + 1);
+    for (const projectId of projectIds) {
+      const project = projectsById.get(projectId)!;
+      if (project.state !== "SUBMITTED" || (existingCounts.get(projectId) ?? 0) + (proposedByProject.get(projectId) ?? 0) > generationInput.reviewsPerProject) {
+        throw new DogfoodError("CONFLICT", "Project review capacity changed; generate a new proposal");
+      }
+      const [revision] = project.currentRevisionId
+        ? await tx
+            .select({ trackId: schema.projectRevisions.trackId })
+            .from(schema.projectRevisions)
+            .where(eq(schema.projectRevisions.id, project.currentRevisionId))
+            .limit(1)
+        : [];
+      if (trackIds.length && (!revision?.trackId || !trackIds.includes(revision.trackId))) {
+        throw new DogfoodError("CONFLICT", "A target project's track changed; generate a new proposal");
+      }
+    }
+    for (const item of result.proposal) {
+      const roles = await tx
+        .select({ role: schema.eventMemberships.role })
+        .from(schema.eventMemberships)
+        .where(
+          and(
+            eq(schema.eventMemberships.eventId, eventId),
+            eq(schema.eventMemberships.userId, item.judgeId),
+            eq(schema.eventMemberships.isActive, true),
+          ),
+        );
+      const project = projectsById.get(item.projectId);
+      if (!roles.some((row) => row.role === "JUDGE") || !project) {
+        throw new DogfoodError("CONFLICT", "Assignment eligibility changed; generate a new proposal");
+      }
+      const [revision] = project.currentRevisionId
+        ? await tx
+            .select({ trackId: schema.projectRevisions.trackId })
+            .from(schema.projectRevisions)
+            .where(eq(schema.projectRevisions.id, project.currentRevisionId))
+            .limit(1)
+        : [];
+      const scopes = await tx
+        .select({ trackId: schema.judgeTrackScopes.trackId })
+        .from(schema.judgeTrackScopes)
+        .where(
+          and(
+            eq(schema.judgeTrackScopes.eventId, eventId),
+            eq(schema.judgeTrackScopes.judgeId, item.judgeId),
+          ),
+        );
+      if (scopes.length && !scopes.some((scope) => scope.trackId === revision?.trackId)) {
+        throw new DogfoodError("CONFLICT", "Judge track scope changed; generate a new proposal");
+      }
+      const conflicts = await tx
+        .select({ userId: schema.teamMembers.userId })
+        .from(schema.teamMembers)
+        .where(
+          and(
+            eq(schema.teamMembers.teamId, project.teamId),
+            eq(schema.teamMembers.userId, item.judgeId),
+          ),
+        )
+        .limit(1);
+      const recusals = await tx
+        .select({ id: schema.judgeRecusals.id })
+        .from(schema.judgeRecusals)
+        .where(
+          and(
+            eq(schema.judgeRecusals.eventId, eventId),
+            eq(schema.judgeRecusals.judgeId, item.judgeId),
+            eq(schema.judgeRecusals.projectId, item.projectId),
+          ),
+        )
+        .limit(1);
+      if (conflicts.length || recusals.length || existingPairs.has(`${item.judgeId}:${item.projectId}`)) {
+        throw new DogfoodError("CONFLICT", "Assignment eligibility changed; generate a new proposal");
+      }
       const [assignment] = await tx
         .insert(schema.judgeAssignments)
-        .values({
-          eventId,
-          judgeId: input.judgeId,
-          projectId: project.id,
-          status: "ASSIGNED",
-          assignedBy: actor.userId,
-        })
+        .values({ eventId, judgeId: item.judgeId, projectId: item.projectId, status: "ASSIGNED", assignedBy: actor.userId })
         .returning();
       await appendAuditEvent(tx, {
         eventId,
@@ -462,20 +946,133 @@ export async function assignJudge(
         action: "judge.assign",
         resourceType: "judge_assignment",
         resourceId: assignment.id,
-        metadata: { judgeId: input.judgeId, projectId: project.id },
+        metadata: { judgeId: item.judgeId, projectId: item.projectId, strategy: input.strategy },
       });
-      return assignment;
-    });
-    return assignment;
-  } catch (error) {
-    if (sqlState(error) === "23505") {
-      throw new DogfoodError(
-        "CONFLICT",
-        "Judge is already assigned to this project in the event",
-      );
     }
+  });
+  return result;
+}
+
+export async function createJudgeRecusal(
+  actor: Actor,
+  eventId: string,
+  input: JudgeRecusalInput,
+) {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  const judgeRoles = await eventRoles(input.judgeId, eventId);
+  if (!judgeRoles.includes("JUDGE")) {
+    throw new DogfoodError("VALIDATION_FAILED", "Judge is not an active judge of this event");
+  }
+  const selfRecusal = actor.userId === input.judgeId && judgeRoles.includes("JUDGE");
+  if (!selfRecusal) await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
+  const project = await loadProjectById(input.projectId);
+  if (!project || project.eventId !== eventId) throw new DogfoodError("NOT_FOUND", "Project not found");
+  try {
+    const recusal = await db.transaction(async (tx) => {
+      const [lockedProject] = await tx
+        .select({ id: schema.projects.id })
+        .from(schema.projects)
+        .where(and(eq(schema.projects.id, input.projectId), eq(schema.projects.eventId, eventId)))
+        .for("update")
+        .limit(1);
+      if (!lockedProject) throw new DogfoodError("NOT_FOUND", "Project not found");
+      const activeJudges = await tx
+        .select({ id: schema.eventMemberships.id })
+        .from(schema.eventMemberships)
+        .where(and(
+          eq(schema.eventMemberships.eventId, eventId),
+          eq(schema.eventMemberships.userId, input.judgeId),
+          eq(schema.eventMemberships.role, "JUDGE"),
+          eq(schema.eventMemberships.isActive, true),
+        ))
+        .limit(1);
+      if (!activeJudges.length) throw new DogfoodError("CONFLICT", "Judge membership is no longer active");
+      const assignments = await tx
+        .select({ id: schema.judgeAssignments.id })
+        .from(schema.judgeAssignments)
+        .where(
+          and(
+            eq(schema.judgeAssignments.eventId, eventId),
+            eq(schema.judgeAssignments.judgeId, input.judgeId),
+            eq(schema.judgeAssignments.projectId, input.projectId),
+          ),
+        )
+        .limit(1);
+      if (assignments.length) {
+        throw new DogfoodError("CONFLICT", "Remove the existing assignment before declaring this recusal");
+      }
+      const [row] = await tx
+        .insert(schema.judgeRecusals)
+        .values({ ...input, eventId, createdBy: actor.userId })
+        .returning();
+      return row;
+    });
+    return recusal;
+  } catch (error) {
+    if (sqlState(error) === "23505") throw new DogfoodError("CONFLICT", "Judge recusal already exists");
     throw error;
   }
+}
+
+export async function listJudgeRecusals(actor: Actor, eventId: string) {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
+  return db
+    .select()
+    .from(schema.judgeRecusals)
+    .where(eq(schema.judgeRecusals.eventId, eventId))
+    .orderBy(schema.judgeRecusals.createdAt);
+}
+
+export async function deleteJudgeRecusal(actor: Actor, eventId: string, recusalId: string) {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
+  const rows = await db
+    .delete(schema.judgeRecusals)
+    .where(
+      and(
+        eq(schema.judgeRecusals.id, recusalId),
+        eq(schema.judgeRecusals.eventId, eventId),
+      ),
+    )
+    .returning({ id: schema.judgeRecusals.id });
+  if (!rows.length) throw new DogfoodError("NOT_FOUND", "Judge recusal not found");
+}
+
+export type JudgeAssignmentFilters = {
+  judgeId?: string;
+  projectId?: string;
+  trackId?: string;
+  status?: AssignmentRow["status"];
+};
+
+export async function getJudgeAssignments(
+  actor: Actor,
+  eventId: string,
+  filters: JudgeAssignmentFilters = {},
+) {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
+  const conditions = [eq(schema.judgeAssignments.eventId, eventId)];
+  if (filters.judgeId) conditions.push(eq(schema.judgeAssignments.judgeId, filters.judgeId));
+  if (filters.projectId) conditions.push(eq(schema.judgeAssignments.projectId, filters.projectId));
+  if (filters.status) conditions.push(eq(schema.judgeAssignments.status, filters.status));
+  if (filters.trackId) conditions.push(eq(schema.projectRevisions.trackId, filters.trackId));
+  const rows = await db
+    .select({ assignment: schema.judgeAssignments, trackId: schema.projectRevisions.trackId })
+    .from(schema.judgeAssignments)
+    .leftJoin(schema.projects, eq(schema.judgeAssignments.projectId, schema.projects.id))
+    .leftJoin(
+      schema.projectRevisions,
+      eq(schema.projects.currentRevisionId, schema.projectRevisions.id),
+    )
+    .where(and(...conditions))
+    .orderBy(schema.judgeAssignments.assignedAt);
+  return rows.map(({ assignment, trackId }) => ({ ...assignment, trackId }));
 }
 
 export async function unassignJudge(
