@@ -435,6 +435,9 @@ importers:
 
   packages/exports:
     dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
