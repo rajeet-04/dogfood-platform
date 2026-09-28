@@ -22,6 +22,8 @@ export {
   judgeApplications,
 } from "./judgeApplications";
 export type { JudgeApplicationStatus } from "./judgeApplications";
+export { notifications, NOTIFICATION_TYPES } from "./notifications";
+export type { NotificationType } from "./notifications";
 export { auditEvents } from "./audit";
 export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";

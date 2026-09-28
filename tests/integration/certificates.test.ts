@@ -113,31 +113,46 @@ async function scoredScenario(): Promise<Scenario> {
   }
 
   await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
+
+  // Rosters lock when submissions open, so teams form during registration and
+  // projects are only created once the window is open.
+  const teamA = await createTeam(actorFor(participantA.id), event.id, {
+    name: "Team A",
+  });
+  const teamB = await createTeam(actorFor(participantB.id), event.id, {
+    name: "Team B",
+  });
+  const teamC = await createTeam(actorFor(participantC.id), event.id, {
+    name: "Team C",
+  });
+
   await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
 
-  async function makeProject(actor: Actor, name: string) {
-    const team = await createTeam(actor, event.id, {
-      name: `Team ${name}`,
-    });
+  async function makeProject(actor: Actor, teamId: string, name: string) {
     const project = await createProject(actor, event.id, {
-      teamId: team.id,
+      teamId,
       title: `Project ${name}`,
       description: `project ${name}`,
     });
     await submitProject(actor, event.id, project.id);
-    return { projectId: project.id, teamId: team.id };
+    return { projectId: project.id, teamId };
   }
 
   const { projectId: projectAId, teamId: teamAId } = await makeProject(
     actorFor(participantA.id),
+    teamA.id,
     "A",
   );
   const { projectId: projectBId } = await makeProject(
     actorFor(participantB.id),
+    teamB.id,
     "B",
   );
-  const projectCId = (await makeProject(actorFor(participantC.id), "C"))
-    .projectId;
+  const { projectId: projectCId } = await makeProject(
+    actorFor(participantC.id),
+    teamC.id,
+    "C",
+  );
 
   await db.insert(schema.teamMembers).values({
     eventId: event.id,

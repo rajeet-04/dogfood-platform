@@ -53,6 +53,11 @@ export async function addMemberAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
+  if (parsed.data.role === "PARTICIPANT") {
+    return {
+      error: "Participants join from the event page, not through this form.",
+    };
+  }
   try {
     const user = await userByEmail(parsed.data.email);
     if (!user) {

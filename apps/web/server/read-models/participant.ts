@@ -1,4 +1,5 @@
 import { and, db, desc, eq, schema } from "@dogfood/db";
+import { isTeamRosterLocked } from "@dogfood/teams";
 import { DogfoodError } from "@dogfood/validation";
 import type { Actor } from "@dogfood/shared";
 
@@ -26,9 +27,20 @@ export type ParticipantHome = {
     submissionClosesAt: EventRow["submissionClosesAt"];
   };
   serverNow: Date;
+  teamRosterLocked: boolean;
   team: {
     id: string;
     name: string;
+    isOwner: boolean;
+    members: Array<{
+      userId: string;
+      displayName: string;
+      email: string;
+      isOwner: boolean;
+    }>;
+    memberCount: number;
+    maxTeamSize: number | null;
+    rosterLocked: boolean;
   } | null;
   project:
     | {
@@ -76,7 +88,14 @@ export async function getParticipantHome(
   }
 
   let team: TeamRow | undefined;
+  let teamIsOwner = false;
   let project: ProjectRow | undefined;
+  let teamMembers: Array<{
+    userId: string;
+    displayName: string;
+    email: string;
+    isOwner: boolean;
+  }> = [];
 
   const teamMemberRows = await db
     .select()
@@ -90,12 +109,25 @@ export async function getParticipantHome(
     .limit(1);
   const teamMember = teamMemberRows[0];
   if (teamMember) {
+    teamIsOwner = teamMember.isOwner;
     const teamRows = await db
       .select()
       .from(schema.teams)
       .where(eq(schema.teams.id, teamMember.teamId))
       .limit(1);
     team = teamRows[0];
+
+    teamMembers = await db
+      .select({
+        userId: schema.teamMembers.userId,
+        displayName: schema.users.displayName,
+        email: schema.users.email,
+        isOwner: schema.teamMembers.isOwner,
+      })
+      .from(schema.teamMembers)
+      .innerJoin(schema.users, eq(schema.users.id, schema.teamMembers.userId))
+      .where(eq(schema.teamMembers.teamId, teamMember.teamId))
+      .orderBy(schema.teamMembers.joinedAt);
 
     const projectRows = await db
       .select()
@@ -140,7 +172,18 @@ export async function getParticipantHome(
       submissionClosesAt: event.submissionClosesAt,
     },
     serverNow: new Date(),
-    team: team ? { id: team.id, name: team.name } : null,
+    teamRosterLocked: isTeamRosterLocked(event.state),
+    team: team
+      ? {
+          id: team.id,
+          name: team.name,
+          isOwner: teamIsOwner,
+          members: teamMembers,
+          memberCount: teamMembers.length,
+          maxTeamSize: event.maxTeamSize,
+          rosterLocked: isTeamRosterLocked(event.state),
+        }
+      : null,
     project: project
       ? {
           id: project.id,

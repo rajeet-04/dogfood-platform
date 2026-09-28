@@ -4,12 +4,21 @@ import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
 import { NotAllowed } from "../../../../components/not-allowed";
+import {
+  ResultsMeta,
+  ResultsTable,
+} from "../../../../components/results-table";
 import { EVENT_STATE_LABEL } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
 import { getParticipantHome } from "../../../../server/read-models/participant";
 import {
+  formatScore,
+  getEventResults,
+} from "../../../../server/read-models/results";
+import {
   createTeamAction,
   createTeamInviteAction,
+  joinTeamAction,
   leaveTeamAction,
 } from "../../../../server/actions/team";
 import {
@@ -54,6 +63,10 @@ export default async function ParticipantPage({
 
   const eventIdBinded = eventId;
   const submissionsOpen = home.event.state === "SUBMISSIONS_OPEN";
+  const results = await getEventResults(eventId);
+  const myRank = results?.entries.find(
+    (entry) => entry.projectId === home.project?.id,
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
@@ -81,22 +94,85 @@ export default async function ParticipantPage({
           <div>
             <p className="text-slate-700">
               <span className="font-medium">Team name:</span> {home.team.name}
+              {home.team.isOwner ? (
+                <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  Leader
+                </span>
+              ) : null}
             </p>
-            <div className="mt-4 flex items-center gap-3">
-              <ActionForm
-                action={createTeamInviteAction.bind(
-                  null,
-                  eventIdBinded,
-                  home.team.id,
-                )}
-                submitLabel="Create invite"
-              />
-              <ActionForm
-                action={leaveTeamAction.bind(null, eventIdBinded, home.team.id)}
-                submitLabel="Leave team"
-              />
-            </div>
+            <p
+              data-testid="team-size"
+              className="mt-1 text-sm text-slate-500"
+            >
+              {home.team.memberCount}
+              {home.team.maxTeamSize
+                ? ` of ${home.team.maxTeamSize}`
+                : ""}{" "}
+              {home.team.memberCount === 1 ? "member" : "members"}
+            </p>
+            <ul
+              data-testid="team-members"
+              className="mt-3 divide-y divide-slate-100 rounded-md border border-slate-200"
+            >
+              {home.team.members.map((member) => (
+                <li
+                  key={member.userId}
+                  data-testid="team-member"
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium text-slate-800">
+                      {member.displayName}
+                    </span>
+                    {member.isOwner ? (
+                      <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                        Leader
+                      </span>
+                    ) : null}
+                    <span className="ml-2 text-xs text-slate-500">
+                      {member.email}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {home.team.rosterLocked ? (
+              <p
+                data-testid="team-roster-locked"
+                className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+              >
+                Submissions are open, so team membership is locked. Teams can no
+                longer be joined, left, or created.
+              </p>
+            ) : (
+              <div className="mt-4 flex items-center gap-3">
+                <ActionForm
+                  action={createTeamInviteAction.bind(
+                    null,
+                    eventIdBinded,
+                    home.team.id,
+                  )}
+                  submitLabel="Create invite"
+                />
+                <ActionForm
+                  action={leaveTeamAction.bind(
+                    null,
+                    eventIdBinded,
+                    home.team.id,
+                  )}
+                  submitLabel="Leave team"
+                />
+              </div>
+            )}
           </div>
+        ) : home.teamRosterLocked ? (
+          <p
+            data-testid="team-roster-locked"
+            className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
+            Submissions are open, so team membership is locked. Teams can no
+            longer be joined or created.
+          </p>
         ) : (
           <div>
             <p className="mb-3 text-sm text-slate-500">
@@ -116,6 +192,25 @@ export default async function ParticipantPage({
                 />
               </label>
             </ActionForm>
+            <div className="mt-4 border-t pt-4">
+              <p className="mb-3 text-sm text-slate-500">
+                Have an invite code? Join an existing team.
+              </p>
+              <ActionForm
+                action={joinTeamAction.bind(null, eventIdBinded)}
+                submitLabel="Join team"
+              >
+                <label className="block text-sm font-medium">
+                  Invite code
+                  <input
+                    type="text"
+                    name="inviteCode"
+                    required
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </ActionForm>
+            </div>
           </div>
         )}
       </section>
@@ -233,6 +328,45 @@ export default async function ParticipantPage({
           <p className="text-sm text-slate-500">
             Create a team first to make a project.
           </p>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 text-lg font-semibold">Results</h2>
+        {!results ? (
+          <p className="text-sm text-slate-500" data-testid="results-pending">
+            {home.event.state === "RESULTS_READY" ||
+            home.event.state === "PUBLISHED" ||
+            home.event.state === "ARCHIVED"
+              ? "Results have not been published for this event yet. Check back once the organizers release the rankings."
+              : "Scores are not available yet. They appear here once the organizers publish the results."}
+          </p>
+        ) : (
+          <div data-testid="results-section">
+            <ResultsMeta results={results} />
+            {myRank ? (
+              <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                <p className="text-sm text-indigo-900">
+                  Your project ranked{" "}
+                  <span
+                    className="text-lg font-bold"
+                    data-testid="my-rank"
+                  >
+                    #{myRank.rank}
+                  </span>{" "}
+                  of {results.entries.length} with a score of{" "}
+                  <span className="font-semibold" data-testid="my-score">
+                    {formatScore(myRank.weightedTotal ?? myRank.score)}
+                  </span>
+                  .
+                </p>
+              </div>
+            ) : null}
+            <ResultsTable
+              results={results}
+              highlightProjectId={home.project?.id ?? null}
+            />
+          </div>
         )}
       </section>
 

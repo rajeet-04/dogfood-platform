@@ -24,9 +24,11 @@ export {
   getAssignedProject,
   startEvaluation,
   saveEvaluationDraft,
+  reopenEvaluation,
   submitEvaluation,
   lockEvaluation,
   getEvaluation,
+  isJudgingClosed,
 } from "./service";
 export type {
   AssignJudgeInput,

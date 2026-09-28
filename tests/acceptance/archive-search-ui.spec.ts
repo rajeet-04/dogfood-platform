@@ -148,3 +148,36 @@ test("catalogue search filters events; drafts and archives stay out of public re
 
   await owner.close();
 });
+
+test("a public event page resolves both the event id and its slug", async ({
+  browser,
+}) => {
+  await resetDb();
+
+  const organizer = await seedUser(uniqueEmail("slug-ui"), "Slug UI");
+  const event = await createEvent(organizer.actor, {
+    slug: `slug-ui-${Date.now()}`,
+    name: "Slug Addressable",
+    timezone: "UTC",
+  });
+  await transitionEvent(organizer.actor, event.id, "REGISTRATION");
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  await page.goto(`/events/${event.id}`);
+  await expect(page.getByRole("heading", { name: "Slug Addressable" })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // A slug is not a uuid, so it used to blow up the id comparison.
+  await page.goto(`/events/${event.slug}`);
+  await expect(page.getByRole("heading", { name: "Slug Addressable" })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const missing = await page.goto("/events/no-such-event-slug");
+  expect(missing?.status()).toBe(404);
+
+  await context.close();
+});

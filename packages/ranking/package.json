@@ -12,6 +12,7 @@
   "dependencies": {
     "@dogfood/audit": "workspace:*",
     "@dogfood/db": "workspace:*",
+    "@dogfood/notifications": "workspace:*",
     "@dogfood/normalization": "workspace:*",
     "@dogfood/permissions": "workspace:*",
     "@dogfood/scoring": "workspace:*",

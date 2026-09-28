@@ -10,7 +10,15 @@ import {
 } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
 import { getOrganizerDocument } from "../../../../server/read-models/organizer";
-import { updateRegistrationWindowAction } from "../../../../server/actions/event";
+import { getEventResults } from "../../../../server/read-models/results";
+import {
+  ResultsMeta,
+  ResultsTable,
+} from "../../../../components/results-table";
+import {
+  updateEventDetailsAction,
+  updateRegistrationWindowAction,
+} from "../../../../server/actions/event";
 import {
   deactivateJudgeAction,
   decideJudgeApplicationAction,
@@ -25,6 +33,7 @@ import {
 } from "../../../../server/actions/rubric";
 import {
   lockAllSubmissionsAction,
+  lockEvaluationAction,
   unassignJudgeAction,
 } from "../../../../server/actions/evaluation";
 import {
@@ -41,6 +50,7 @@ import {
   revokeCertificatesAction,
 } from "../../../../server/actions/certificates";
 import { CERTIFICATE_TIER_LABEL } from "@dogfood/certificates";
+import { canRunRanking } from "@dogfood/ranking";
 import {
   generateRankingAction,
   publishRankingAction,
@@ -123,6 +133,7 @@ export default async function OrganizerPage({
 
   const nextState = nextEventState(doc.event.state);
   const { coverage } = doc;
+  const results = await getEventResults(eventId, { includeUnpublished: true });
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
@@ -203,9 +214,100 @@ export default async function OrganizerPage({
           </p>
         ) : (
           <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            Scores are visible after results are ready.
+            Individual judge scores stay hidden. Ranked scores and per-criterion
+            breakdowns appear under &ldquo;Latest scores&rdquo; once a ranking
+            snapshot exists.
           </p>
         )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 text-lg font-semibold">Event details</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Everything here is shown publicly on the event page under “About this
+          event”.
+        </p>
+        <ActionForm
+          action={updateEventDetailsAction.bind(null, eventId)}
+          submitLabel="Save details"
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium">
+              Description
+              <textarea
+                name="description"
+                rows={4}
+                defaultValue={doc.event.description ?? ""}
+                placeholder="What is this event about?"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Event website
+                <input
+                  type="url"
+                  name="websiteUrl"
+                  defaultValue={doc.event.websiteUrl ?? ""}
+                  placeholder="https://example.com"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Maximum team size
+                <input
+                  type="number"
+                  name="maxTeamSize"
+                  min={2}
+                  max={100}
+                  defaultValue={doc.event.maxTeamSize ?? ""}
+                  placeholder="Unlimited"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+            <label className="block text-sm font-medium">
+              Prizes
+              <textarea
+                name="prizeInfo"
+                rows={2}
+                defaultValue={doc.event.prizeInfo ?? ""}
+                placeholder="e.g. $5,000 for the winning team, plus sponsor prizes."
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Timeline
+              <textarea
+                name="timeline"
+                rows={3}
+                defaultValue={doc.event.timeline ?? ""}
+                placeholder={"Registration opens\nSubmissions close\nJudging starts"}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Schedule
+              <textarea
+                name="schedule"
+                rows={3}
+                defaultValue={doc.event.schedule ?? ""}
+                placeholder={"Day 1 · 09:00 Opening ceremony\nDay 1 · 13:00 Hacking starts"}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Rules
+              <textarea
+                name="rules"
+                rows={4}
+                defaultValue={doc.event.rules ?? ""}
+                placeholder="Eligibility, judging criteria, code of conduct…"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+        </ActionForm>
       </section>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
@@ -322,7 +424,6 @@ export default async function OrganizerPage({
                 aria-label="Role for new member"
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
               >
-                <option value="PARTICIPANT">Participant</option>
                 <option value="JUDGE">Judge</option>
                 <option value="ORGANIZER">Organizer</option>
               </select>
@@ -435,6 +536,20 @@ export default async function OrganizerPage({
                   {application.rationale ? (
                     <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">
                       {application.rationale}
+                    </p>
+                  ) : null}
+                  {application.attachmentName ? (
+                    <p className="mt-1 text-xs">
+                      <a
+                        href={`/api/v1/events/${eventId}/judge-applications/${application.id}/attachment`}
+                        data-testid="application-attachment"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Download {application.attachmentName}
+                      </a>
+                      {application.attachmentSize
+                        ? ` (${Math.max(1, Math.round(application.attachmentSize / 1024))}KB)`
+                        : null}
                     </p>
                   ) : null}
                   <p className="mt-1 text-xs text-slate-400">
@@ -718,17 +833,43 @@ export default async function OrganizerPage({
                   </td>
                   <td className="py-2 pr-4">{formatDate(item.submittedAt)}</td>
                   <td className="py-2">
-                    {item.status === "ASSIGNED" ? (
-                      <ActionForm
-                        action={unassignJudgeAction.bind(
-                          null,
-                          eventId,
-                          item.id,
-                        )}
-                        submitLabel="Unassign"
-                        className="[&_button]:mt-0 [&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
-                      />
-                    ) : null}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.status === "ASSIGNED" ? (
+                        <ActionForm
+                          action={unassignJudgeAction.bind(
+                            null,
+                            eventId,
+                            item.id,
+                          )}
+                          submitLabel="Unassign"
+                          className="[&_button]:mt-0 [&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
+                        />
+                      ) : null}
+                      {item.status === "SUBMITTED" ? (
+                        <ActionForm
+                          action={lockEvaluationAction.bind(
+                            null,
+                            eventId,
+                            item.id,
+                          )}
+                          submitLabel="Lock"
+                          className="[&_button]:mt-0 [&_button]:bg-emerald-600 [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:text-white [&_button]:hover:bg-emerald-500"
+                        />
+                      ) : null}
+                      {item.status === "LOCKED" ? (
+                        <span
+                          data-testid="assignment-locked-label"
+                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500"
+                        >
+                          Locked
+                        </span>
+                      ) : null}
+                      {item.status === "IN_PROGRESS" ? (
+                        <span className="text-xs text-slate-400">
+                          In progress
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -745,12 +886,29 @@ export default async function OrganizerPage({
               action={lockAllSubmissionsAction.bind(null, eventId)}
               submitLabel="Lock submitted evaluations"
             />
+          </div>
+        ) : null}
+        {canRunRanking(doc.event.state) ? (
+          <div className="flex flex-wrap items-center gap-3">
             <ActionForm
               action={generateRankingAction.bind(null, eventId)}
               submitLabel="Generate ranking snapshot"
             />
           </div>
         ) : null}
+        {!doc.publishedRankingSnapshotId &&
+        (doc.event.state === "RESULTS_READY" || doc.event.state === "PUBLISHED")
+          ? (
+            <p
+              data-testid="results-missing-warning"
+              className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            >
+              This event is {EVENT_STATE_LABEL[doc.event.state]?.toLowerCase()}{" "}
+              but no results have been published. Generate a ranking snapshot
+              and publish it so participants can see their scores.
+            </p>
+          )
+          : null}
         {doc.allEvaluationsLocked ? (
           <p
             data-testid="all-locked-note"
@@ -788,7 +946,7 @@ export default async function OrganizerPage({
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
                     Published
                   </span>
-                ) : doc.event.state === "JUDGING" ? (
+                ) : canRunRanking(doc.event.state) ? (
                   <ActionForm
                     action={publishRankingAction.bind(
                       null,
@@ -802,6 +960,14 @@ export default async function OrganizerPage({
             ))}
           </ul>
         )}
+
+        {results ? (
+          <div className="mt-6 border-t border-slate-200 pt-4">
+            <h3 className="text-base font-semibold">Latest scores</h3>
+            <ResultsMeta results={results} />
+            <ResultsTable results={results} />
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">

@@ -7,14 +7,18 @@ import { DogfoodError } from "@dogfood/validation";
 import { appendAuditEvent } from "@dogfood/audit";
 
 import {
+  countTeamMembers,
   deleteTeamMember,
   eventMembershipRoles,
   findInviteByTokenHash,
   getEventState,
+  getEventTeamRules,
   getMembership,
   getTeamById,
   getTeamMembers,
+  getTeamMembersWithProfiles,
   insertInvite,
+  type TeamMemberProfile,
 } from "./repository";
 
 export type CreateTeamInput = { name: string };
@@ -25,7 +29,48 @@ export type TeamDetail = {
   name: string;
   isOwner: boolean;
   ownerIds: string[];
+  members: TeamMemberProfile[];
+  maxTeamSize: number | null;
+  memberCount: number;
+  rosterLocked: boolean;
 };
+
+const LOCKED_ROSTER_STATES: EventState[] = [
+  "SUBMISSIONS_OPEN",
+  "SUBMISSIONS_CLOSED",
+  "JUDGING",
+  "RESULTS_READY",
+  "PUBLISHED",
+  "ARCHIVED",
+];
+
+export function isTeamRosterLocked(state: string): boolean {
+  return LOCKED_ROSTER_STATES.includes(state as EventState);
+}
+
+function assertRosterUnlocked(state: string): void {
+  if (isTeamRosterLocked(state)) {
+    throw new DogfoodError(
+      "TEAM_RULE_VIOLATION",
+      "Team membership is locked because submissions for this event are open",
+    );
+  }
+}
+
+function assertTeamCapacity(
+  currentCount: number,
+  maxTeamSize: number | null,
+  adding: number,
+): void {
+  if (maxTeamSize !== null && currentCount + adding > maxTeamSize) {
+    throw new DogfoodError(
+      "TEAM_RULE_VIOLATION",
+      `This event allows a maximum of ${maxTeamSize} ${
+        maxTeamSize === 1 ? "person" : "people"
+      } per team`,
+    );
+  }
+}
 
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
@@ -61,12 +106,18 @@ async function toTeamDetail(
       "[FORBIDDEN] Actor is not a team member",
     );
   }
+  const rules = await getEventTeamRules(team.eventId);
+  const profiles = await getTeamMembersWithProfiles(teamId);
   return {
     id: team.id,
     eventId: team.eventId,
     name: team.name,
     isOwner: my.isOwner,
     ownerIds: members.filter((m) => m.isOwner).map((m) => m.userId),
+    members: profiles,
+    maxTeamSize: rules?.maxTeamSize ?? null,
+    memberCount: members.length,
+    rosterLocked: isTeamRosterLocked(rules?.state ?? "DRAFT"),
   };
 }
 
@@ -76,6 +127,10 @@ export async function createTeam(
   input: CreateTeamInput,
 ): Promise<TeamDetail> {
   await requireParticipant(actor, eventId, ACTION.TEAM_JOIN);
+
+  const rules = await getEventTeamRules(eventId);
+  assertRosterUnlocked(rules?.state ?? "DRAFT");
+  assertTeamCapacity(0, rules?.maxTeamSize ?? null, 1);
 
   let teamId: string;
   try {
@@ -127,7 +182,7 @@ export async function createTeamInvite(
     );
   }
 
-  const rawToken = randomBytes(32).toString("hex");
+  const rawToken = randomBytes(9).toString("base64url").replace(/[_-]/g, ""); // ~12 chars
   await insertInvite({
     teamId,
     tokenHash: hashToken(rawToken),
@@ -154,6 +209,14 @@ export async function joinTeam(
   }
 
   await requireParticipant(actor, team.eventId, ACTION.TEAM_JOIN);
+
+  const rules = await getEventTeamRules(team.eventId);
+  assertRosterUnlocked(rules?.state ?? "DRAFT");
+  assertTeamCapacity(
+    await countTeamMembers(team.id),
+    rules?.maxTeamSize ?? null,
+    1,
+  );
 
   try {
     await db.transaction(async (tx) => {
@@ -197,6 +260,9 @@ export async function leaveTeam(
   const team = await getTeamById(teamId);
   if (!team) throw new DogfoodError("NOT_FOUND", "Team not found");
   await requireParticipant(actor, team.eventId, ACTION.TEAM_MANAGE);
+
+  const rules = await getEventTeamRules(team.eventId);
+  assertRosterUnlocked(rules?.state ?? "DRAFT");
 
   const my = await getMembership(teamId, actor.userId);
   if (!my) throw new DogfoodError("FORBIDDEN", "[FORBIDDEN] Actor is not a team member");

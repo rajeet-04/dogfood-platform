@@ -140,6 +140,31 @@ async function loadEvent(eventId: string) {
   return rows[0];
 }
 
+const JUDGING_CLOSED_STATES: EventState[] = [
+  "RESULTS_READY",
+  "PUBLISHED",
+  "ARCHIVED",
+];
+
+/**
+ * Judges may keep working on an evaluation until results are generated. Once
+ * the event reaches RESULTS_READY (or later) every evaluation is frozen.
+ */
+export function isJudgingClosed(eventState: EventState): boolean {
+  return JUDGING_CLOSED_STATES.includes(eventState);
+}
+
+async function assertJudgingOpen(eventId: string): Promise<void> {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  if (isJudgingClosed(event.state as EventState)) {
+    throw new DogfoodError(
+      "CONFLICT",
+      "Judging for this event is closed because results have already been generated",
+    );
+  }
+}
+
 async function loadProjectById(projectId: string): Promise<ProjectRow | undefined> {
   const rows = await db
     .select()
@@ -671,6 +696,8 @@ export async function startEvaluation(
     ACTION.EVALUATION_SUBMIT,
   );
 
+  await assertJudgingOpen(eventId);
+
   if (await isUserOnProjectTeam(actor.userId, assignment.projectId)) {
     throw new DogfoodError(
       "CONFLICT",
@@ -755,6 +782,8 @@ export async function saveEvaluationDraft(
     );
   }
 
+  await assertJudgingOpen(eventId);
+
   const criteria = await loadCriteria(evaluation.rubricId);
   if (input.scores) {
     for (const item of input.scores) {
@@ -819,6 +848,68 @@ export async function saveEvaluationDraft(
   return toEvaluationDetail(fresh, freshAssignment, criteria, scores);
 }
 
+/**
+ * Reopens a submitted evaluation without touching the scores the judge already
+ * gave, so the judge can revise them before results are generated.
+ */
+export async function reopenEvaluation(
+  actor: Actor,
+  eventId: string,
+  assignmentId: string,
+): Promise<EvaluationDetail> {
+  const assignment = await loadAssignmentById(assignmentId);
+  if (!assignment || assignment.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Assignment not found");
+  }
+
+  await requireAssignmentPermission(
+    actor,
+    eventId,
+    assignment,
+    ACTION.EVALUATION_SUBMIT,
+  );
+
+  const evaluation = await loadEvaluationByAssignment(assignmentId);
+  if (!evaluation) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not started");
+  }
+  if (evaluation.state === "LOCKED") {
+    throw new DogfoodError(
+      "EVALUATION_LOCKED",
+      "Cannot reopen a locked evaluation",
+    );
+  }
+
+  await assertJudgingOpen(eventId);
+
+  if (evaluation.state !== "SUBMITTED") {
+    throw new DogfoodError(
+      "CONFLICT",
+      "Only a submitted evaluation can be reopened",
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.evaluations)
+      .set({ state: "IN_PROGRESS", submittedAt: null })
+      .where(eq(schema.evaluations.id, evaluation.id));
+    await tx
+      .update(schema.judgeAssignments)
+      .set({ status: "IN_PROGRESS" })
+      .where(eq(schema.judgeAssignments.id, assignment.id));
+  });
+
+  const fresh = await loadEvaluationByAssignment(assignmentId);
+  const freshAssignment = await loadAssignmentById(assignmentId);
+  const criteria = await loadCriteria(evaluation.rubricId);
+  const scores = await loadScores(evaluation.id);
+  if (!fresh || !freshAssignment) {
+    throw new DogfoodError("NOT_FOUND", "Evaluation not found");
+  }
+  return toEvaluationDetail(fresh, freshAssignment, criteria, scores);
+}
+
 export async function submitEvaluation(
   actor: Actor,
   eventId: string,
@@ -848,6 +939,13 @@ export async function submitEvaluation(
     throw new DogfoodError(
       "EVALUATION_LOCKED",
       "Cannot submit a locked evaluation",
+    );
+  }
+
+  if (isJudgingClosed(event.state as EventState)) {
+    throw new DogfoodError(
+      "CONFLICT",
+      "Judging for this event is closed because results have already been generated",
     );
   }
 

@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dogfood/audit": "workspace:*",
     "@dogfood/applications": "workspace:*",
+    "@dogfood/audit": "workspace:*",
     "@dogfood/auth": "workspace:*",
     "@dogfood/certificates": "workspace:*",
     "@dogfood/db": "workspace:*",
@@ -18,6 +18,7 @@
     "@dogfood/exports": "workspace:*",
     "@dogfood/judging": "workspace:*",
     "@dogfood/normalization": "workspace:*",
+    "@dogfood/notifications": "workspace:*",
     "@dogfood/permissions": "workspace:*",
     "@dogfood/ranking": "workspace:*",
     "@dogfood/scoring": "workspace:*",

@@ -14,6 +14,12 @@ export type OrganizerDocument = {
     state: EventRow["state"];
     registrationOpensAt: Date | null;
     registrationClosesAt: Date | null;
+    websiteUrl: string | null;
+    prizeInfo: string | null;
+    timeline: string | null;
+    schedule: string | null;
+    rules: string | null;
+    maxTeamSize: number | null;
   };
   members: Array<{
     userId: string;
@@ -30,6 +36,9 @@ export type OrganizerDocument = {
     status: string;
     createdAt: Date;
     decidedAt: Date | null;
+    attachmentName: string | null;
+    attachmentSize: number | null;
+    attachmentContentType: string | null;
   }>;
   judges: Array<{ userId: string; email: string; displayName: string }>;
   rubrics: Array<{
@@ -237,10 +246,16 @@ export async function getOrganizerDocument(
       slug: event.slug,
       name: event.name,
       description: event.description,
-      state: event.state,
-      registrationOpensAt: event.registrationOpensAt,
-      registrationClosesAt: event.registrationClosesAt,
-    },
+    state: event.state,
+    registrationOpensAt: event.registrationOpensAt,
+    registrationClosesAt: event.registrationClosesAt,
+    websiteUrl: event.websiteUrl,
+    prizeInfo: event.prizeInfo,
+    timeline: event.timeline,
+    schedule: event.schedule,
+    rules: event.rules,
+    maxTeamSize: event.maxTeamSize,
+  },
     members,
     applications: applications.map((application) => ({
       id: application.id,
@@ -251,6 +266,9 @@ export async function getOrganizerDocument(
       status: application.status,
       createdAt: application.createdAt,
       decidedAt: application.decidedAt,
+      attachmentName: application.attachmentName,
+      attachmentSize: application.attachmentSize,
+      attachmentContentType: application.attachmentContentType,
     })),
     judges: members.filter((m) => m.role === "JUDGE"),
     rubrics: rubrics.map((rubric) => {

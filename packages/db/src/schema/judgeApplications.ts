@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -36,6 +37,10 @@ export const judgeApplications = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     rationale: text("rationale"),
+    attachmentName: text("attachment_name"),
+    attachmentPath: text("attachment_path"),
+    attachmentSize: integer("attachment_size"),
+    attachmentContentType: text("attachment_content_type"),
     status: judgeApplicationStatus("status").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

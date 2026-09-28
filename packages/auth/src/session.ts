@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, db, eq, gt, schema } from "@dogfood/db";
+import { and, db, eq, gt, lt, schema } from "@dogfood/db";
 import type { Actor } from "@dogfood/shared";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -52,6 +52,49 @@ export async function resolveSession(rawToken: string): Promise<Actor | null> {
   return { userId: user.id, isPlatformAdmin: user.isPlatformAdmin };
 }
 
+export type SessionAccount = {
+  userId: string;
+  email: string;
+  displayName: string;
+  isPlatformAdmin: boolean;
+  token: string;
+};
+
+export async function resolveSessionAccount(
+  rawToken: string,
+): Promise<SessionAccount | null> {
+  const account = await resolveSession(rawToken);
+  if (!account) return null;
+  const users = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, account.userId))
+    .limit(1);
+  const user = users[0];
+  if (!user) return null;
+  return {
+    userId: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    isPlatformAdmin: user.isPlatformAdmin,
+    token: rawToken,
+  };
+}
+
 export async function revokeSession(sessionId: string): Promise<void> {
   await db.delete(schema.sessions).where(eq(schema.sessions.id, sessionId));
+}
+
+export async function revokeSessionByToken(rawToken: string): Promise<void> {
+  await db
+    .delete(schema.sessions)
+    .where(eq(schema.sessions.tokenHash, hashOpaqueToken(rawToken)));
+}
+
+export async function deleteExpiredSessions(): Promise<number> {
+  const rows = await db
+    .delete(schema.sessions)
+    .where(lt(schema.sessions.expiresAt, new Date()))
+    .returning({ id: schema.sessions.id });
+  return rows.length;
 }

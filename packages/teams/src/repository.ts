@@ -45,6 +45,31 @@ export async function getTeamMembers(
     .where(eq(schema.teamMembers.teamId, teamId));
 }
 
+export async function getTeamMembersWithProfiles(
+  teamId: string,
+): Promise<TeamMemberProfile[]> {
+  return db
+    .select({
+      userId: schema.teamMembers.userId,
+      displayName: schema.users.displayName,
+      email: schema.users.email,
+      isOwner: schema.teamMembers.isOwner,
+      joinedAt: schema.teamMembers.joinedAt,
+    })
+    .from(schema.teamMembers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.teamMembers.userId))
+    .where(eq(schema.teamMembers.teamId, teamId))
+    .orderBy(schema.teamMembers.joinedAt);
+}
+
+export type TeamMemberProfile = {
+  userId: string;
+  displayName: string;
+  email: string;
+  isOwner: boolean;
+  joinedAt: Date;
+};
+
 export async function getMembership(
   teamId: string,
   userId: string,
@@ -129,4 +154,25 @@ export async function getEventState(eventId: string): Promise<string | undefined
     .where(eq(schema.events.id, eventId))
     .limit(1);
   return rows[0]?.state;
+}
+
+export async function getEventTeamRules(eventId: string): Promise<{
+  state: string;
+  maxTeamSize: number | null;
+} | null> {
+  const rows = await db
+    .select({ state: schema.events.state, maxTeamSize: schema.events.maxTeamSize })
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  const row = rows[0];
+  return row ? { state: row.state, maxTeamSize: row.maxTeamSize } : null;
+}
+
+export async function countTeamMembers(teamId: string): Promise<number> {
+  const rows = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.teamMembers)
+    .where(eq(schema.teamMembers.teamId, teamId));
+  return rows[0]?.n ?? 0;
 }

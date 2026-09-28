@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isJudgingClosed } from "@dogfood/judging";
 import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
@@ -11,6 +12,7 @@ import {
   getJudgeHome,
 } from "../../../../server/read-models/judge";
 import {
+  reopenEvaluationAction,
   startEvaluationAction,
   submitEvaluationAction,
 } from "../../../../server/actions/evaluation";
@@ -147,6 +149,7 @@ export default async function JudgePage({
               eventId={eventId}
               assignmentId={assignment}
               detail={detail.evaluation}
+              judgingClosed={isJudgingClosed(detail.event.state)}
             />
           )}
         </section>
@@ -210,7 +213,11 @@ export default async function JudgePage({
                       href={`/events/${eventId}/judge?assignment=${item.assignmentId}`}
                       className="text-blue-600 hover:underline"
                     >
-                      {item.status === "LOCKED" ? "View" : "Evaluate"}
+                      {item.status === "LOCKED"
+                        ? "View"
+                        : item.status === "SUBMITTED"
+                          ? "Re-evaluate"
+                          : "Evaluate"}
                     </Link>
                   </td>
                 </tr>
@@ -227,12 +234,16 @@ function EvaluationForm({
   eventId,
   assignmentId,
   detail,
+  judgingClosed,
 }: {
   eventId: string;
   assignmentId: string;
   detail: NonNullable<Awaited<ReturnType<typeof getJudgeAssignmentDetail>>["evaluation"]>;
+  judgingClosed: boolean;
 }) {
   const locked = detail.state === "LOCKED";
+  const submitted = detail.state === "SUBMITTED";
+  const readOnly = locked || judgingClosed;
   return (
     <div>
       {locked ? (
@@ -242,6 +253,32 @@ function EvaluationForm({
         >
           This evaluation is locked and can no longer be modified.
         </p>
+      ) : judgingClosed ? (
+        <p
+          data-testid="judging-closed-banner"
+          className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          Results have already been generated for this event, so evaluations
+          are read-only.
+        </p>
+      ) : submitted ? (
+        <div
+          data-testid="submitted-banner"
+          className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800"
+        >
+          <p className="font-medium">
+            Submitted{detail.submittedAt ? ` on ${formatDate(detail.submittedAt)}` : ""}.
+          </p>
+          <p className="mt-1">
+            Your scores are saved. Re-evaluate to change them before results
+            are generated.
+          </p>
+          <ActionForm
+            action={reopenEvaluationAction.bind(null, eventId, assignmentId)}
+            submitLabel="Re-evaluate"
+            className="[&_button]:mt-3 [&_button]:bg-emerald-600 [&_button]:text-white [&_button]:hover:bg-emerald-500"
+          />
+        </div>
       ) : (
         <p className="mb-4 text-sm text-slate-500">
           Score each criterion within its allowed range.
@@ -249,8 +286,8 @@ function EvaluationForm({
       )}
       <ActionForm
         action={submitEvaluationAction.bind(null, eventId, assignmentId)}
-        submitLabel={locked ? "Read only" : "Submit evaluation"}
-        submitDisabled={locked}
+        submitLabel={readOnly ? "Read only" : "Submit evaluation"}
+        submitDisabled={readOnly}
       >
         {detail.criteria.map((criterion) => (
           <fieldset
@@ -276,7 +313,7 @@ function EvaluationForm({
                 max={criterion.maxScore}
                 step="any"
                 required={!criterion.optional}
-                disabled={locked}
+                disabled={readOnly}
                 defaultValue={
                   criterion.score === null ? "" : String(criterion.score)
                 }
@@ -289,7 +326,7 @@ function EvaluationForm({
               <textarea
                 name={`comment:${criterion.criterionId}`}
                 rows={2}
-                disabled={locked}
+                disabled={readOnly}
                 defaultValue={criterion.comment ?? ""}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
               />
@@ -301,12 +338,12 @@ function EvaluationForm({
           <textarea
             name="overallComment"
             rows={3}
-            disabled={locked}
+            disabled={readOnly}
             defaultValue={detail.overallComment ?? ""}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
         </label>
-        {locked ? (
+        {readOnly ? (
           <div className="mt-3">
             {detail.criteria.map((criterion) => (
               <p key={criterion.criterionId} className="text-sm text-slate-600">

@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -34,6 +35,12 @@ export const events = pgTable("events", {
   }),
   judgingOpensAt: timestamp("judging_opens_at", { withTimezone: true }),
   judgingClosesAt: timestamp("judging_closes_at", { withTimezone: true }),
+  websiteUrl: text("website_url"),
+  prizeInfo: text("prize_info"),
+  timeline: text("timeline"),
+  schedule: text("schedule"),
+  rules: text("rules"),
+  maxTeamSize: integer("max_team_size"),
   publishedRankingSnapshotId: uuid("published_ranking_snapshot_id"),
   createdBy: uuid("created_by")
     .notNull()

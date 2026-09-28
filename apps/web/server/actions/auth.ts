@@ -1,15 +1,25 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "@dogfood/validation";
 import {
   authenticateCredentials,
   createSession,
   registerUser,
+  resolveSessionAccount,
+  revokeSessionByToken,
 } from "@dogfood/auth";
 
 import type { FormState } from "../../lib/form-state";
-import { clearSessionCookie, setSessionCookie } from "../session";
+import {
+  clearSessionCookie,
+  forgetAccount,
+  getCurrentSessionToken,
+  getSavedAccounts,
+  rememberAccount,
+  setSessionCookie,
+} from "../session";
 import { describeError } from "./common";
 
 const registerSchema = z.object({
@@ -46,6 +56,11 @@ export async function registerAction(
     const user = await registerUser(parsed.data);
     const { rawToken } = await createSession(user.id);
     await setSessionCookie(rawToken);
+    await rememberAccount({
+      token: rawToken,
+      email: user.email,
+      displayName: user.displayName,
+    });
   } catch (err) {
     return { error: describeError(err) };
   }
@@ -68,6 +83,11 @@ export async function loginAction(
     const user = await authenticateCredentials(parsed.data);
     const { rawToken } = await createSession(user.id);
     await setSessionCookie(rawToken);
+    await rememberAccount({
+      token: rawToken,
+      email: user.email,
+      displayName: user.displayName,
+    });
   } catch (err) {
     return { error: describeError(err) };
   }
@@ -77,4 +97,55 @@ export async function loginAction(
 export async function logoutAction(): Promise<void> {
   await clearSessionCookie();
   redirect("/");
+}
+
+export async function switchAccountAction(
+  token: string,
+  _prev: FormState | undefined,
+  _formData: FormData,
+): Promise<FormState | undefined> {
+  const account = await resolveSessionAccount(token);
+  if (!account) {
+    await forgetAccount(token);
+    return { error: "That account session has expired. Log in again." };
+  }
+  await setSessionCookie(account.token);
+  revalidatePath("/", "layout");
+  redirect("/events");
+}
+
+export async function signOutAccountAction(
+  token: string,
+  _prev: FormState | undefined,
+  _formData: FormData,
+): Promise<FormState | undefined> {
+  const currentToken = (await getCurrentSessionToken()) ?? "";
+  await revokeSessionByToken(token);
+  await forgetAccount(token);
+  if (token === currentToken) {
+    const remaining = (await getSavedAccounts())[0];
+    const fallback = remaining
+      ? await resolveSessionAccount(remaining.token)
+      : null;
+    if (fallback) {
+      await setSessionCookie(fallback.token);
+    } else {
+      await clearSessionCookie();
+    }
+  }
+  revalidatePath("/", "layout");
+  return { success: "Signed out." };
+}
+
+export async function signOutAllAction(
+  _prev: FormState | undefined,
+  _formData: FormData,
+): Promise<FormState | undefined> {
+  const accounts = await getSavedAccounts();
+  for (const account of accounts) {
+    await revokeSessionByToken(account.token);
+  }
+  await clearSessionCookie();
+  revalidatePath("/", "layout");
+  return { success: "Signed out of all accounts." };
 }

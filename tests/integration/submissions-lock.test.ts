@@ -48,11 +48,12 @@ async function scenario() {
     "PARTICIPANT",
   );
   await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
-  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
-
+  // Rosters lock when submissions open, so the team forms during registration.
   const team = await createTeam(actorFor(participant.id), event.id, {
     name: "Team Lock",
   });
+  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
+
   const project = await createProject(actorFor(participant.id), event.id, {
     teamId: team.id,
     title: "Locked Project",

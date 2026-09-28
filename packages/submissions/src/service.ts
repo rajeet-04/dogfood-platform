@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { db, desc, eq, schema, sqlState, type EventState } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
+import { actorDisplayName, notifyEventMembersByRole } from "@dogfood/notifications";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
 import { appendAuditEvent } from "@dogfood/audit";
@@ -296,6 +297,18 @@ export async function submitProject(
       resourceType: "project",
       resourceId: project.id,
     });
+    await notifyEventMembersByRole(
+      tx,
+      eventId,
+      ["JUDGE", "ORGANIZER"],
+      {
+        type: "project_submitted",
+        title: `A project was submitted for ${event.name}`,
+        body: `${await actorDisplayName(tx, actor.userId)} submitted "${revision.title}" for judging.`,
+        href: `/events/${eventId}/judge`,
+      },
+      { excludeUserIds: [actor.userId] },
+    );
   });
   const updated = await getProjectById(project.id);
   if (!updated) throw new DogfoodError("NOT_FOUND", "Project not found");

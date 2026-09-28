@@ -57,7 +57,7 @@ export default async function CertificatePage({
           </p>
           <p className="mt-2 text-sm text-slate-500">
             {tierLabel}
-            {certificate.rank ? ` — placed #{certificate.rank}` : ""} in the
+            {certificate.rank ? ` — placed #${certificate.rank}` : ""} in the
             hackathon
             <span className="font-medium text-slate-700">
               {" "}
@@ -83,7 +83,7 @@ export default async function CertificatePage({
 
       <div className="mt-6 text-center">
         <Link
-          href={`/events/${certificate.eventSlug}`}
+          href={`/events/${certificate.eventId}`}
           className="text-sm font-medium text-blue-600 hover:underline"
         >
           Open event

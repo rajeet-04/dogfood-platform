@@ -14,6 +14,7 @@
                          "@dogfood/validation":  "workspace:*",
                          "@dogfood/shared":  "workspace:*",
                          "@dogfood/permissions":  "workspace:*",
-                         "@dogfood/audit":  "workspace:*"
+                         "@dogfood/audit":  "workspace:*",
+                         "@dogfood/notifications":  "workspace:*"
                      }
 }

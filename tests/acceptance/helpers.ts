@@ -32,6 +32,7 @@ export type SeedUser = {
   userId: string;
   actor: Actor;
   email: string;
+  displayName: string;
 };
 
 export async function seedUser(
@@ -47,6 +48,7 @@ export async function seedUser(
     userId: user.id,
     actor: { userId: user.id, isPlatformAdmin: false },
     email: user.email,
+    displayName,
   };
 }
 
@@ -95,24 +97,44 @@ export async function seedRubric(
   return rubric.id;
 }
 
+/**
+ * Creates a participant team while registration is still open. Rosters lock
+ * when submissions open, so the team has to exist before that transition.
+ */
+export async function seedParticipantTeam(
+  organizer: Actor,
+  eventId: string,
+  participant: SeedUser,
+  name: string,
+): Promise<{ teamId: string }> {
+  await grantEventMembership(organizer, eventId, participant.userId, "PARTICIPANT");
+  const team = await createTeam(participant.actor, eventId, { name });
+  return { teamId: team.id };
+}
+
 export async function seedParticipantProject(
   organizer: Actor,
   eventId: string,
   participant: SeedUser,
   title: string,
+  existingTeamId?: string,
 ): Promise<{ teamId: string; projectId: string }> {
   await grantEventMembership(organizer, eventId, participant.userId, "PARTICIPANT");
-  const team = await createTeam(participant.actor, eventId, {
-    name: `${title} Team`,
-  });
+  const teamId =
+    existingTeamId ??
+    (
+      await createTeam(participant.actor, eventId, {
+        name: `${title} Team`,
+      })
+    ).id;
   const project = await createProject(participant.actor, eventId, {
-    teamId: team.id,
+    teamId,
     title,
     description: `${title} — a self-hosted hackathon project.`,
     techTags: ["react", "typescript"],
   });
   await submitProject(participant.actor, eventId, project.id);
-  return { teamId: team.id, projectId: project.id };
+  return { teamId, projectId: project.id };
 }
 
 export async function getAssignments(
@@ -174,6 +196,11 @@ export async function loginViaUi(page: Page, email: string): Promise<void> {
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Log in" }).click();
   await page.waitForURL("**/events");
+  await waitForHydration(page);
+}
+
+export async function waitForHydration(page: Page): Promise<void> {
+  await page.waitForLoadState("networkidle");
 }
 
 export async function expectNoSelector(

@@ -7,12 +7,18 @@ import {
 } from "@dogfood/applications";
 
 import { ActionForm } from "../../../components/action-form";
+import {
+  ResultsMeta,
+  ResultsTable,
+} from "../../../components/results-table";
 import { EVENT_STATE_LABEL } from "../../../lib/event-flow";
 import {
   applyAsJudgeAction,
   withdrawJudgeApplicationAction,
 } from "../../../server/actions/applications";
 import { joinEventAction } from "../../../server/actions/members";
+import { getEventResults } from "../../../server/read-models/results";
+import { getPublicRubric } from "../../../server/read-models/rubric";
 import { getActor } from "../../../server/session";
 
 export const dynamic = "force-dynamic";
@@ -34,21 +40,33 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function EventLandingPage({
   params,
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const { eventId } = await params;
+  const { eventId: eventParam } = await params;
   const actor = await getActor();
 
+  // The segment is an id, but slugs are accepted too: a non-UUID value can
+  // never match the uuid column, so it is matched against the slug instead.
+  // Everything downstream uses the resolved id.
+  const isUuid = UUID_PATTERN.test(eventParam);
   const rows = await db
     .select()
     .from(schema.events)
-    .where(eq(schema.events.id, eventId))
+    .where(
+      isUuid
+        ? eq(schema.events.id, eventParam)
+        : eq(schema.events.slug, eventParam),
+    )
     .limit(1);
   const event = rows[0];
   if (!event) notFound();
+  const eventId = event.id;
 
   let roles: string[] = [];
   if (actor) {
@@ -101,6 +119,9 @@ export default async function EventLandingPage({
   const canApplyAsJudge =
     Boolean(actor) && withinWindow && notMember && !application;
 
+  const results = await getEventResults(eventId);
+  const rubric = await getPublicRubric(eventId);
+
   return (
     <main>
       <header className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-4 py-16 text-white sm:py-20">
@@ -126,13 +147,132 @@ export default async function EventLandingPage({
 
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0">
-          {event.description ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          {event.description ||
+          event.prizeInfo ||
+          event.timeline ||
+          event.schedule ||
+          event.rules ||
+          event.websiteUrl ? (
+            <div
+              className="rounded-2xl border border-slate-200 bg-white p-6"
+              data-testid="event-about"
+            >
               <h2 className="mb-3 text-lg font-semibold">About this event</h2>
-              <p className="whitespace-pre-wrap text-slate-600">
-                {event.description}
-              </p>
+              {event.description ? (
+                <p className="whitespace-pre-wrap text-slate-600">
+                  {event.description}
+                </p>
+              ) : null}
+
+              {event.websiteUrl ? (
+                <p className="mt-3 text-sm">
+                  <a
+                    href={event.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="event-website-link"
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    Visit the event website
+                  </a>
+                </p>
+              ) : null}
+
+              {event.prizeInfo ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-slate-900">Prizes</h3>
+                  <p
+                    data-testid="event-prize"
+                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                  >
+                    {event.prizeInfo}
+                  </p>
+                </div>
+              ) : null}
+
+              {event.timeline ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Timeline
+                  </h3>
+                  <p
+                    data-testid="event-timeline"
+                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                  >
+                    {event.timeline}
+                  </p>
+                </div>
+              ) : null}
+
+              {event.schedule ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Schedule
+                  </h3>
+                  <p
+                    data-testid="event-schedule"
+                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                  >
+                    {event.schedule}
+                  </p>
+                </div>
+              ) : null}
+
+              {event.rules ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-slate-900">Rules</h3>
+                  <p
+                    data-testid="event-rules"
+                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                  >
+                    {event.rules}
+                  </p>
+                </div>
+              ) : null}
             </div>
+          ) : null}
+
+          {rubric && rubric.criteria.length > 0 ? (
+            <section
+              className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
+              data-testid="public-rubric"
+            >
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-lg font-semibold">Judging rubric</h2>
+                <span className="text-xs text-slate-500">
+                  {rubric.name} · v{rubric.version}
+                </span>
+              </div>
+              <p className="mb-4 text-sm text-slate-500">
+                Judges score every submitted project against these criteria.
+                Total weight: {rubric.weightSum}.
+              </p>
+              <ul className="divide-y divide-slate-100">
+                {rubric.criteria.map((criterion) => (
+                  <li key={criterion.name} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-800">
+                        {criterion.name}
+                        {criterion.optional ? (
+                          <span className="ml-2 text-xs font-normal text-slate-400">
+                            optional
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        weight {criterion.weight} · {criterion.minScore}–
+                        {criterion.maxScore}
+                      </p>
+                    </div>
+                    {criterion.description ? (
+                      <p className="mt-1 text-sm text-slate-600">
+                        {criterion.description}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
 
           {links.length ? (
@@ -197,7 +337,18 @@ export default async function EventLandingPage({
           </dl>
 
           <div className="mt-6 space-y-3">
-            {links.length ? (
+          {results ? (
+            <section
+              className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
+              data-testid="public-results"
+            >
+              <h2 className="mb-1 text-lg font-semibold">Results</h2>
+              <ResultsMeta results={results} />
+              <ResultsTable results={results} showCriteria={false} />
+            </section>
+          ) : null}
+
+          {links.length ? (
               <span className="inline-block rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
                 You are part of this event
               </span>
@@ -249,6 +400,19 @@ export default async function EventLandingPage({
                     placeholder="Optional: tell organizers about your judging experience."
                     className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                   />
+                  <label className="mt-3 block text-xs font-medium text-slate-600">
+                    CV or resume (optional)
+                    <input
+                      type="file"
+                      name="attachment"
+                      data-testid="judge-application-attachment"
+                      accept=".pdf,.doc,.docx,.txt,image/png,image/jpeg"
+                      className="mt-1 block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700"
+                    />
+                  </label>
+                  <p className="mt-1 text-xs text-slate-400">
+                    PDF, Word, text, PNG or JPEG up to 5MB.
+                  </p>
                 </ActionForm>
               </div>
             ) : (

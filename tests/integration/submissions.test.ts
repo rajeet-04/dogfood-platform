@@ -37,7 +37,6 @@ async function eventInSubmissions(overrides?: {
     ),
   });
   await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
-  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
 
   const participant = await registerUser({
     email: "participant@example.com",
@@ -50,9 +49,11 @@ async function eventInSubmissions(overrides?: {
     participant.id,
     "PARTICIPANT",
   );
+  // Rosters lock when submissions open, so the team forms during registration.
   const team = await createTeam(actorFor(participant.id), event.id, {
     name: "Alpha",
   });
+  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
   return {
     event,
     organizer: actorFor(organizer.id),
