@@ -34,6 +34,7 @@ import {
   Textarea,
 } from "../../../../components/ui/input";
 import { Page, PageHeader } from "../../../../components/ui/page-header";
+import { EventWindowFields } from "../../../../components/event-window-fields";
 import {
   EVENT_ROLE_TONE,
   EVENT_STATE_LABEL,
@@ -41,6 +42,7 @@ import {
   nextEventState,
 } from "../../../../lib/event-flow";
 import { isUuidId } from "../../../../lib/ids";
+import { toUtcLocalInput } from "../../../../lib/format";
 import { requireActor } from "../../../../server/session";
 import { getOrganizerDocument } from "../../../../server/read-models/organizer";
 import { getEventResults } from "../../../../server/read-models/results";
@@ -143,15 +145,6 @@ function initials(name: string): string {
 function formatDate(value: Date | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleString();
-}
-
-function toLocalInput(value: Date | null | undefined): string {
-  if (!value) return "";
-  const d = new Date(value);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
 }
 
 export default async function OrganizerPage({
@@ -444,28 +437,19 @@ export default async function OrganizerPage({
         >
           <p className="mb-4 text-small text-fg-subtle">
             The window during which participants can join and judges can apply.
-            Leave a field empty to disable that boundary.
+            Times use UTC. Leave a boundary empty to disable it.
           </p>
           <ActionForm
             action={updateRegistrationWindowAction.bind(null, eventId)}
             submitLabel="Save window"
           >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Opens">
-                <Input
-                  type="datetime-local"
-                  name="registrationOpensAt"
-                  defaultValue={toLocalInput(doc.event.registrationOpensAt)}
-                />
-              </Field>
-              <Field label="Closes">
-                <Input
-                  type="datetime-local"
-                  name="registrationClosesAt"
-                  defaultValue={toLocalInput(doc.event.registrationClosesAt)}
-                />
-              </Field>
-            </div>
+            <EventWindowFields
+              windows={["registration"]}
+              values={{
+                registrationOpensAt: toUtcLocalInput(doc.event.registrationOpensAt),
+                registrationClosesAt: toUtcLocalInput(doc.event.registrationClosesAt),
+              }}
+            />
           </ActionForm>
         </Collapsible>
 
