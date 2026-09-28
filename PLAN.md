@@ -102,11 +102,11 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 ### P5 — Stretch tiers and bonuses, only after P1–P4 are green
 
 - [~] **T3 Public (partial):** authenticated-account voting is the default; open-link and email-invitation access are also implemented, along with comments, randomized order, per-identity uniqueness, project-team self-vote denial for signed-in voters, write throttles, audit records, and tally privacy. Anonymous identities are easy to replace: open-link callers can omit/reset cookies or fabricate a fresh token, and there is no IP/global throttle; invitation email ownership is unverified and links are manually shared. These modes do not prevent Sybil ballot stuffing. No quadratic voting.
-- [~] **T4 Stretch (partial):** certificate issuance exists. Webhooks for all UI actions, signed/publicly verifiable judge participation records, embeddable gallery, and bulk import/export remain unsupported.
+- [~] **T4 Stretch (partial):** certificate issuance and signed public judge participation records exist. Configure `JUDGE_RECORD_SIGNING_PRIVATE_KEY` with an Ed25519 PKCS#8 PEM; the endpoint returns 503 without it. Records are derived from current state per request, not persisted as immutable issuance/revocation artifacts. Webhooks for all UI actions, embeddable gallery, and bulk import/export remain unsupported.
 - [x] **Normalization Proof (+5 tie-break):** `JUDGING.md` documents the raw/normalized fixture comparison, rank movement, method, sensitivity/limits, and the database-free reproducible proof script.
-- [~] **Pairwise Mode (+5 tie-break):** a tested Bradley–Terry-style estimator and organizer endpoint exist. Pairwise comparison collection, persistent judge sessions, and judge UI are missing; the bonus is partial.
+- [~] **Pairwise Mode (+5 tie-break):** the tested Bradley–Terry-style estimator and organizer endpoint now accept explicit comparisons or persisted judge choices. Judges have a UI and authenticated API for assigned, track-scoped comparisons; each pair stores the judge's latest winner. The calculation does not publish or persist a ranking snapshot, so the bonus remains partial.
 - [x] **Threat Model (+3 tie-break):** `THREAT-MODEL.md` records code-backed mitigations and accepted submission/voting/judging risks, including anonymous ballot stuffing.
-- [~] **API First (+3 tie-break):** `openapi.yaml` documents 52 HTTP methods and a parity audit exists, but server-action workflows remain outside the API; full UI/API parity is incomplete.
+- [~] **API First (+3 tie-break):** `openapi.yaml` documents 56 HTTP methods and a parity audit exists, but server-action workflows remain outside the API; full UI/API parity is incomplete.
 - [ ] Do not add bonuses to the weighted 1–5 score. These bonuses break ties only; they also help decide the $100 Best Judging Engine prize.
 
 ## Official scoring and awards reference
