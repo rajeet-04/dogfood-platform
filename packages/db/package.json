@@ -10,6 +10,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "seed": "node --env-file-if-exists=../../.env --import tsx src/seed.ts",
+    "seed:fixtures": "DOGFOOD_SEED_FIXTURES=1 node --env-file-if-exists=../../.env --import tsx src/seed.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

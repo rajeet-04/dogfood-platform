@@ -23,8 +23,12 @@ services:
     environment:
       DATABASE_URL: postgresql://dogfood:dogfood@db:5432/dogfood
       APP_URL: http://localhost:3000
+      DOGFOOD_SEED_FIXTURES: "1"
     ports:
       - "3000:3000"
+    volumes:
+      - dogfood-uploads:/app/apps/web/.uploads
 
 volumes:
   dogfood-db:
+  dogfood-uploads:
