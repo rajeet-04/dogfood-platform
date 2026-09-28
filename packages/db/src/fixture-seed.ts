@@ -27,6 +27,33 @@ type Fixture = {
 
 const CRITERIA = ["functionality", "quality", "innovation"] as const;
 const WEIGHTS = ["0.33334", "0.33333", "0.33333"] as const;
+const LOCAL_FIXTURE_SESSION_TOKENS = {
+  organizer: "dogfood-local-fixture-organizer-v1",
+  judgeA: "dogfood-local-fixture-judge-a-v1",
+  judgeB: "dogfood-local-fixture-judge-b-v1",
+  participant: "dogfood-local-fixture-participant-v1",
+} as const;
+
+export type FixtureAuthRole = keyof typeof LOCAL_FIXTURE_SESSION_TOKENS;
+
+export function fixtureSeedingEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const requested = env.DOGFOOD_SEED_FIXTURES === "1";
+  if (requested && env.DOGFOOD_MODE !== "local") {
+    throw new Error("DOGFOOD_SEED_FIXTURES=1 requires DOGFOOD_MODE=local; fixture users and credentials are local-only");
+  }
+  return requested;
+}
+
+export function fixtureSessionToken(
+  role: FixtureAuthRole,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  return fixtureSeedingEnabled(env)
+    ? LOCAL_FIXTURE_SESSION_TOKENS[role]
+    : randomBytes(32).toString("base64url");
+}
 
 /** Stable fixture IDs make a second boot an additive no-op for domain records. */
 function fixtureId(kind: string, sourceId: string): string {
@@ -237,7 +264,7 @@ export async function seedOfficialFixture(fixture: Fixture) {
   };
 }
 
-/** Print real session cookies for the four official acceptance roles. */
+/** Print local-only session cookies for the four official acceptance roles. */
 export async function printFixtureAuthHeaders(
   fixture: Fixture,
   seeded: Awaited<ReturnType<typeof seedOfficialFixture>>,
@@ -259,12 +286,17 @@ export async function printFixtureAuthHeaders(
     ["participant", seeded.participantId],
   ] as const;
   console.log(`[db] official fixture seeded: ${JSON.stringify(seeded.counts)}; eventId=${seeded.eventId}; sharedProjectId=${seeded.projectIds[firstProject.id]}`);
+  const localFixtureAuth = fixtureSeedingEnabled();
+  const expiresAt = new Date(Date.now() + (localFixtureAuth ? 12 : 24 * 30) * 60 * 60 * 1000);
   for (const [role, userId] of roles) {
     requireFixture(userId, `missing ${role} user`);
-    const token = randomBytes(32).toString("base64url");
+    const token = fixtureSessionToken(role);
     await db.insert(schema.sessions).values({
       userId, tokenHash: createHash("sha256").update(token).digest("hex"),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiresAt,
+    }).onConflictDoUpdate({
+      target: schema.sessions.tokenHash,
+      set: { userId, expiresAt },
     });
     console.log(`[db] ${role} header: Cookie: dogfood_session=${token}`);
   }

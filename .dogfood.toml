@@ -1,27 +1,22 @@
-name = "DOGFOOD"
-description = "Self-hosted hackathon submission and judging platform"
-version = "0.1.0"
-license = "MIT"
-repository = "public"
+# DOGFOOD 2026 official checker configuration.
+# Local-only fixture credentials. Never seed or expose these in production.
+
+[portal]
+base_url = "http://localhost:3000"
 
 [tiers]
-T1 = true
-T2 = true
+claimed = ["T1", "T2"]
+pitch = "Self-hosted hackathon submissions, judging, and results portal."
 
-[claims]
-# T1/T2 required path: participant submit -> judge evaluation -> normalized
-# ranking -> publication, with event-scoped authorization, audit trail,
-# immutable revisions, exports, and operational readiness.
-participant_submission = true
-judge_evaluation = true
-normalization = true
-ranking_snapshots = true
-authorization_isolation = true
-transactional_audit = true
-csv_exports = true
-health_ready_endpoints = true
+[auth]
+organizer   = "Cookie: dogfood_session=dogfood-local-fixture-organizer-v1"
+judge_a     = "Cookie: dogfood_session=dogfood-local-fixture-judge-a-v1"
+judge_b     = "Cookie: dogfood_session=dogfood-local-fixture-judge-b-v1"
+participant = "Cookie: dogfood_session=dogfood-local-fixture-participant-v1"
 
-[notes]
-# Reconcile `tiers`/`claims` with the official `.dogfood.toml` schema when the
-# released spec ships. See acceptance-report.txt for verification evidence and
-# ARCHITECTURE.md / JUDGING.md / DATA-MODEL.md for the technical narrative.
+[routes]
+gallery      = "/projects"
+submit       = "/api/v1/events/bf768bdf-3f0a-57ca-ae94-44b36cd59727/projects"
+judge_scores = "/api/v1/events/bf768bdf-3f0a-57ca-ae94-44b36cd59727/evaluations/ae78be91-e1a8-5de0-a1a4-4fee9493d41f"
+peer_scores  = "/api/v1/events/bf768bdf-3f0a-57ca-ae94-44b36cd59727/evaluations/ae78be91-e1a8-5de0-a1a4-4fee9493d41f"
+csv_export   = "/api/v1/events/bf768bdf-3f0a-57ca-ae94-44b36cd59727/exports/participants.csv"

@@ -4,7 +4,8 @@ Date:      2026-09-28
 Commit:    ec8eeb3 (final tag v0.1.0; evidence commits c0619fb, 11d037b)
 Platform:  Windows 11, Node v22.15.0, pnpm 12.5.1, PostgreSQL 17 (portable)
 
-Result: PASS for all exercised gates. No required-T1/T2 failures.
+Status: Historical local gates passed at ec8eeb3; not rerun against this checkout.
+Official DOGFOOD checker: NOT RUN (local app/database unavailable).
 
 Suite results
 -------------
@@ -57,12 +58,40 @@ Other hardened gates (green)
 
 Notes
 -----
-- The official/released acceptance suite is not published yet (it ships with
-  the hackathon release artifacts). This report covers the local suite; the
-  official suite will be run against this commit when released.
-- Network-off smoke test and the Compose boot were not literally exercised
-  because Docker is unavailable on this machine; the required path has no
-  third-party cloud dependency by design (only app + PostgreSQL).
+- The current official spec, checker, example config, and fixture are saved in
+  plans-dogfood/official/ with source URLs and SHA-256 hashes. The official
+  suite is now published; it was not run for this report because the available
+  Podman machine could not be accessed and the existing PostgreSQL container
+  was stopped. No official PASS/FAIL output is claimed here.
+- The root fixtures.json was compared with the downloaded official fixture and
+  is byte-identical (SHA-256 252896bc45d49fca69ad413be40c6bfde9d9b9f9dd8db702b3ff74eaaa181121); it was left untouched.
+- .dogfood.toml now uses the official schema and this app's route paths. Its
+  auth values are explicit placeholders because fixture seeding creates fresh
+  session tokens on each boot; copy the four current headers from the seed log
+  before running the checker.
+- The checker sends only {"title":"dogfood-late-submission-probe","summary":"probe"}
+  to the configured project-creation route. That API also requires teamId, so
+  the expected 4xx can result from request validation before the deadline rule
+  is reached. A checker PASS there would not by itself prove deadline refusal.
+- Eligibility is not assessed or claimed by this report. Acceptance behavior
+  and using the official fake-data fixture do not establish that the project
+  meets the event's code-window or other eligibility rules.
+- Safe official-checker sequence after the app and database are ready:
+    podman compose up -d --build
+    podman compose logs web
+  Copy the four current `Cookie: dogfood_session=...` headers printed during
+  fixture seeding into `[auth]` in `.dogfood.toml`, then run from the repo root:
+    python3 plans-dogfood/official/run.py .dogfood.toml > acceptance-report.txt
+  That command intentionally replaces this historical note with the checker's
+  complete stdout, including failures. Do not edit the captured output. Stop
+  containers with `podman compose down` if desired; do not add `-v`, which
+  would remove the named database and upload volumes.
+- The checker route for its closed-event probe is the JSON project-creation
+  endpoint. Its probe body omits required `teamId`, so an observed 400 may come
+  from validation before the deadline rule is reached; keep the separate
+  deadline-test evidence distinct.
+- Network-off smoke test and Compose boot were not literally exercised in the
+  historical run. The intended deployment path uses only the app and PostgreSQL.
 
 How to reproduce
 ----------------

@@ -13,7 +13,7 @@ services:
     volumes:
       - dogfood-db:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   web:
     build: .
@@ -23,9 +23,11 @@ services:
     environment:
       DATABASE_URL: postgresql://dogfood:dogfood@db:5432/dogfood
       APP_URL: http://localhost:3000
+      # Local-only fixture users and deterministic session credentials; never use in production.
+      DOGFOOD_MODE: "local"
       DOGFOOD_SEED_FIXTURES: "1"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - dogfood-uploads:/app/apps/web/.uploads
 

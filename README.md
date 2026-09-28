@@ -20,19 +20,22 @@ security), [DATA-MODEL.md](./DATA-MODEL.md) (tables and constraints),
 
 - Node 22+
 - pnpm 12 (or set `packageManager` via corepack)
-- Docker with Compose v2
+- Docker Compose v2, or Podman with a Compose provider
 
 ## Quick start
 
 One command for the full stack (database + web):
 
 ```bash
-docker compose up
+podman compose up --build
+# Docker users can run: docker compose up --build
 ```
 
 Then open http://localhost:3000. Docker Compose starts PostgreSQL, waits for
 its health check, and boots the web app. Migrations are applied before startup
-is considered ready (`GET /api/ready`).
+is considered ready (`GET /api/ready`). Compose seeds the official fixture and
+prints stable local-only fixture credentials that match `.dogfood.toml`. Never
+seed these fixture users or credentials in production.
 
 For local development instead:
 
