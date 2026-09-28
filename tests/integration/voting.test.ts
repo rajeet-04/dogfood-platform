@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSession, registerUser } from "@dogfood/auth";
-import { queryAudit } from "@dogfood/audit";
+import { createWebhookEndpoint, queryAudit } from "@dogfood/audit";
 import { and, db, eq, schema } from "@dogfood/db";
 import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
 import { createTeam } from "@dogfood/teams";
@@ -272,17 +272,27 @@ describe("authenticated public voting", () => {
   });
 
   it("rate limits repeated write attempts and records the blocked action", async () => {
-    const { event, voter, project } = await votingEvent();
+    const { event, organizer, voter, project } = await votingEvent();
+    await createWebhookEndpoint(organizer, event.id, {
+      url: "https://hooks.example.test/voting-audit",
+      eventTypes: ["vote.rate_limited"],
+    });
     await castVote(voter, event.id, project.id);
     for (let attempt = 0; attempt < 9; attempt++) {
       await expect(castVote(voter, event.id, project.id)).rejects.toMatchObject({ code: "CONFLICT" });
     }
     await expect(castVote(voter, event.id, project.id)).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    const concurrentDenials = await Promise.all(Array.from({ length: 5 }, () =>
+      castVote(voter, event.id, project.id).then(() => null, (error: unknown) => error)));
+    expect(concurrentDenials).toHaveLength(5);
+    expect(concurrentDenials.every((error) => (error as { code?: string }).code === "RATE_LIMITED")).toBe(true);
     const audit = await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.eventId, event.id));
-    expect(audit.map((row) => row.action)).toContain("vote.rate_limited");
+    expect(audit.filter((row) => row.action === "vote.rate_limited")).toHaveLength(1);
+    const deliveries = await db.select().from(schema.webhookDeliveries);
+    expect(deliveries).toHaveLength(1);
     const rateBucket = await db.select().from(schema.votingRateLimits).where(eq(schema.votingRateLimits.eventId, event.id));
     expect(rateBucket).toHaveLength(1);
-    expect(rateBucket[0].count).toBe(11);
+    expect(rateBucket[0].count).toBe(16);
   });
 
   it("keeps active results available only to event organizers", async () => {
