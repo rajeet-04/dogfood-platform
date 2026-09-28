@@ -24,6 +24,10 @@ import * as eventRegistrationWindowRoute from "../../apps/web/app/api/v1/events/
 import * as eventTransitionRoute from "../../apps/web/app/api/v1/events/[eventId]/transition/route";
 import * as teamsRoute from "../../apps/web/app/api/v1/events/[eventId]/teams/route";
 import * as projectsRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/route";
+import * as projectRevisionRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/[projectId]/route";
+import * as projectSubmissionRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/[projectId]/submit/route";
+import * as projectWithdrawalRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/[projectId]/withdraw/route";
+import * as projectLockRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/[projectId]/lock/route";
 import * as judgeQueueRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-queue/route";
 import * as judgeAssignmentsRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-assignments/route";
 import * as judgeAssignmentRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-assignments/[assignmentId]/route";
@@ -101,6 +105,81 @@ async function invoke(
 }
 
 describe("api/v1", () => {
+  it("supports participant revision, submit, and withdrawal plus organizer locking", async () => {
+    await resetDb();
+    const organizer = await seedAuthUser(uniqueEmail("org-project-actions"));
+    const participant = await seedAuthUser(uniqueEmail("participant-project-actions"));
+    const otherParticipant = await seedAuthUser(uniqueEmail("other-project-actions"));
+    const event = await createEvent(organizer.actor, {
+      name: "Project Actions API",
+      slug: `project-actions-${Date.now()}`,
+      timezone: "UTC",
+      submissionOpensAt: new Date(Date.now() - 60_000),
+      submissionClosesAt: new Date(Date.now() + 60 * 60_000),
+    });
+    await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
+    await grantEventMembership(organizer.actor, event.id, otherParticipant.userId, "PARTICIPANT");
+    const team = await createTeam(participant.actor, event.id, { name: "API Team" });
+    await transitionEvent(organizer.actor, event.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
+    const project = await createProject(participant.actor, event.id, {
+      teamId: team.id,
+      title: "Original title",
+      description: "Original description",
+    });
+    const path = `/api/v1/events/${event.id}/projects/${project.id}`;
+
+    const revised = await invoke(projectRevisionRoute.PATCH, request("PATCH", path, participant.cookie, {
+      expectedCurrentRevisionId: project.currentRevision.id,
+      title: "Updated title",
+      description: "Updated description",
+    }), { eventId: event.id, projectId: project.id });
+    expect(revised.res.status).toBe(200);
+    expect(revised.body.project.currentRevision).toMatchObject({
+      title: "Updated title",
+      description: "Updated description",
+      revisionNumber: 2,
+    });
+
+    const deniedRevision = await invoke(projectRevisionRoute.PATCH, request("PATCH", path, otherParticipant.cookie, {
+      expectedCurrentRevisionId: revised.body.project.currentRevision.id,
+      title: "Unauthorized title",
+      description: "Unauthorized edit",
+    }), { eventId: event.id, projectId: project.id });
+    expect(deniedRevision.res.status).toBe(403);
+
+    const submit = await invoke(projectSubmissionRoute.POST, request("POST", `${path}/submit`, participant.cookie), {
+      eventId: event.id,
+      projectId: project.id,
+    });
+    expect(submit.res.status).toBe(200);
+    expect(submit.body.project.state).toBe("SUBMITTED");
+
+    const withdraw = await invoke(projectWithdrawalRoute.POST, request("POST", `${path}/withdraw`, participant.cookie), {
+      eventId: event.id,
+      projectId: project.id,
+    });
+    expect(withdraw.res.status).toBe(200);
+    expect(withdraw.body.project.state).toBe("DRAFT");
+
+    const participantLock = await invoke(projectLockRoute.POST, request("POST", `${path}/lock`, participant.cookie), {
+      eventId: event.id,
+      projectId: project.id,
+    });
+    expect(participantLock.res.status).toBe(403);
+    const locked = await invoke(projectLockRoute.POST, request("POST", `${path}/lock`, organizer.cookie), {
+      eventId: event.id,
+      projectId: project.id,
+    });
+    expect(locked.res.status).toBe(200);
+    expect(locked.body.accepted).toBe(true);
+
+    const audit = await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.resourceId, project.id));
+    expect(audit.map((row) => row.action)).toEqual(expect.arrayContaining([
+      "project.revise", "project.submit", "project.withdraw", "project.lock",
+    ]));
+  });
+
   it("updates the registration window through the organizer REST API", async () => {
     await resetDb();
     const organizer = await seedAuthUser(uniqueEmail("org-window"));
