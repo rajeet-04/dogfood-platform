@@ -174,6 +174,9 @@ export function parseProjectArchiveCsv(text: string, eventId: string): unknown {
 
 export async function importProjectArchive(actor: Actor, eventId: string, input: unknown): Promise<{ imported: number }> {
   const event = await requireOrganizer(actor, eventId);
+  if (["JUDGING", "RESULTS_READY", "PUBLISHED", "ARCHIVED"].includes(event.state)) {
+    throw new DogfoodError("CONFLICT", "Project archive imports are closed once judging has started");
+  }
   const parsed = archiveSchema.safeParse(input);
   if (!parsed.success) throw new DogfoodError("VALIDATION_FAILED", "Project archive does not match format version 1");
   const archive = parsed.data;

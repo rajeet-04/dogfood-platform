@@ -6,7 +6,7 @@ import { createSession, registerUser } from "@dogfood/auth";
 import { and, db, eq, schema } from "@dogfood/db";
 import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
 import type { Actor } from "@dogfood/shared";
-import { createProject, reviseProject } from "@dogfood/submissions";
+import { createProject, reviseProject, submitProject } from "@dogfood/submissions";
 import { createTeam } from "@dogfood/teams";
 
 import { GET, POST } from "../../apps/web/app/api/v1/events/[eventId]/bulk/projects/route";
@@ -137,5 +137,52 @@ describe("event project archives", () => {
     tampered.projects[0]!.revisions[0]!.id = tampered.projects[0]!.currentRevisionId;
     tampered.projects[0]!.revisions[0]!.title = "";
     await expect(importProjectArchive(organizer.actor, target.id, tampered)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
+  it("rejects imports that would add submitted projects after event publication", async () => {
+    const organizer = await user("org");
+    const participant = await user("participant");
+    const source = await event(organizer.actor, "bulk-published-source");
+    await grantEventMembership(organizer.actor, source.id, participant.actor.userId, "PARTICIPANT");
+    const sourceTeam = await createTeam(participant.actor, source.id, { name: "Source event team" });
+    await transitionEvent(organizer.actor, source.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, source.id, "SUBMISSIONS_OPEN");
+    const project = await createProject(participant.actor, source.id, {
+      teamId: sourceTeam.id,
+      slug: "submitted-before-publication",
+      title: "Original project",
+      description: "A submitted project to include in the export archive.",
+    });
+    await submitProject(participant.actor, source.id, project.id);
+    const archive = await exportProjectArchive(organizer.actor, source.id);
+
+    const target = await event(organizer.actor, "bulk-published-target");
+    await grantEventMembership(organizer.actor, target.id, participant.actor.userId, "PARTICIPANT");
+    const targetTeam = await createTeam(participant.actor, target.id, { name: "Published event team" });
+    archive.eventId = target.id;
+    const lateProject = archive.projects[0]!;
+    lateProject.id = randomUUID();
+    lateProject.teamId = targetTeam.id;
+    lateProject.slug = "late-imported-project";
+    for (const revision of lateProject.revisions) revision.id = randomUUID();
+    lateProject.currentRevisionId = lateProject.revisions.at(-1)!.id;
+
+    await transitionEvent(organizer.actor, target.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, target.id, "SUBMISSIONS_OPEN");
+    await transitionEvent(organizer.actor, target.id, "SUBMISSIONS_CLOSED");
+    await transitionEvent(organizer.actor, target.id, "JUDGING");
+    await transitionEvent(organizer.actor, target.id, "RESULTS_READY");
+    await transitionEvent(organizer.actor, target.id, "PUBLISHED");
+
+    const response = await POST(
+      request(target.id, "POST", organizer.cookie, JSON.stringify(archive)),
+      { params: Promise.resolve({ eventId: target.id }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "CONFLICT" } });
+    const importedProjects = await db.select().from(schema.projects)
+      .where(and(eq(schema.projects.eventId, target.id), eq(schema.projects.slug, "late-imported-project")));
+    expect(importedProjects).toHaveLength(0);
   });
 });

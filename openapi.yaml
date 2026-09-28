@@ -1149,7 +1149,7 @@ paths:
       operationId: importProjectArchive
       tags: [Assets and exports]
       summary: Import projects and revision history from an archive
-      description: Organizer-only, create-only import. The request is limited to 10 MiB, 1,000 projects, and 5,000 revisions. Referenced teams, tracks, and image assets must already exist in this event; events, teams, and binary assets are not imported. Existing project IDs cause a conflict. A successful import appends a projects.bulk_import audit event and queues matching webhook deliveries.
+      description: Organizer-only, create-only import, accepted only before judging starts. Imports are rejected in JUDGING, RESULTS_READY, PUBLISHED, and ARCHIVED so rankings and published entrants cannot be changed afterward; there is no restore-mode exception. The request is limited to 10 MiB, 1,000 projects, and 5,000 revisions. Referenced teams, tracks, and image assets must already exist in this event; events, teams, and binary assets are not imported. Existing project IDs cause a conflict. A successful import appends a projects.bulk_import audit event and queues matching webhook deliveries.
       security: [{ sessionCookie: [] }]
       requestBody:
         required: true
