@@ -61,7 +61,7 @@ test("participant joins via UI and organizer manages members", async ({
     organizerRow.getByRole("button", { name: "Update" }),
   ).toBeDisabled();
 
-  await organizerPage.getByLabel("Email").fill(judge.email);
+  await organizerPage.getByLabel("Email", { exact: true }).fill(judge.email);
   // Participants self-join, so the add form only offers judge and organizer
   // while the change-role form still offers participant.
   const newMemberRole = organizerPage.getByLabel("Role for new member");

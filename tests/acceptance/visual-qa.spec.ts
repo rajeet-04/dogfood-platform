@@ -196,8 +196,20 @@ async function audit(page: Page, label: string) {
     if (document.querySelectorAll("main").length !== 1) {
       issues.push(`main count ${document.querySelectorAll("main").length}`);
     }
-    if (document.querySelectorAll("header").length !== 1) {
-      issues.push(`header count ${document.querySelectorAll("header").length}`);
+    const banners = new Set<Element>();
+    for (const landmark of Array.from(
+      document.querySelectorAll("header, [role='banner']"),
+    )) {
+      if (
+        landmark.getAttribute("role") === "banner" ||
+        (landmark.tagName === "HEADER" &&
+          !landmark.closest("article, aside, main, nav, section"))
+      ) {
+        banners.add(landmark);
+      }
+    }
+    if (banners.size !== 1) {
+      issues.push(`banner landmark count ${banners.size}`);
     }
     const h1s = document.querySelectorAll("h1");
     if (h1s.length !== 1) issues.push(`h1 count ${h1s.length}`);
