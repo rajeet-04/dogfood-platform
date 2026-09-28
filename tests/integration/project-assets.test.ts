@@ -84,6 +84,12 @@ describe("project image assets", () => {
     const ownerRead = await read(asset.id, organizer.cookie);
     expect(ownerRead.status).toBe(200);
     expect(ownerRead.headers.get("x-content-type-options")).toBe("nosniff");
+
+    await db.update(schema.eventMemberships).set({ isActive: false }).where(eq(
+      schema.eventMemberships.eventId,
+      event.id,
+    ));
+    expect((await read(asset.id, organizer.cookie)).status).toBe(404);
   });
 
   it("serves only images linked to a current submitted revision of a public event", async () => {
@@ -126,5 +132,33 @@ describe("project image assets", () => {
     await db.update(schema.events).set({ state: "SUBMISSIONS_OPEN" }).where(eq(schema.events.id, event.id));
     await db.update(schema.projects).set({ currentRevisionId: null }).where(eq(schema.projects.id, project.id));
     expect((await read(asset.id)).status).toBe(404);
+  });
+
+  it("serves a current submitted revision thumbnail anonymously", async () => {
+    await resetDb();
+    const organizer = await user("organizer");
+    const participant = await user("participant");
+    const event = await createEvent(organizer.actor, { slug: `image-thumbnail-${number}`, name: "Thumbnails", timezone: "UTC" });
+    await grantEventMembership(organizer.actor, event.id, participant.actor.userId, "PARTICIPANT");
+    await transitionEvent(organizer.actor, event.id, "REGISTRATION");
+    const team = await createTeam(participant.actor, event.id, { name: "Thumbnail Team" });
+    const uploaded = await upload(event.id, participant.cookie);
+    expect(uploaded.status).toBe(201);
+    const { asset } = await uploaded.json();
+    const [record] = await db.select().from(schema.assets).where(eq(schema.assets.id, asset.id));
+    storedKeys.push(record.storageKey);
+
+    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
+    const project = await createProject(participant.actor, event.id, {
+      teamId: team.id,
+      title: "Thumbnail",
+      description: "A submitted project with a thumbnail",
+      thumbnailAssetId: asset.id,
+    });
+    await submitProject(participant.actor, event.id, project.id);
+
+    const response = await read(asset.id);
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(png);
   });
 });
