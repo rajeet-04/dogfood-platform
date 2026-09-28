@@ -13,8 +13,10 @@ import {
   assignJudge,
   createRubric,
   getAssignedProject,
+  getEvaluation,
   getJudgeQueue,
   getJudgeQueueItem,
+  startEvaluation,
 } from "@dogfood/judging";
 import type { Actor } from "@dogfood/shared";
 import { createProject, submitProject } from "@dogfood/submissions";
@@ -223,6 +225,103 @@ describe("rubrics and judge assignments", () => {
         projectId: projectAId,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("rejects manual assignments outside a judge's configured track scope", async () => {
+    const { event, organizer, judgeA, judgeB, projectAId, projectBId } =
+      await eventInJudging();
+    const tracks = await db
+      .insert(schema.eventTracks)
+      .values([
+        { eventId: event.id, name: "Track A" },
+        { eventId: event.id, name: "Track B" },
+      ])
+      .returning();
+    const [trackA, trackB] = tracks;
+    await db
+      .update(schema.projectRevisions)
+      .set({ trackId: trackA.id })
+      .where(eq(schema.projectRevisions.projectId, projectAId));
+    await db
+      .update(schema.projectRevisions)
+      .set({ trackId: trackB.id })
+      .where(eq(schema.projectRevisions.projectId, projectBId));
+    await db.insert(schema.judgeTrackScopes).values({
+      eventId: event.id,
+      judgeId: judgeA.userId,
+      trackId: trackA.id,
+    });
+
+    await expect(
+      assignJudge(organizer, event.id, {
+        judgeId: judgeA.userId,
+        projectId: projectBId,
+      }),
+    ).rejects.toMatchObject({ code: "TRACK_SCOPE_VIOLATION" });
+
+    await expect(
+      assignJudge(organizer, event.id, {
+        judgeId: judgeA.userId,
+        projectId: projectAId,
+      }),
+    ).resolves.toMatchObject({ projectId: projectAId });
+
+    // A judge without any scope rows remains event-wide.
+    await expect(
+      assignJudge(organizer, event.id, {
+        judgeId: judgeB.userId,
+        projectId: projectBId,
+      }),
+    ).resolves.toMatchObject({ projectId: projectBId });
+  });
+
+  it("denies out-of-scope assigned project and evaluation reads", async () => {
+    const { event, organizer, judgeA, projectAId, projectBId } =
+      await eventInJudging();
+    const tracks = await db
+      .insert(schema.eventTracks)
+      .values([
+        { eventId: event.id, name: "Track A" },
+        { eventId: event.id, name: "Track B" },
+      ])
+      .returning();
+    const [trackA, trackB] = tracks;
+    await db
+      .update(schema.projectRevisions)
+      .set({ trackId: trackA.id })
+      .where(eq(schema.projectRevisions.projectId, projectAId));
+    await db
+      .update(schema.projectRevisions)
+      .set({ trackId: trackB.id })
+      .where(eq(schema.projectRevisions.projectId, projectBId));
+
+    const assignmentA = await assignJudge(organizer, event.id, {
+      judgeId: judgeA.userId,
+      projectId: projectAId,
+    });
+    const assignmentB = await assignJudge(organizer, event.id, {
+      judgeId: judgeA.userId,
+      projectId: projectBId,
+    });
+    await setUpRubric(organizer, event.id);
+    await startEvaluation(judgeA, event.id, assignmentB.id);
+    await db.insert(schema.judgeTrackScopes).values({
+      eventId: event.id,
+      judgeId: judgeA.userId,
+      trackId: trackA.id,
+    });
+
+    const queue = await getJudgeQueue(judgeA, event.id);
+    expect(queue.map((item) => item.assignmentId)).toEqual([assignmentA.id]);
+    await expect(
+      getJudgeQueueItem(judgeA, event.id, assignmentB.id),
+    ).rejects.toMatchObject({ code: "TRACK_SCOPE_VIOLATION" });
+    await expect(
+      getAssignedProject(judgeA, event.id, projectBId),
+    ).rejects.toMatchObject({ code: "TRACK_SCOPE_VIOLATION" });
+    await expect(
+      getEvaluation(judgeA, event.id, assignmentB.id),
+    ).rejects.toMatchObject({ code: "TRACK_SCOPE_VIOLATION" });
   });
 
   it("rejects assignment by a non-organizer and to a non-judge", async () => {
