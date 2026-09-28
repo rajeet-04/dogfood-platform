@@ -14,9 +14,9 @@ import { requireActor } from "../session";
 import { runAction } from "./common";
 
 const projectSchema = z.object({
-  title: z.string().min(1, "Title is required.").max(200),
-  tagline: z.string().max(300).optional(),
-  description: z.string().min(1, "Description is required."),
+  title: z.string().max(120),
+  tagline: z.string().max(280).optional(),
+  description: z.string().max(4_000),
   repositoryUrl: z.string().url("Enter a valid URL.").optional().or(z.literal("")),
   liveUrl: z.string().url("Enter a valid URL.").optional().or(z.literal("")),
   demoVideoUrl: z
@@ -28,9 +28,27 @@ const projectSchema = z.object({
     (v) => (typeof v === "string" ? v.split(",").map((t) => t.trim()).filter(Boolean) : []),
     z.array(z.string()),
   ),
+  trackId: z.string().uuid().nullable(),
+  thumbnailAssetId: z.string().uuid().nullable(),
+  imageAssetIds: z.array(z.string().uuid()).max(10),
+  customAnswers: z.record(z.string().uuid(), z.string().max(4_000)),
+});
+
+const revisedProjectSchema = projectSchema.extend({
+  expectedCurrentRevisionId: z.string().uuid(),
 });
 
 function parseProjectFields(formData: FormData) {
+  const rawImageIds = formData.get("imageAssetIds") ?? "[]";
+  let imageAssetIds: unknown = rawImageIds;
+  if (typeof rawImageIds === "string") {
+    try {
+      imageAssetIds = JSON.parse(rawImageIds);
+    } catch {
+      // Keep malformed input for schema validation rather than clearing images.
+    }
+  }
+
   return {
     title: formData.get("title"),
     tagline: formData.get("tagline") || undefined,
@@ -39,6 +57,15 @@ function parseProjectFields(formData: FormData) {
     liveUrl: formData.get("liveUrl") || undefined,
     demoVideoUrl: formData.get("demoVideoUrl") || undefined,
     techTags: formData.get("techTags") || undefined,
+    trackId: formData.get("trackId") || null,
+    thumbnailAssetId: formData.get("thumbnailAssetId") || null,
+    imageAssetIds,
+    customAnswers: Object.fromEntries(
+      [...formData.entries()]
+        .filter(([name]) => name.startsWith("customAnswer:"))
+        .map(([name, value]) => [name.slice("customAnswer:".length), value]),
+    ),
+    expectedCurrentRevisionId: formData.get("expectedCurrentRevisionId"),
   };
 }
 
@@ -69,7 +96,7 @@ export async function reviseProjectAction(
   formData: FormData,
 ): Promise<FormState | undefined> {
   const actor = await requireActor();
-  const parsed = projectSchema.safeParse(parseProjectFields(formData));
+  const parsed = revisedProjectSchema.safeParse(parseProjectFields(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }

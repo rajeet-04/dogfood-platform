@@ -25,7 +25,9 @@ export type ParticipantHome = {
     state: EventRow["state"];
     submissionOpensAt: EventRow["submissionOpensAt"];
     submissionClosesAt: EventRow["submissionClosesAt"];
+    customQuestions: EventRow["customQuestions"];
   };
+  tracks: Array<{ id: string; name: string }>;
   serverNow: Date;
   teamRosterLocked: boolean;
   team: {
@@ -49,6 +51,7 @@ export type ParticipantHome = {
         submittedAt: ProjectRow["submittedAt"];
         lockedAt: ProjectRow["lockedAt"];
         currentRevision: {
+          id: string;
           title: string;
           tagline: string | null;
           description: string;
@@ -56,6 +59,10 @@ export type ParticipantHome = {
           liveUrl: string | null;
           demoVideoUrl: string | null;
           techTags: string[];
+          trackId: string | null;
+          thumbnailAssetId: string | null;
+          imageAssetIds: string[];
+          customAnswers: Record<string, string>;
         };
       }
     | null;
@@ -86,6 +93,12 @@ export async function getParticipantHome(
   if (!memberships.some((m) => m.role === "PARTICIPANT")) {
     throw new DogfoodError("FORBIDDEN", "You are not a participant of this event");
   }
+
+  const tracks = await db
+    .select({ id: schema.eventTracks.id, name: schema.eventTracks.name })
+    .from(schema.eventTracks)
+    .where(eq(schema.eventTracks.eventId, eventId))
+    .orderBy(schema.eventTracks.sortOrder, schema.eventTracks.name);
 
   let team: TeamRow | undefined;
   let teamIsOwner = false;
@@ -143,6 +156,7 @@ export async function getParticipantHome(
   }
 
   let currentRevision: RevisionRow | null = null;
+  let imageAssetIds: string[] = [];
   let revisions: RevisionRow[] = [];
   if (project) {
     if (project.currentRevisionId) {
@@ -152,6 +166,14 @@ export async function getParticipantHome(
         .where(eq(schema.projectRevisions.id, project.currentRevisionId))
         .limit(1);
       currentRevision = revisionRows[0] ?? null;
+      if (currentRevision) {
+        const images = await db
+          .select({ assetId: schema.projectRevisionImages.assetId })
+          .from(schema.projectRevisionImages)
+          .where(eq(schema.projectRevisionImages.revisionId, currentRevision.id))
+          .orderBy(schema.projectRevisionImages.position);
+        imageAssetIds = images.map((image) => image.assetId);
+      }
     }
     revisions = await db
       .select()
@@ -170,7 +192,9 @@ export async function getParticipantHome(
       state: event.state,
       submissionOpensAt: event.submissionOpensAt,
       submissionClosesAt: event.submissionClosesAt,
+      customQuestions: event.customQuestions,
     },
+    tracks,
     serverNow: new Date(),
     teamRosterLocked: isTeamRosterLocked(event.state),
     team: team
@@ -191,6 +215,7 @@ export async function getParticipantHome(
           submittedAt: project.submittedAt,
           lockedAt: project.lockedAt,
           currentRevision: {
+            id: currentRevision?.id ?? "",
             title: currentRevision?.title ?? "",
             tagline: currentRevision?.tagline ?? null,
             description: currentRevision?.description ?? "",
@@ -198,6 +223,10 @@ export async function getParticipantHome(
             liveUrl: currentRevision?.liveUrl ?? null,
             demoVideoUrl: currentRevision?.demoVideoUrl ?? null,
             techTags: currentRevision?.techTags ?? [],
+            trackId: currentRevision?.trackId ?? null,
+            thumbnailAssetId: currentRevision?.thumbnailAssetId ?? null,
+            imageAssetIds,
+            customAnswers: currentRevision?.customAnswers ?? {},
           },
         }
       : null,
