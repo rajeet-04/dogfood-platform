@@ -1006,6 +1006,14 @@ export async function createJudgeRecusal(
         .insert(schema.judgeRecusals)
         .values({ ...input, eventId, createdBy: actor.userId })
         .returning();
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "judge.recusal.create",
+        resourceType: "judge_recusal",
+        resourceId: row.id,
+        metadata: { judgeId: input.judgeId, projectId: input.projectId },
+      });
       return row;
     });
     return recusal;
@@ -1030,16 +1038,30 @@ export async function deleteJudgeRecusal(actor: Actor, eventId: string, recusalI
   const event = await loadEvent(eventId);
   if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
   await requireEventPermission(actor, eventId, event.state as EventState, ACTION.EVENT_CONFIGURE);
-  const rows = await db
-    .delete(schema.judgeRecusals)
-    .where(
-      and(
-        eq(schema.judgeRecusals.id, recusalId),
-        eq(schema.judgeRecusals.eventId, eventId),
-      ),
-    )
-    .returning({ id: schema.judgeRecusals.id });
-  if (!rows.length) throw new DogfoodError("NOT_FOUND", "Judge recusal not found");
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(schema.judgeRecusals)
+      .where(
+        and(
+          eq(schema.judgeRecusals.id, recusalId),
+          eq(schema.judgeRecusals.eventId, eventId),
+        ),
+      )
+      .returning({
+        id: schema.judgeRecusals.id,
+        judgeId: schema.judgeRecusals.judgeId,
+        projectId: schema.judgeRecusals.projectId,
+      });
+    if (!row) throw new DogfoodError("NOT_FOUND", "Judge recusal not found");
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "judge.recusal.delete",
+      resourceType: "judge_recusal",
+      resourceId: row.id,
+      metadata: { judgeId: row.judgeId, projectId: row.projectId },
+    });
+  });
 }
 
 export type JudgeAssignmentFilters = {

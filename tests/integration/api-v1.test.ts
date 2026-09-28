@@ -526,12 +526,21 @@ describe("api/v1", () => {
       request("POST", `/api/v1/events/${event.id}/judge-recusals`, organizer.cookie, {
         judgeId: judge.userId,
         projectId: project.id,
-        reason: "Prior collaboration",
+        reason: "Confidential conflict details: private-collab-4821",
+        actorId: judge.userId,
+        createdBy: judge.userId,
       }),
       { eventId: event.id },
     );
     expect(recusal.res.status).toBe(201);
     expect(recusal.body.recusal).toMatchObject({ judgeId: judge.userId, projectId: project.id });
+    const createAudit = await db
+      .select()
+      .from(schema.auditEvents)
+      .where(eq(schema.auditEvents.resourceId, recusal.body.recusal.id));
+    expect(createAudit).toHaveLength(1);
+    expect(createAudit[0].actorId).toBe(organizer.userId);
+    expect(JSON.stringify(createAudit[0])).not.toContain("private-collab-4821");
 
     const preview = await invoke(
       generateAssignmentsRoute.POST,
@@ -574,6 +583,16 @@ describe("api/v1", () => {
       { eventId: event.id, recusalId: recusal.body.recusal.id },
     );
     expect(deleted.body).toEqual({ deleted: true });
+    const deleteAudit = await db
+      .select()
+      .from(schema.auditEvents)
+      .where(eq(schema.auditEvents.resourceId, recusal.body.recusal.id));
+    expect(deleteAudit.map((row) => row.action)).toEqual([
+      "judge.recusal.create",
+      "judge.recusal.delete",
+    ]);
+    expect(deleteAudit.every((row) => row.actorId === organizer.userId)).toBe(true);
+    expect(JSON.stringify(deleteAudit)).not.toContain("private-collab-4821");
 
     const staleCommit = await invoke(
       generateAssignmentsRoute.POST,
