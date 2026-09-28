@@ -4,14 +4,20 @@ import { ActionForm } from "../../components/action-form";
 import { getActor } from "../../server/session";
 import { registerAction } from "../../server/actions/auth";
 
-export default async function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   const actor = await getActor();
-  if (actor) redirect("/events");
+  if (actor) redirect(next && next.startsWith("/") ? next : "/events");
 
   return (
     <main className="mx-auto max-w-md px-4 py-12">
       <h1 className="mb-6 text-2xl font-bold">Create an account</h1>
       <ActionForm action={registerAction} submitLabel="Register">
+        {next ? <input type="hidden" name="next" value={next} /> : null}
         <label className="block text-sm font-medium">
           Email
           <input

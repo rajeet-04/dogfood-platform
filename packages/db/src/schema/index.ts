@@ -16,6 +16,12 @@ export {
   judgeAssignments,
   judgeTrackScopes,
 } from "./judging";
+export {
+  JUDGE_APPLICATION_STATUSES,
+  judgeApplicationStatus,
+  judgeApplications,
+} from "./judgeApplications";
+export type { JudgeApplicationStatus } from "./judgeApplications";
 export { auditEvents } from "./audit";
 export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";

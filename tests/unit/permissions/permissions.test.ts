@@ -163,6 +163,32 @@ describe("permission matrix", () => {
     expect(can(actor("j1"), ACTION.EVENT_JOIN, ctx({ roles: ["JUDGE"] }))).toBe(true);
   });
 
+  it("allows any signed-in actor to apply as a judge at the policy level", () => {
+    expect(can(actor("u1"), ACTION.JUDGE_APPLY, ctx({ roles: [] }))).toBe(true);
+    expect(can(actor("o1"), ACTION.JUDGE_APPLY, ctx({ roles: ["ORGANIZER"] }))).toBe(true);
+  });
+
+  it("keeps judge application management organizer-only", () => {
+    expect(
+      can(actor("o1"), ACTION.JUDGE_APPLICATION_MANAGE, ctx({
+        roles: ["ORGANIZER"],
+      })),
+    ).toBe(true);
+    expect(
+      can(actor("p1"), ACTION.JUDGE_APPLICATION_MANAGE, ctx({
+        roles: ["PARTICIPANT"],
+      })),
+    ).toBe(false);
+    expect(
+      can(actor("j1"), ACTION.JUDGE_APPLICATION_MANAGE, ctx({
+        roles: ["JUDGE"],
+      })),
+    ).toBe(false);
+    expect(
+      can(actor("u1"), ACTION.JUDGE_APPLICATION_MANAGE, ctx({ roles: [] })),
+    ).toBe(false);
+  });
+
   it("keeps member management organizer-only", () => {
     expect(can(actor("o1"), ACTION.MEMBER_INVITE, ctx({ roles: ["ORGANIZER"] }))).toBe(true);
     expect(can(actor("o1"), ACTION.MEMBER_REMOVE, ctx({ roles: ["ORGANIZER"] }))).toBe(true);

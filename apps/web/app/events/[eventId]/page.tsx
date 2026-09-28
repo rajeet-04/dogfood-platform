@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, db, eq, schema } from "@dogfood/db";
+import {
+  getMyJudgeApplication,
+  JUDGE_APPLICATION_STATUS_LABEL,
+} from "@dogfood/applications";
 
 import { ActionForm } from "../../../components/action-form";
 import { EVENT_STATE_LABEL } from "../../../lib/event-flow";
+import {
+  applyAsJudgeAction,
+  withdrawJudgeApplicationAction,
+} from "../../../server/actions/applications";
 import { joinEventAction } from "../../../server/actions/members";
 import { getActor } from "../../../server/session";
 
@@ -68,7 +76,30 @@ export default async function EventLandingPage({
   }
 
   const stateLabel = EVENT_STATE_LABEL[event.state] ?? event.state;
-  const canJoin = actor && event.state === "REGISTRATION" && links.length === 0;
+
+  const now = new Date();
+  const withinWindow =
+    event.state === "REGISTRATION" &&
+    (!event.registrationOpensAt || event.registrationOpensAt <= now) &&
+    (!event.registrationClosesAt || event.registrationClosesAt >= now);
+
+  const notMember = links.length === 0;
+  let application:
+    | { status: string; rationale: string | null }
+    | null = null;
+  if (actor && notMember) {
+    const mine = await getMyJudgeApplication(actor, eventId);
+    if (mine) {
+      application = {
+        status: mine.status,
+        rationale: mine.rationale,
+      };
+    }
+  }
+
+  const canJoin = Boolean(actor) && withinWindow && notMember;
+  const canApplyAsJudge =
+    Boolean(actor) && withinWindow && notMember && !application;
 
   return (
     <main>
@@ -116,16 +147,16 @@ export default async function EventLandingPage({
             </section>
           ) : null}
 
-          {!links.length && !canJoin ? (
+          {!links.length && !canJoin && !application ? (
             <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
               <p className="text-slate-500">
                 {actor
-                  ? `Registration for this event is ${event.state === "REGISTRATION" ? "open" : "not open right now"}.`
+                  ? `Registration for this event is ${withinWindow ? "open" : "not open right now"}.`
                   : "Sign in to join this event."}
               </p>
-              {!actor && event.state === "REGISTRATION" ? (
+              {!actor && withinWindow ? (
                 <Link
-                  href="/login"
+                  href={`/login?next=/events/${eventId}`}
                   className="mt-4 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"
                 >
                   Sign in to join
@@ -156,17 +187,61 @@ export default async function EventLandingPage({
             <DetailRow label="Timezone" value={event.timezone} />
           </dl>
 
-          <div className="mt-6">
+          <div className="mt-6 space-y-3">
             {links.length ? (
               <span className="inline-block rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
                 You are part of this event
               </span>
-            ) : canJoin ? (
-              <ActionForm
-                action={joinEventAction.bind(null, eventId)}
-                submitLabel="Join as participant"
-                className="[&_button]:mt-0"
-              />
+            ) : application ? (
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p
+                  data-testid="judge-application-status"
+                  className="text-sm font-semibold text-slate-700"
+                >
+                  Judge application:{" "}
+                  {JUDGE_APPLICATION_STATUS_LABEL[
+                    application.status as keyof typeof JUDGE_APPLICATION_STATUS_LABEL
+                  ] ?? application.status}
+                </p>
+                {application.rationale ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {application.rationale}
+                  </p>
+                ) : null}
+                {application.status === "pending" ? (
+                  <div className="mt-3">
+                    <ActionForm
+                      action={withdrawJudgeApplicationAction.bind(null, eventId)}
+                      submitLabel="Withdraw application"
+                      className="[&_button]:w-full [&_button]:bg-slate-100 [&_button]:text-slate-600"
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">
+                    You can submit a new application at any time.
+                  </p>
+                )}
+              </div>
+            ) : canJoin || canApplyAsJudge ? (
+              <div className="rounded-lg border border-slate-200 p-4">
+                <ActionForm
+                  action={joinEventAction.bind(null, eventId)}
+                  submitLabel="Join as participant"
+                  className="[&_button]:w-full"
+                />
+                <ActionForm
+                  action={applyAsJudgeAction.bind(null, eventId)}
+                  submitLabel="Apply as judge"
+                  className="mt-2 [&_button]:w-full [&_button]:bg-white [&_button]:text-slate-700 [&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-slate-300 [&_button]:hover:bg-slate-50"
+                >
+                  <textarea
+                    name="rationale"
+                    rows={3}
+                    placeholder="Optional: tell organizers about your judging experience."
+                    className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </ActionForm>
+              </div>
             ) : (
               <p className="rounded-lg bg-slate-50 px-4 py-2.5 text-sm text-slate-500">
                 {actor
@@ -174,6 +249,14 @@ export default async function EventLandingPage({
                   : "Sign in to apply for this event"}
               </p>
             )}
+            {!actor && withinWindow ? (
+              <Link
+                href={`/login?next=/events/${eventId}`}
+                className="block rounded-lg bg-indigo-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-indigo-500"
+              >
+                Sign in to join this event
+              </Link>
+            ) : null}
           </div>
         </aside>
       </div>

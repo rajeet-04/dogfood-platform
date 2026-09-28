@@ -10,6 +10,12 @@ import {
 } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
 import { getOrganizerDocument } from "../../../../server/read-models/organizer";
+import { updateRegistrationWindowAction } from "../../../../server/actions/event";
+import {
+  deactivateJudgeAction,
+  decideJudgeApplicationAction,
+} from "../../../../server/actions/applications";
+import { JUDGE_APPLICATION_STATUS_LABEL } from "@dogfood/applications";
 import { transitionEventAction } from "../../../../server/actions/event";
 import {
   activateRubricAction,
@@ -81,6 +87,15 @@ function initials(name: string): string {
 function formatDate(value: Date | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleString();
+}
+
+function toLocalInput(value: Date | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
 }
 
 export default async function OrganizerPage({
@@ -179,6 +194,39 @@ export default async function OrganizerPage({
             Scores are visible after results are ready.
           </p>
         )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 text-lg font-semibold">Registration window</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          The window during which participants can join and judges can apply.
+          Leave a field empty to disable that boundary.
+        </p>
+        <ActionForm
+          action={updateRegistrationWindowAction.bind(null, eventId)}
+          submitLabel="Save window"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Opens
+              <input
+                type="datetime-local"
+                name="registrationOpensAt"
+                defaultValue={toLocalInput(doc.event.registrationOpensAt)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Closes
+              <input
+                type="datetime-local"
+                name="registrationClosesAt"
+                defaultValue={toLocalInput(doc.event.registrationClosesAt)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+        </ActionForm>
       </section>
 
       <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -336,6 +384,90 @@ export default async function OrganizerPage({
                       )}
                       submitLabel="Remove"
                       className="[&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600 [&_button]:mt-0"
+                    />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+          <h2 className="text-lg font-semibold">Judge applications</h2>
+          <span className="text-sm text-slate-500">
+            {doc.applications.length} total
+          </span>
+        </div>
+        {doc.applications.length === 0 ? (
+          <p className="px-6 py-8 text-sm text-slate-500">
+            No judge applications yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {doc.applications.map((application) => (
+              <li
+                key={application.id}
+                className="flex items-start justify-between gap-4 px-6 py-4"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-800">
+                    {application.displayName}
+                    <span className="ml-2 text-xs text-slate-400">
+                      {application.email}
+                    </span>
+                  </p>
+                  {application.rationale ? (
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">
+                      {application.rationale}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-xs text-slate-400">
+                    Applied {formatDate(application.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <span
+                    data-testid="application-status"
+                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                  >
+                    {JUDGE_APPLICATION_STATUS_LABEL[
+                      application.status as keyof typeof JUDGE_APPLICATION_STATUS_LABEL
+                    ] ?? application.status}
+                  </span>
+                  {application.status === "pending" ? (
+                    <>
+                      <ActionForm
+                        action={decideJudgeApplicationAction.bind(
+                          null,
+                          eventId,
+                          application.id,
+                          "approve",
+                        )}
+                        submitLabel="Approve"
+                        className="[&_button]:bg-emerald-600 [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:text-white [&_button]:hover:bg-emerald-500"
+                      />
+                      <ActionForm
+                        action={decideJudgeApplicationAction.bind(
+                          null,
+                          eventId,
+                          application.id,
+                          "reject",
+                        )}
+                        submitLabel="Reject"
+                        className="[&_button]:bg-white [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:text-slate-600 [&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-slate-300"
+                      />
+                    </>
+                  ) : application.status === "approved" ? (
+                    <ActionForm
+                      action={deactivateJudgeAction.bind(
+                        null,
+                        eventId,
+                        application.userId,
+                      )}
+                      submitLabel="Revoke"
+                      className="[&_button]:bg-white [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:text-slate-600 [&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-slate-300"
                     />
                   ) : null}
                 </div>

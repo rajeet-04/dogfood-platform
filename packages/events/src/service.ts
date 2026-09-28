@@ -91,6 +91,70 @@ export async function createEvent(
   return event;
 }
 
+export type RegistrationWindowInput = {
+  registrationOpensAt?: Date | null;
+  registrationClosesAt?: Date | null;
+};
+
+export async function updateEventRegistrationWindow(
+  actor: Actor,
+  eventId: string,
+  input: RegistrationWindowInput,
+): Promise<EventRow> {
+  const rows = await db
+    .select()
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  const event = rows[0];
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+
+  await requireEventPermission(
+    actor,
+    event.id,
+    event.state as EventState,
+    ACTION.EVENT_CONFIGURE,
+  );
+
+  const registrationOpensAt = input.registrationOpensAt ?? null;
+  const registrationClosesAt = input.registrationClosesAt ?? null;
+  if (
+    registrationOpensAt &&
+    registrationClosesAt &&
+    registrationOpensAt >= registrationClosesAt
+  ) {
+    throw new DogfoodError(
+      "VALIDATION_FAILED",
+      "[VALIDATION_FAILED] Registration open must be earlier than close",
+    );
+  }
+
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.events)
+      .set({
+        registrationOpensAt,
+        registrationClosesAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.events.id, eventId))
+      .returning();
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "event.registration_window",
+      resourceType: "event",
+      resourceId: event.id,
+      metadata: {
+        opensAt: registrationOpensAt?.toISOString() ?? null,
+        closesAt: registrationClosesAt?.toISOString() ?? null,
+      },
+    });
+    return row;
+  });
+  return updated;
+}
+
 export async function transitionEvent(
   actor: Actor,
   eventId: string,

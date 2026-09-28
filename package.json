@@ -23,6 +23,7 @@
   "dependencies": {},
   "devDependencies": {
     "@dogfood/audit": "workspace:*",
+    "@dogfood/applications": "workspace:*",
     "@dogfood/auth": "workspace:*",
     "@dogfood/certificates": "workspace:*",
     "@dogfood/db": "workspace:*",
