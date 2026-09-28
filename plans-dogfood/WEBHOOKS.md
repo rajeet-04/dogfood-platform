@@ -12,9 +12,9 @@ The outbox covers these action values when recorded through `appendAuditEvent`:
 
 - Events and prizes: `event.details`, `event.join`, `event.member.grant`, `event.member.remove`, `event.registration_window`, `event.transition`, `prize.create`, `prize.update`, `prize.delete`.
 - Judges and evaluation: `judge_application.apply`, `judge_application.approve`, `judge_application.reapply`, `judge_application.reject`, `judge_application.revoke`, `judge_application.withdraw`, `judge_invitation.accept`, `judge_invitation.create`, `judge_invitation.revoke`, `judge.assign`, `judge.recusal.create`, `judge.recusal.delete`, `judge.unassign`, `evaluation.start`, `evaluation.submit`, `evaluation.lock`.
-- Projects and teams: `project.revise`, `project.submit`, `project.lock`, `project.lock_all`, `project.withdraw`, `team.create`, `team.join`.
+- Projects and teams: `project.revise`, `project.submit`, `project.lock`, `project.lock_all`, `project.withdraw`, `projects.bulk_import`, `team.create`, `team.join`.
 - Results and records: `ranking.generate`, `ranking.publish`, `certificate.issue`, `certificate.revoke`.
-- Voting and comments: `voting.config.update`, `voting_invitation.create`, `voting_invitation.revoke`, `vote.cast`, `vote.duplicate`, `vote.self_attempt`, `vote.rate_limited`, `vote.event_rate_limited`, `vote.network_rate_limited`, `comment.create`, `comment.delete`, `comment.moderate_delete`.
+- Voting and comments: `voting.config.update`, `voting_invitation.create`, `voting_invitation.revoke`, `vote.cast`, `vote.duplicate`, `vote.self_attempt`, `vote.rate_limited`, `vote.event_rate_limited`, `vote.network_rate_limited`, `comment.create`, `comment.delete`, `comment.moderate_delete`, `comment.rate_limited`.
 
 ## Known UI mutation gaps
 
@@ -28,6 +28,5 @@ The implementation is not yet complete T4 coverage. These mutation flows do not 
 - Project asset upload.
 - Pairwise comparison create/update.
 - Webhook endpoint create/update/delete.
-- Bulk import currently writes its audit row directly instead of calling `appendAuditEvent`; the audit row exists but does not enqueue a delivery.
 
 Read-only gallery, search, download, and audit queries are not webhook events. Extend the service audit writes for the mutation gaps above before claiming “every UI action” coverage.
