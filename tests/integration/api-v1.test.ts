@@ -371,6 +371,21 @@ describe("api/v1", () => {
     expect(owner.body.events.map((e: any) => e.slug)).toContain("hidden-draft");
     expect(owner.body.events.map((e: any) => e.slug)).toContain("old-hack");
 
+    const member = await seedAuthUser(uniqueEmail("member"));
+    await grantEventMembership(
+      organizer.actor,
+      draft.id,
+      member.userId,
+      "PARTICIPANT",
+    );
+    const memberView = await invoke(
+      eventsRoute.GET,
+      request("GET", "/api/v1/events", member.cookie),
+    );
+    expect(memberView.body.events.map((e: any) => e.slug)).toContain(
+      "hidden-draft",
+    );
+
     const stateFilter = await invoke(
       eventsRoute.GET,
       request("GET", "/api/v1/events?state=REGISTRATION", organizer.cookie),

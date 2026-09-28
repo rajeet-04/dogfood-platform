@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { registerUser } from "@dogfood/auth";
 import {
   createEvent,
+  grantEventMembership,
   listEvents,
   transitionEvent,
 } from "@dogfood/events";
@@ -118,6 +119,21 @@ describe("event catalogue listEvents", () => {
     const { other, draft } = await scenario();
     const rows = await listEvents(actorFor(other.id));
     expect(rows.map((row) => row.id)).not.toContain(draft.id);
+  });
+
+  it("lets added members see a draft event", async () => {
+    const { organizer, other, draft } = await scenario();
+    await grantEventMembership(
+      actorFor(organizer.id),
+      draft.id,
+      other.id,
+      "PARTICIPANT",
+    );
+    const rows = await listEvents(actorFor(other.id));
+    expect(rows.map((row) => row.id)).toContain(draft.id);
+
+    const anonymous = await listEvents(null);
+    expect(anonymous.map((row) => row.id)).not.toContain(draft.id);
   });
 
   it("lets a platform admin see drafts but still hides archived events", async () => {
