@@ -86,6 +86,37 @@ export const judgeTrackScopes = pgTable(
   ],
 );
 
+export const judgeRecusals = pgTable(
+  "judge_recusals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "restrict" }),
+    judgeId: uuid("judge_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("judge_recusals_event_judge_project_unique").on(
+      t.eventId,
+      t.judgeId,
+      t.projectId,
+    ),
+    index("judge_recusals_event_idx").on(t.eventId),
+  ],
+);
+
 export const evaluations = pgTable(
   "evaluations",
   {

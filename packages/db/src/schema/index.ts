@@ -17,6 +17,7 @@ export {
   evaluations,
   judgeAssignmentState,
   judgeAssignments,
+  judgeRecusals,
   judgeTrackScopes,
 } from "./judging";
 export {
