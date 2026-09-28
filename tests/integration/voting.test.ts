@@ -6,7 +6,7 @@ import { and, db, eq, schema } from "@dogfood/db";
 import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
 import { createTeam } from "@dogfood/teams";
 import { createProject, submitProject } from "@dogfood/submissions";
-import { castVote, createProjectComment, deleteProjectComment, getVotingBallot, getVotingResults, updateVotingConfig } from "@dogfood/voting";
+import { castVote, createProjectComment, createVotingInvitation, deleteProjectComment, ensureOpenLinkCredential, getVotingBallot, getVotingConfig, getVotingResults, listVotingInvitations, revokeVotingInvitation, updateVotingConfig } from "@dogfood/voting";
 import type { Actor } from "@dogfood/shared";
 
 import { resetDb } from "../fixtures/db";
@@ -68,6 +68,60 @@ describe("authenticated public voting", () => {
     const ballot = await getVotingBallot(actorFor((await registerUser({ email: "ballot@example.com", password: "pass", displayName: "Ballot" })).id), event.id);
     expect(ballot.projects).toHaveLength(1);
     expect(ballot.projects[0].title).toBe("Community project");
+  });
+
+  it("defaults to authenticated-account access", async () => {
+    const { event } = await votingEvent();
+    expect(await getVotingConfig(event.id)).toMatchObject({ accessMode: "AUTHENTICATED" });
+  });
+
+  it("supports an open link with a hashed, persistent browser credential and one vote", async () => {
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const issued = await ensureOpenLinkCredential(event.id);
+    const ballot = await getVotingBallot(null, event.id, issued.token);
+    expect(ballot.accessMode).toBe("OPEN_LINK");
+    expect(ballot.hasVoted).toBe(false);
+    await castVote(null, event.id, project.id, issued.token);
+    await expect(castVote(null, event.id, project.id, issued.token)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await getVotingBallot(null, event.id, issued.token)).toMatchObject({ hasVoted: true });
+    const credentials = await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id));
+    expect(credentials).toHaveLength(1);
+    expect(credentials[0].tokenHash).not.toBe(issued.token);
+    expect(credentials[0].tokenHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("issues email-labeled bearer invitations, consumes one vote, and rejects revoked codes", async () => {
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "EMAIL_GATED", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const first = await createVotingInvitation(organizer, event.id, " Voter@Example.com ");
+    expect(first.invitation.email).toBe("voter@example.com");
+    expect(await getVotingBallot(null, event.id, first.token)).toMatchObject({ accessMode: "EMAIL_GATED", hasVoted: false });
+    const rotated = await createVotingInvitation(organizer, event.id, "voter@example.com");
+    await expect(getVotingBallot(null, event.id, first.token)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(await getVotingBallot(null, event.id, rotated.token)).toMatchObject({ hasVoted: false });
+    await castVote(null, event.id, project.id, rotated.token);
+    await expect(castVote(null, event.id, project.id, rotated.token)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(createVotingInvitation(organizer, event.id, "voter@example.com")).rejects.toMatchObject({ code: "CONFLICT" });
+    const second = await createVotingInvitation(organizer, event.id, "second@example.com");
+    await revokeVotingInvitation(organizer, event.id, second.invitation.id);
+    await expect(getVotingBallot(null, event.id, second.token)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    const listed = await listVotingInvitations(organizer, event.id);
+    expect(listed).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: first.invitation.id, voted: false, revokedAt: expect.any(Date) }),
+      expect.objectContaining({ id: rotated.invitation.id, voted: true, revokedAt: null }),
+      expect.objectContaining({ id: second.invitation.id, voted: false, revokedAt: expect.any(Date) }),
+    ]));
+  });
+
+  it("rejects expired email invitations and blocks votes outside the configured window", async () => {
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "EMAIL_GATED", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const invitation = await createVotingInvitation(organizer, event.id, "expired@example.com");
+    await db.update(schema.votingCredentials).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.votingCredentials.id, invitation.invitation.id));
+    await expect(getVotingBallot(null, event.id, invitation.token)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await updateVotingConfig(organizer, event.id, { accessMode: "EMAIL_GATED", opensAt: null, closesAt: null });
+    await expect(castVote(null, event.id, project.id, invitation.token)).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("rejects votes when an organizer disables the voting window", async () => {

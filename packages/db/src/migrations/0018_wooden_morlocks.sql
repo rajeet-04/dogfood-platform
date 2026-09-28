@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "voting_credentials_active_event_email_unique" ON "voting_credentials" USING btree ("event_id","email") WHERE "voting_credentials"."email" is not null and "voting_credentials"."revoked_at" is null;

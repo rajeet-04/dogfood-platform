@@ -6,7 +6,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ even
   return api(request, async () => {
     const { eventId } = await params;
     const actor = await requireApiActor(request);
-    const batches = await Promise.all(["voting_config", "vote", "project_comment", "comment"].map((resourceType) =>
+    const batches = await Promise.all(["voting_config", "voting_invitation", "vote", "project_comment", "comment"].map((resourceType) =>
       queryAudit(actor, eventId, { limit: 100, resourceType }),
     ));
     const events = batches.flat().sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 100);

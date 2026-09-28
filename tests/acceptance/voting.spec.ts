@@ -64,7 +64,7 @@ test("organizer configures the authenticated community voting window", async ({ 
   await loginViaUi(page, organizer.email);
   await page.goto(`/events/${event.id}/organizer`);
   const settings = page.getByRole("region", { name: "Community voting" });
-  await expect(settings.getByText("Only signed-in accounts can vote. Times use UTC. Leave both dates empty to disable community voting.")).toBeVisible();
+  await expect(settings.getByText("Choose who can vote. Times use UTC. Leave both dates empty to disable community voting.")).toBeVisible();
   await expect(settings.getByLabel("Voting opens")).toBeDisabled();
   await expect(settings.getByRole("alert")).toHaveText("Could not load voting settings.");
   allowLoad = true;
@@ -74,12 +74,14 @@ test("organizer configures the authenticated community voting window", async ({ 
   await expect(settings.getByLabel("Voting closes")).toHaveValue("");
   await settings.getByLabel("Voting opens").fill("2027-03-01T10:00");
   await settings.getByLabel("Voting closes").fill("2027-03-02T10:00");
+  await settings.getByLabel("Voter access").selectOption("OPEN_LINK");
   await settings.getByRole("button", { name: "Save voting settings" }).click();
   await expect(settings.getByRole("status")).toHaveText("Community voting settings saved.");
   const savedConfig = await page.evaluate(async (eventId) => {
     const response = await fetch(`/api/v1/events/${eventId}/voting/config`);
-    return (await response.json()).config as { opensAt: string; closesAt: string };
+    return (await response.json()).config as { accessMode: string; opensAt: string; closesAt: string };
   }, event.id);
+  expect(savedConfig.accessMode).toBe("OPEN_LINK");
   expect(savedConfig.opensAt).toBe("2027-03-01T10:00:00.000Z");
   expect(savedConfig.closesAt).toBe("2027-03-02T10:00:00.000Z");
 
