@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "@dogfood/validation";
-import { createEvent, transitionEvent } from "@dogfood/events";
+import { createEvent, transitionEvent, updateEventRegistrationWindow } from "@dogfood/events";
 
 import type { FormState } from "../../lib/form-state";
 import { requireActor } from "../session";
@@ -44,6 +44,40 @@ export async function createEventAction(
     return { error: describeError(err) };
   }
   redirect(`/events/${eventId}/organizer`);
+}
+
+function parseOptionalDatetime(raw: FormDataEntryValue | null): Date | null {
+  if (!raw || typeof raw !== "string" || raw.trim() === "") return null;
+  const value = new Date(raw);
+  if (Number.isNaN(value.getTime())) {
+    throw new Error("Enter a valid date and time.");
+  }
+  return value;
+}
+
+export async function updateRegistrationWindowAction(
+  eventId: string,
+  _prev: FormState | undefined,
+  formData: FormData,
+): Promise<FormState | undefined> {
+  const actor = await requireActor();
+  try {
+    const registrationOpensAt = parseOptionalDatetime(
+      formData.get("registrationOpensAt"),
+    );
+    const registrationClosesAt = parseOptionalDatetime(
+      formData.get("registrationClosesAt"),
+    );
+    await updateEventRegistrationWindow(actor, eventId, {
+      registrationOpensAt,
+      registrationClosesAt,
+    });
+    revalidatePath(`/events/${eventId}/organizer`);
+    revalidatePath(`/events/${eventId}`);
+    return { success: "Registration window saved." };
+  } catch (err) {
+    return { error: describeError(err) };
+  }
 }
 
 const transitionSchema = z.object({

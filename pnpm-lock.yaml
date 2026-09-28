@@ -166,6 +166,9 @@ importers:
 
   .:
     devDependencies:
+      '@dogfood/applications':
+        specifier: workspace:*
+        version: link:packages/applications
       '@dogfood/audit':
         specifier: workspace:*
         version: link:packages/audit
@@ -223,6 +226,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@dogfood/applications':
+        specifier: workspace:*
+        version: link:../../packages/applications
       '@dogfood/audit':
         specifier: workspace:*
         version: link:../../packages/audit
@@ -299,6 +305,27 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/applications:
+    dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@dogfood/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dogfood/events':
+        specifier: workspace:*
+        version: link:../events
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@dogfood/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/audit:
     dependencies:

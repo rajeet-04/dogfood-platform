@@ -23,6 +23,12 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+function safeNext(raw: FormDataEntryValue | null): string {
+  if (typeof raw !== "string" || raw.length === 0) return "/events";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/events";
+  return raw;
+}
+
 export async function registerAction(
   _prev: FormState | undefined,
   formData: FormData,
@@ -35,6 +41,7 @@ export async function registerAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
+  const next = safeNext(formData.get("next"));
   try {
     const user = await registerUser(parsed.data);
     const { rawToken } = await createSession(user.id);
@@ -42,7 +49,7 @@ export async function registerAction(
   } catch (err) {
     return { error: describeError(err) };
   }
-  redirect("/events");
+  redirect(next);
 }
 
 export async function loginAction(
@@ -56,6 +63,7 @@ export async function loginAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
+  const next = safeNext(formData.get("next"));
   try {
     const user = await authenticateCredentials(parsed.data);
     const { rawToken } = await createSession(user.id);
@@ -63,7 +71,7 @@ export async function loginAction(
   } catch (err) {
     return { error: describeError(err) };
   }
-  redirect("/events");
+  redirect(next);
 }
 
 export async function logoutAction(): Promise<void> {

@@ -1,4 +1,5 @@
 import { db, desc, eq, inArray, schema } from "@dogfood/db";
+import { listJudgeApplications } from "@dogfood/applications";
 import { DogfoodError } from "@dogfood/validation";
 import type { Actor } from "@dogfood/shared";
 
@@ -11,12 +12,24 @@ export type OrganizerDocument = {
     name: string;
     description: string | null;
     state: EventRow["state"];
+    registrationOpensAt: Date | null;
+    registrationClosesAt: Date | null;
   };
   members: Array<{
     userId: string;
     email: string;
     displayName: string;
     role: string;
+  }>;
+  applications: Array<{
+    id: string;
+    userId: string;
+    displayName: string;
+    email: string;
+    rationale: string | null;
+    status: string;
+    createdAt: Date;
+    decidedAt: Date | null;
   }>;
   judges: Array<{ userId: string; email: string; displayName: string }>;
   rubrics: Array<{
@@ -216,6 +229,8 @@ export async function getOrganizerDocument(
     .where(eq(schema.certificates.eventId, eventId))
     .orderBy(desc(schema.certificates.issuedAt));
 
+  const applications = await listJudgeApplications(actor, eventId);
+
   return {
     event: {
       id: event.id,
@@ -223,8 +238,20 @@ export async function getOrganizerDocument(
       name: event.name,
       description: event.description,
       state: event.state,
+      registrationOpensAt: event.registrationOpensAt,
+      registrationClosesAt: event.registrationClosesAt,
     },
     members,
+    applications: applications.map((application) => ({
+      id: application.id,
+      userId: application.userId,
+      displayName: application.displayName,
+      email: application.email,
+      rationale: application.rationale,
+      status: application.status,
+      createdAt: application.createdAt,
+      decidedAt: application.decidedAt,
+    })),
     judges: members.filter((m) => m.role === "JUDGE"),
     rubrics: rubrics.map((rubric) => {
       const rubricCriteria = criteria.filter((c) => c.rubricId === rubric.id);

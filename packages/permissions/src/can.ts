@@ -37,12 +37,14 @@ export function can(
     case "question:manage":
     case "member:invite":
     case "member:remove":
+    case "judge_application:manage":
     case "ranking:generate":
     case "export:event":
     case "audit:read":
       return roles.includes("ORGANIZER");
 
     case "event:join":
+    case "judge:apply":
       return true;
 
     case "team:join":
