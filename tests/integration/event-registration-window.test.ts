@@ -95,6 +95,22 @@ describe("event registration window settings", () => {
     expect(rows[0].registrationClosesAt).toBeNull();
   });
 
+  it("treats empty-string boundaries as null", async () => {
+    const { organizer, event } = await scenario();
+    const empty = "" as unknown as Date;
+    await updateEventRegistrationWindow(actorFor(organizer.id), event.id, {
+      registrationOpensAt: empty,
+      registrationClosesAt: empty,
+    });
+
+    const rows = await db
+      .select()
+      .from(schema.events)
+      .where(eq(schema.events.id, event.id));
+    expect(rows[0].registrationOpensAt).toBeNull();
+    expect(rows[0].registrationClosesAt).toBeNull();
+  });
+
   it("rejects an inverted window", async () => {
     const { organizer, event } = await scenario();
     await expect(

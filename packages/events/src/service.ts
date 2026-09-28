@@ -8,6 +8,7 @@ import {
   or,
   schema,
   sql,
+  sqlState,
   type EventRole,
   type EventState,
   type SQL,
@@ -66,34 +67,54 @@ async function requireEventPermission(
   });
 }
 
+function toNullableDate(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (text === "") return null;
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
 export async function createEvent(
   actor: Actor,
   input: CreateEventInput,
 ): Promise<EventRow> {
-  const event = await db.transaction(async (tx) => {
-    const [created] = await tx.insert(schema.events).values({
-      slug: input.slug,
-      name: input.name,
-      description: input.description ?? null,
-      timezone: input.timezone,
-      registrationOpensAt: input.registrationOpensAt ?? null,
-      registrationClosesAt: input.registrationClosesAt ?? null,
-      submissionOpensAt: input.submissionOpensAt ?? null,
-      submissionClosesAt: input.submissionClosesAt ?? null,
-      judgingOpensAt: input.judgingOpensAt ?? null,
-      judgingClosesAt: input.judgingClosesAt ?? null,
-      createdBy: actor.userId,
-    }).returning();
+  try {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(schema.events).values({
+        slug: input.slug,
+        name: input.name,
+        description: input.description ?? null,
+        timezone: input.timezone,
+        registrationOpensAt: toNullableDate(input.registrationOpensAt),
+        registrationClosesAt: toNullableDate(input.registrationClosesAt),
+        submissionOpensAt: toNullableDate(input.submissionOpensAt),
+        submissionClosesAt: toNullableDate(input.submissionClosesAt),
+        judgingOpensAt: toNullableDate(input.judgingOpensAt),
+        judgingClosesAt: toNullableDate(input.judgingClosesAt),
+        createdBy: actor.userId,
+      }).returning();
 
-    await tx.insert(schema.eventMemberships).values({
-      eventId: created.id,
-      userId: actor.userId,
-      role: "ORGANIZER",
+      await tx.insert(schema.eventMemberships).values({
+        eventId: created.id,
+        userId: actor.userId,
+        role: "ORGANIZER",
+      });
+
+      return created;
     });
-
-    return created;
-  });
-  return event;
+  } catch (err) {
+    if (sqlState(err) === "23505") {
+      throw new DogfoodError(
+        "SLUG_TAKEN",
+        `An event with the slug "${input.slug}" already exists. Choose a different slug.`,
+      );
+    }
+    throw err;
+  }
 }
 
 export type RegistrationWindowInput = {
@@ -121,8 +142,8 @@ export async function updateEventRegistrationWindow(
     ACTION.EVENT_CONFIGURE,
   );
 
-  const registrationOpensAt = input.registrationOpensAt ?? null;
-  const registrationClosesAt = input.registrationClosesAt ?? null;
+  const registrationOpensAt = toNullableDate(input.registrationOpensAt);
+  const registrationClosesAt = toNullableDate(input.registrationClosesAt);
   if (
     registrationOpensAt &&
     registrationClosesAt &&
