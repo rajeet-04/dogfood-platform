@@ -15,11 +15,15 @@ import { NotificationBell } from "./notification-bell";
 import { ThemeToggle } from "./ui/theme";
 import { ButtonLink, SubmitButton } from "./ui/button";
 
-const PUBLIC_NAV: NavItem[] = [{ href: "/events", label: "Events" }];
+const PUBLIC_NAV: NavItem[] = [
+  { href: "/events", label: "Events" },
+  { href: "/projects", label: "Projects" },
+];
 // "Profile" lives in the right-hand cluster rather than the primary nav, so it
 // is only repeated in the small-screen drawer.
 const MEMBER_DRAWER_NAV: NavItem[] = [
   { href: "/events", label: "Events" },
+  { href: "/projects", label: "Projects" },
   { href: "/profile", label: "Profile" },
 ];
 
