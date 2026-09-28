@@ -70,7 +70,7 @@ test("participant journey: team → project → revision → submit", async ({ p
   ).toBeVisible();
 
   // Submit for judging
-  await page.getByRole("button", { name: "Submit for judging" }).click();
+  await page.getByRole("button", { name: "Submit saved revision" }).click();
   await expect(page.getByTestId("project-state")).toHaveText("SUBMITTED");
 });
 
@@ -219,7 +219,7 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
 
   // Assign the judge to the seeded project through the UI
   await page.locator('select[name="judgeId"]').selectOption({ index: 0 });
-  await page.getByLabel("Project").selectOption({ index: 0 });
+  await page.locator('select[name="projectId"]').selectOption({ index: 0 });
   await page.getByRole("button", { name: "Assign judge" }).click();
   await expect(page.getByTestId("coverage-total")).toHaveText("1");
 

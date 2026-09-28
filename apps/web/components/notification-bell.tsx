@@ -31,12 +31,17 @@ function MarkAllReadButton() {
 }
 
 function formatWhen(value: Date): string {
-  return new Intl.DateTimeFormat("en", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+    timeZone: "UTC",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? "";
+
+  return `${part("month")} ${part("day")}, ${part("hour")}:${part("minute")} ${part("dayPeriod")} UTC`;
 }
 
 function NotificationRow({ item }: { item: NotificationListItem }) {

@@ -90,7 +90,7 @@ test("participant creates a team, shares the code, and a teammate joins and sees
     timeout: 15_000,
   });
 
-  await leaderPage.getByRole("button", { name: "Submit for judging" }).click();
+  await leaderPage.getByRole("button", { name: "Submit saved revision" }).click();
   await expect(leaderPage.getByTestId("project-state")).toHaveText("SUBMITTED", {
     timeout: 15_000,
   });
