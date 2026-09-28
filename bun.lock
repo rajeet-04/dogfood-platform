@@ -20,6 +20,7 @@
         "@dogfood/submissions": "workspace:*",
         "@dogfood/teams": "workspace:*",
         "@dogfood/validation": "workspace:*",
+        "@dogfood/voting": "workspace:*",
         "@playwright/test": "^1.63.0",
         "@types/node": "^26.6.2",
         "typescript": "^5.9.3",
@@ -47,6 +48,7 @@
         "@dogfood/submissions": "workspace:*",
         "@dogfood/teams": "workspace:*",
         "@dogfood/validation": "workspace:*",
+        "@dogfood/voting": "workspace:*",
         "clsx": "^2.1.1",
         "lucide-react": "^1.48.0",
         "next": "^16.3.5",
@@ -236,6 +238,17 @@
         "zod": "^4.6.5",
       },
     },
+    "packages/voting": {
+      "name": "@dogfood/voting",
+      "version": "0.1.0",
+      "dependencies": {
+        "@dogfood/audit": "workspace:*",
+        "@dogfood/db": "workspace:*",
+        "@dogfood/permissions": "workspace:*",
+        "@dogfood/shared": "workspace:*",
+        "@dogfood/validation": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.3.0", "", {}, "sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA=="],
@@ -269,10 +282,11 @@
     "@dogfood/shared": ["@dogfood/shared@workspace:packages/shared"],
 
     "@dogfood/submissions": ["@dogfood/submissions@workspace:packages/submissions"],
-
     "@dogfood/teams": ["@dogfood/teams@workspace:packages/teams"],
 
     "@dogfood/validation": ["@dogfood/validation@workspace:packages/validation"],
+
+    "@dogfood/voting": ["@dogfood/voting@workspace:packages/voting"],
 
     "@dogfood/web": ["@dogfood/web@workspace:apps/web"],
 
