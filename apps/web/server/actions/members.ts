@@ -14,7 +14,7 @@ import { requireActor } from "../session";
 import { describeError, runAction } from "./common";
 
 const EMAIL = z.string().email("A valid email is required.");
-const ROLE = z.enum(["PARTICIPANT", "JUDGE"]);
+const ROLE = z.enum(["PARTICIPANT", "JUDGE", "ORGANIZER"]);
 
 export async function joinEventAction(
   eventId: string,
@@ -75,7 +75,7 @@ export async function changeMemberRoleAction(
   const actor = await requireActor();
   const parsed = ROLE.safeParse(formData.get("role"));
   if (!parsed.success) {
-    return { error: "Role must be PARTICIPANT or JUDGE." };
+    return { error: "Role must be PARTICIPANT, JUDGE, or ORGANIZER." };
   }
   return runAction(async () => {
     await grantEventMembership(actor, eventId, userId, parsed.data);

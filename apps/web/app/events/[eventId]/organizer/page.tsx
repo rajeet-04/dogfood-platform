@@ -324,6 +324,7 @@ export default async function OrganizerPage({
               >
                 <option value="PARTICIPANT">Participant</option>
                 <option value="JUDGE">Judge</option>
+                <option value="ORGANIZER">Organizer</option>
               </select>
             </label>
           </ActionForm>
@@ -385,6 +386,7 @@ export default async function OrganizerPage({
                     >
                       <option value="PARTICIPANT">Participant</option>
                       <option value="JUDGE">Judge</option>
+                      <option value="ORGANIZER">Organizer</option>
                     </select>
                   </ActionForm>
                   {actor.userId !== member.userId ? (
