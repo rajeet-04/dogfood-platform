@@ -21,6 +21,7 @@ export const ERROR_CODES = [
   "JUDGING_INCOMPLETE",
   "RANKING_NOT_READY",
   "RATE_LIMITED",
+  "SLUG_TAKEN",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
