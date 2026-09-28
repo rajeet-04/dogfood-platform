@@ -64,6 +64,13 @@
       "when": 1791010000000,
       "tag": "0008_rubric_criteria_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791020000000,
+      "tag": "0009_certificates",
+      "breakpoints": true
     }
   ]
 }

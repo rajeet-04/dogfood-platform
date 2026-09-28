@@ -17,4 +17,5 @@ export {
   judgeTrackScopes,
 } from "./judging";
 export { auditEvents } from "./audit";
+export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";

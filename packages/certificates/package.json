@@ -1,0 +1,19 @@
+{
+  "name": "@dogfood/certificates",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dogfood/audit": "workspace:*",
+    "@dogfood/db": "workspace:*",
+    "@dogfood/permissions": "workspace:*",
+    "@dogfood/shared": "workspace:*",
+    "@dogfood/validation": "workspace:*"
+  }
+}
