@@ -1,11 +1,11 @@
 # API inventory and UI/API parity audit
 
 **Audited:** 2026-09-28 against the route handlers and Server Actions in this checkout.  
-**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 42 route modules (39 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 57 implemented HTTP operations.
+**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 43 application route modules (40 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 59 implemented HTTP operations.
 
 ## What has an HTTP API
 
-The contract includes event listing/creation/detail/settings; public global, event, and embeddable galleries; image upload/read; team and project draft creation; judge assignment, generation, queue, evaluation draft/submission, invitation and recusal operations; signed public judge participation records; ranking generation/listing, persisted judge pairwise choices and pairwise calculation; published results; authenticated community voting, voting invitations, comments, configuration and audit; prizes; certificate issue/read; and CSV/application-attachment downloads. Session-protected routes use the `dogfood_session` cookie. Public and optionally authenticated reads are marked per operation.
+The contract includes event listing/creation/detail/settings; public global, event, and embeddable galleries; image upload/read; team and project draft creation; judge assignment, generation, queue, evaluation draft/submission, invitation and recusal operations; signed public judge participation records; ranking generation/listing, persisted judge pairwise choices and pairwise calculation; published results; authenticated community voting, voting invitations, comments, configuration and audit; prizes; certificate issue/read; CSV/application-attachment downloads; and organizer project archive import/export in JSON or CSV. Session-protected routes use the `dogfood_session` cookie. Public and optionally authenticated reads are marked per operation.
 
 The contract was assembled from `apps/web/app/api/**/route.ts`. It records methods, paths, parameters, implemented request fields, auth mode, and response status/content types. Many JSON response envelopes intentionally use a permissive object schema; this is a route inventory, not yet a strict generated contract for every domain response.
 
@@ -27,6 +27,8 @@ Some page navigation and form flows are therefore server-rendered or Server Acti
 `PUT /api/v1/events/{eventId}` now replaces the organizer-managed detail fields (description, website, prize information, timeline, schedule, rules, and maximum team size). The request requires every field so omission cannot silently clear a saved value; nullable fields accept `null` to clear. It requires a session and the existing event configure permission, runs the same service normalization and audit path as the UI action, and returns the updated detail fields. Event transitions, registration windows, tracks, custom questions, and the other gaps above remain open.
 
 Pairwise judging now has authenticated judge `GET`/`POST /api/v1/events/{eventId}/pairwise-comparisons` for assigned, track-scoped projects and persisted latest pair choices. Organizer ranking calculation can use these stored choices when explicit comparisons are omitted. The signed public judge-record route is also in the inventory; it requires a configured Ed25519 key and derives records per request rather than maintaining an issuance/revocation ledger. These additions do not close the other API First gaps.
+
+Organizer project archives now have `GET` and `POST /api/v1/events/{eventId}/bulk/projects`. Export returns the version 1 project/revision archive as JSON by default or CSV with `?format=csv`; import accepts JSON or CSV and creates projects only. Teams, tracks, and image assets must already exist in the same event; the route does not import teams, events, or binary assets. Imports are limited to 10 MiB, 1,000 projects, and 5,000 revisions, and reject existing project IDs. This adds archive transfer but does not close the remaining API First gaps.
 
 ## Remaining contract work
 
