@@ -11,5 +11,6 @@ export {
   listProjectComments,
   updateVotingConfig,
   revokeVotingInvitation,
+  trustedVotingNetworkHash,
 } from "./service";
 export type { VotingAccessMode, VotingConfig, VotingInvitation, VotingResults } from "./service";

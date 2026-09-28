@@ -1,4 +1,5 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
+import { isIP } from "node:net";
 
 import { and, db, desc, eq, gt, inArray, schema, sql, sqlState, type DbTx, type EventRole } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
@@ -7,6 +8,9 @@ import { DogfoodError } from "@dogfood/validation";
 import { appendAuditEvent } from "@dogfood/audit";
 
 const WRITE_LIMIT_PER_MINUTE = 10;
+const ABUSE_WINDOW_MS = 60 * 60 * 1000;
+const DEFAULT_NETWORK_VOTE_LIMIT = 2_000;
+const DEFAULT_EVENT_VOTE_LIMIT = 10_000;
 type EventRow = typeof schema.events.$inferSelect;
 type CommentRow = typeof schema.projectComments.$inferSelect;
 
@@ -18,6 +22,45 @@ const CREDENTIAL_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function tokenHash(token: string): string { return createHash("sha256").update(token).digest("hex"); }
+
+function networkPrefix(input: string): string | undefined {
+  let address = input.trim().split("%")[0] ?? "";
+  if (isIP(address) === 4) return `ipv4:${address.split(".").slice(0, 3).join(".")}/24`;
+  if (isIP(address) !== 6) return undefined;
+  address = address.toLowerCase();
+  let parts = address.split(":");
+  const tail = parts.at(-1);
+  if (tail && isIP(tail) === 4) {
+    const octets = tail.split(".").map(Number);
+    parts = [...parts.slice(0, -1), ((octets[0]! << 8) | octets[1]!).toString(16), ((octets[2]! << 8) | octets[3]!).toString(16)];
+    address = parts.join(":");
+  }
+  const compression = address.indexOf("::");
+  if (compression >= 0) {
+    const left = address.slice(0, compression).split(":").filter(Boolean);
+    const right = address.slice(compression + 2).split(":").filter(Boolean);
+    const zeros = 8 - left.length - right.length;
+    if (zeros < 1) return undefined;
+    parts = [...left, ...Array.from({ length: zeros }, () => "0"), ...right];
+  }
+  const words = parts.map((part) => Number.parseInt(part, 16));
+  if (words.length !== 8 || words.some((word) => !Number.isInteger(word) || word < 0 || word > 0xffff)) return undefined;
+  if (words.slice(0, 5).every((word) => word === 0) && words[5] === 0xffff) {
+    const a = words[6]! >> 8;
+    const b = words[6]! & 255;
+    const c = words[7]! >> 8;
+    return `ipv4:${a}.${b}.${c}/24`;
+  }
+  return `ipv6:${words.slice(0, 4).map((word) => word.toString(16).padStart(4, "0")).join(":")}/64`;
+}
+
+export function trustedVotingNetworkHash(ip: string | undefined): string | undefined {
+  if (process.env.DOGFOOD_TRUST_PROXY_HEADERS !== "true" || !ip) return undefined;
+  const secret = process.env.DOGFOOD_VOTING_ABUSE_SECRET;
+  const prefix = networkPrefix(ip);
+  if (!secret || !prefix) return undefined;
+  return createHmac("sha256", secret).update(prefix).digest("hex");
+}
 
 function configuredAccessMode(value: string | undefined): VotingAccessMode {
   return ACCESS_MODES.includes(value as VotingAccessMode) ? value as VotingAccessMode : "AUTHENTICATED";
@@ -278,6 +321,34 @@ async function consumeCredentialVoteLimit(eventId: string, identity: { credentia
   throw new DogfoodError("RATE_LIMITED", "Too many community actions; try again in a minute");
 }
 
+function configuredLimit(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function consumeAbuseRateLimit(eventId: string, networkHash?: string): Promise<void> {
+  const now = new Date();
+  const windowStart = new Date(Math.floor(now.getTime() / ABUSE_WINDOW_MS) * ABUSE_WINDOW_MS);
+  const scopes = [
+    { scope: "EVENT", keyHash: "event", limit: configuredLimit("DOGFOOD_VOTING_EVENT_LIMIT_PER_HOUR", DEFAULT_EVENT_VOTE_LIMIT) },
+    ...(networkHash ? [{ scope: "NETWORK", keyHash: networkHash, limit: configuredLimit("DOGFOOD_VOTING_NETWORK_LIMIT_PER_HOUR", DEFAULT_NETWORK_VOTE_LIMIT) }] : []),
+  ] as const;
+  for (const { scope, keyHash, limit } of scopes) {
+    const [bucket] = await db.insert(schema.votingAbuseRateLimits).values({
+      eventId, scope, keyHash, action: "vote", windowStart, count: 1,
+    }).onConflictDoUpdate({
+      target: [schema.votingAbuseRateLimits.eventId, schema.votingAbuseRateLimits.scope, schema.votingAbuseRateLimits.keyHash, schema.votingAbuseRateLimits.action, schema.votingAbuseRateLimits.windowStart],
+      set: { count: sql`${schema.votingAbuseRateLimits.count} + 1` },
+    }).returning({ count: schema.votingAbuseRateLimits.count });
+    if (bucket.count <= limit) continue;
+    await db.transaction((tx) => appendAuditEvent(tx, {
+      eventId, actorId: null, action: scope === "NETWORK" ? "vote.network_rate_limited" : "vote.event_rate_limited",
+      resourceType: "vote", metadata: { scope, limit, windowStart: windowStart.toISOString() },
+    }));
+    throw new DogfoodError("RATE_LIMITED", "This event has reached its voting limit for the hour");
+  }
+}
+
 async function requireVisibleProject(eventId: string, projectId: string): Promise<void> {
   const [project] = await db.select({ id: schema.projects.id })
     .from(schema.projects)
@@ -305,7 +376,7 @@ async function rejectProjectTeamVote(actor: Actor, eventId: string, projectId: s
   throw new DogfoodError("FORBIDDEN", "This vote is not allowed");
 }
 
-export async function castVote(actor: Actor | null, eventId: string, projectId: string, rawCredential?: string): Promise<void> {
+export async function castVote(actor: Actor | null, eventId: string, projectId: string, rawCredential?: string, abuse?: { networkHash?: string }): Promise<void> {
   const event = await eventForVoting(eventId);
   await assertVotingWindow(event);
   const config = await getVotingConfig(eventId);
@@ -325,6 +396,7 @@ export async function castVote(actor: Actor | null, eventId: string, projectId: 
   }
   await requireVisibleProject(eventId, projectId);
   if (actor) await rejectProjectTeamVote(actor, eventId, projectId);
+  await consumeAbuseRateLimit(eventId, config.accessMode === "AUTHENTICATED" ? undefined : abuse?.networkHash);
   if (actor && config.accessMode === "AUTHENTICATED") await consumeWriteLimit(actor, eventId, "vote");
   else await consumeCredentialVoteLimit(eventId, { credentialId: credentialId ?? undefined, voterTokenHash: voterTokenHash ?? undefined });
   try {

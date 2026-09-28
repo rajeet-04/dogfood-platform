@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSession, registerUser } from "@dogfood/auth";
 import { queryAudit } from "@dogfood/audit";
@@ -6,11 +6,12 @@ import { and, db, eq, schema } from "@dogfood/db";
 import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
 import { createTeam } from "@dogfood/teams";
 import { createProject, submitProject } from "@dogfood/submissions";
-import { castVote, createProjectComment, createVotingInvitation, deleteProjectComment, ensureOpenLinkCredential, getVotingBallot, getVotingConfig, getVotingResults, listVotingInvitations, revokeVotingInvitation, updateVotingConfig } from "@dogfood/voting";
+import { castVote, createProjectComment, createVotingInvitation, deleteProjectComment, ensureOpenLinkCredential, getVotingBallot, getVotingConfig, getVotingResults, listVotingInvitations, revokeVotingInvitation, trustedVotingNetworkHash, updateVotingConfig } from "@dogfood/voting";
 import type { Actor } from "@dogfood/shared";
 
 import { resetDb } from "../fixtures/db";
 import * as votingAuditRoute from "../../apps/web/app/api/v1/events/[eventId]/voting/audit/route";
+import * as votesRoute from "../../apps/web/app/api/v1/events/[eventId]/votes/route";
 
 function actorFor(userId: string): Actor {
   return { userId, isPlatformAdmin: false };
@@ -62,6 +63,7 @@ async function votingEvent() {
 
 describe("authenticated public voting", () => {
   beforeEach(async () => resetDb());
+  afterEach(() => vi.unstubAllEnvs());
 
   it("returns a randomized ballot containing only visible projects", async () => {
     const { event } = await votingEvent();
@@ -73,6 +75,20 @@ describe("authenticated public voting", () => {
   it("defaults to authenticated-account access", async () => {
     const { event } = await votingEvent();
     expect(await getVotingConfig(event.id)).toMatchObject({ accessMode: "AUTHENTICATED" });
+  });
+
+  it("uses x-real-ip only when trusted proxy headers and a hash secret are configured", () => {
+    expect(trustedVotingNetworkHash("198.51.100.2")).toBeUndefined();
+    vi.stubEnv("DOGFOOD_TRUST_PROXY_HEADERS", "true");
+    expect(trustedVotingNetworkHash("198.51.100.2")).toBeUndefined();
+    vi.stubEnv("DOGFOOD_VOTING_ABUSE_SECRET", "test-only-key");
+    const first = trustedVotingNetworkHash("198.51.100.2");
+    expect(first).toBe(trustedVotingNetworkHash("198.51.100.250"));
+    expect(first).not.toBe(trustedVotingNetworkHash("198.51.101.2"));
+    expect(first).not.toMatch(/198\.51\.100/);
+    expect(trustedVotingNetworkHash("2001:db8:1234:5678::1"))
+      .toBe(trustedVotingNetworkHash("2001:db8:1234:5678:abcd::ffff"));
+    expect(trustedVotingNetworkHash("not-an-ip")).toBeUndefined();
   });
 
   it("keeps open-link issuance stateless and hashes the browser token on one vote", async () => {
@@ -96,6 +112,70 @@ describe("authenticated public voting", () => {
     expect(buckets).toHaveLength(1);
     expect(buckets[0].credentialId).toBeNull();
     expect(buckets[0].voterTokenHash).toBe(votesWithToken[0].voterTokenHash);
+  });
+
+  it("limits fresh open-link tokens by trusted network and event-wide hourly buckets", async () => {
+    vi.stubEnv("DOGFOOD_TRUST_PROXY_HEADERS", "true");
+    vi.stubEnv("DOGFOOD_VOTING_ABUSE_SECRET", "test-only-key");
+    vi.stubEnv("DOGFOOD_VOTING_NETWORK_LIMIT_PER_HOUR", "2");
+    vi.stubEnv("DOGFOOD_VOTING_EVENT_LIMIT_PER_HOUR", "20");
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+
+    const key = "198.51.100.0/24";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const credential = await ensureOpenLinkCredential(event.id);
+      await castVote(null, event.id, project.id, credential.token, { networkHash: key });
+    }
+    const freshToken = await ensureOpenLinkCredential(event.id);
+    await expect(castVote(null, event.id, project.id, freshToken.token, { networkHash: key }))
+      .rejects.toMatchObject({ code: "RATE_LIMITED" });
+
+    const rows = await db.select().from(schema.votingAbuseRateLimits).where(eq(schema.votingAbuseRateLimits.eventId, event.id));
+    expect(rows.find((row) => row.scope === "NETWORK")?.count).toBe(3);
+    // The event bucket counts valid vote attempts, including attempts blocked by a network cap.
+    expect(rows.find((row) => row.scope === "EVENT")?.count).toBe(3);
+  });
+
+  it("caps total event votes even when requests use different trusted networks", async () => {
+    vi.stubEnv("DOGFOOD_TRUST_PROXY_HEADERS", "true");
+    vi.stubEnv("DOGFOOD_VOTING_ABUSE_SECRET", "test-only-key");
+    vi.stubEnv("DOGFOOD_VOTING_NETWORK_LIMIT_PER_HOUR", "20");
+    vi.stubEnv("DOGFOOD_VOTING_EVENT_LIMIT_PER_HOUR", "2");
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const credential = await ensureOpenLinkCredential(event.id);
+      await castVote(null, event.id, project.id, credential.token, { networkHash: `network-${attempt}` });
+    }
+    const credential = await ensureOpenLinkCredential(event.id);
+    await expect(castVote(null, event.id, project.id, credential.token, { networkHash: "network-new" }))
+      .rejects.toMatchObject({ code: "RATE_LIMITED" });
+    const rows = await db.select().from(schema.votingAbuseRateLimits).where(eq(schema.votingAbuseRateLimits.eventId, event.id));
+    expect(rows.find((row) => row.scope === "EVENT")?.count).toBe(3);
+  });
+
+  it("passes the configured reverse-proxy IP into the network voter throttle", async () => {
+    vi.stubEnv("DOGFOOD_TRUST_PROXY_HEADERS", "true");
+    vi.stubEnv("DOGFOOD_VOTING_ABUSE_SECRET", "test-only-key");
+    vi.stubEnv("DOGFOOD_VOTING_NETWORK_LIMIT_PER_HOUR", "1");
+    vi.stubEnv("DOGFOOD_VOTING_EVENT_LIMIT_PER_HOUR", "20");
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const post = async () => {
+      const credential = await ensureOpenLinkCredential(event.id);
+      return votesRoute.POST(new Request(`http://dogfood.local/api/v1/events/${event.id}/votes`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `dogfood_vote_${event.id}=${credential.token}`,
+          "x-real-ip": "203.0.113.29",
+        },
+        body: JSON.stringify({ projectId: project.id }),
+      }), { params: Promise.resolve({ eventId: event.id }) });
+    };
+    expect((await post()).status).toBe(201);
+    expect((await post()).status).toBe(429);
   });
 
   it("does not mint an open-link token before the voting window opens", async () => {
