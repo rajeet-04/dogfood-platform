@@ -34,3 +34,5 @@ export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";
 export { pairwiseComparisons } from "./pairwise";
 export { projectComments, votingConfigs, votingCredentials, votingCredentialRateLimits, votingRateLimits, votes } from "./voting";
+export { webhookDeliveries, webhookEndpoints } from "./webhooks";
+export type { WebhookDelivery, WebhookEndpoint, WebhookEvent } from "./webhooks";
