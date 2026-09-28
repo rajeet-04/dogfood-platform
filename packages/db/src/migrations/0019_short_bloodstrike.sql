@@ -1,0 +1,10 @@
+ALTER TABLE "votes" DROP CONSTRAINT "votes_one_voter_identity_check";--> statement-breakpoint
+DROP INDEX "voting_credential_rate_limits_bucket_unique";--> statement-breakpoint
+ALTER TABLE "voting_credential_rate_limits" ALTER COLUMN "credential_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "votes" ADD COLUMN "voter_token_hash" text;--> statement-breakpoint
+ALTER TABLE "voting_credential_rate_limits" ADD COLUMN "voter_token_hash" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "votes_event_voter_token_unique" ON "votes" USING btree ("event_id","voter_token_hash") WHERE "votes"."voter_token_hash" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "voting_token_rate_limits_bucket_unique" ON "voting_credential_rate_limits" USING btree ("event_id","voter_token_hash","action","window_start") WHERE "voting_credential_rate_limits"."voter_token_hash" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "voting_credential_rate_limits_bucket_unique" ON "voting_credential_rate_limits" USING btree ("event_id","credential_id","action","window_start") WHERE "voting_credential_rate_limits"."credential_id" is not null;--> statement-breakpoint
+ALTER TABLE "votes" ADD CONSTRAINT "votes_one_voter_identity_check" CHECK ((case when "votes"."voter_id" is not null then 1 else 0 end + case when "votes"."credential_id" is not null then 1 else 0 end + case when "votes"."voter_token_hash" is not null then 1 else 0 end) = 1);--> statement-breakpoint
+ALTER TABLE "voting_credential_rate_limits" ADD CONSTRAINT "voting_credential_rate_limits_identity_check" CHECK (("voting_credential_rate_limits"."credential_id" is not null and "voting_credential_rate_limits"."voter_token_hash" is null) or ("voting_credential_rate_limits"."credential_id" is null and "voting_credential_rate_limits"."voter_token_hash" is not null));

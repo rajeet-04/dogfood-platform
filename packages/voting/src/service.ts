@@ -67,15 +67,15 @@ async function findCredential(eventId: string, rawToken: string | undefined, acc
 }
 
 export async function ensureOpenLinkCredential(eventId: string, currentToken?: string): Promise<{ token: string; expiresAt: Date }> {
-  await eventForVoting(eventId);
+  const event = await eventForVoting(eventId);
   const config = await getVotingConfig(eventId);
   if (config.accessMode !== "OPEN_LINK") throw new DogfoodError("CONFLICT", "Open-link voting is not enabled");
-  if (!config.closesAt || config.closesAt <= new Date()) throw new DogfoodError("CONFLICT", "Community voting is not open");
-  const existing = await findCredential(eventId, currentToken, "OPEN_LINK");
-  if (existing) return { token: currentToken!, expiresAt: existing.expiresAt };
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = config.closesAt ?? new Date(Date.now() + CREDENTIAL_LIFETIME_MS);
-  await db.insert(schema.votingCredentials).values({ eventId, accessMode: "OPEN_LINK", tokenHash: tokenHash(token), expiresAt });
+  const now = new Date();
+  if (event.state !== "JUDGING" || !config.opensAt || !config.closesAt || now < config.opensAt || now >= config.closesAt) {
+    throw new DogfoodError("CONFLICT", "Community voting is not open");
+  }
+  const token = currentToken && /^[A-Za-z0-9_-]{43}$/.test(currentToken) ? currentToken : randomBytes(32).toString("base64url");
+  const expiresAt = config.closesAt;
   return { token, expiresAt };
 }
 
@@ -220,17 +220,25 @@ export async function getVotingBallot(actor: Actor | null, eventId: string, rawC
   await assertVotingWindow(event);
   const config = await getVotingConfig(eventId);
   let credentialId: string | null = null;
+  let voterTokenHash: string | null = null;
   if (config.accessMode === "AUTHENTICATED") {
     if (!actor) throw new DogfoodError("UNAUTHENTICATED", "Sign in to vote in this event");
   } else {
-    const credential = await findCredential(eventId, rawCredential, config.accessMode);
-    if (!credential) throw new DogfoodError("UNAUTHENTICATED", config.accessMode === "EMAIL_GATED" ? "Enter a valid voting invitation code" : "Voting link is unavailable; reload the ballot");
-    credentialId = credential.id;
+    if (config.accessMode === "OPEN_LINK") {
+      if (!rawCredential || !/^[A-Za-z0-9_-]{43}$/.test(rawCredential)) throw new DogfoodError("UNAUTHENTICATED", "Voting link is unavailable; reload the ballot");
+      voterTokenHash = tokenHash(rawCredential);
+    } else {
+      const credential = await findCredential(eventId, rawCredential, "EMAIL_GATED");
+      if (!credential) throw new DogfoodError("UNAUTHENTICATED", "Enter a valid voting invitation code");
+      credentialId = credential.id;
+    }
   }
   const projects = shuffle(await publicProjects(eventId));
   const [existing] = actor && config.accessMode === "AUTHENTICATED"
     ? await db.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.eventId, eventId), eq(schema.votes.voterId, actor.userId))).limit(1)
-    : await db.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.eventId, eventId), eq(schema.votes.credentialId, credentialId!))).limit(1);
+    : config.accessMode === "OPEN_LINK"
+      ? await db.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.eventId, eventId), eq(schema.votes.voterTokenHash, voterTokenHash!))).limit(1)
+      : await db.select({ id: schema.votes.id }).from(schema.votes).where(and(eq(schema.votes.eventId, eventId), eq(schema.votes.credentialId, credentialId!))).limit(1);
   return { eventId, accessMode: config.accessMode, hasVoted: Boolean(existing), projects };
 }
 
@@ -251,12 +259,18 @@ async function consumeWriteLimit(actor: Actor, eventId: string, action: "vote" |
   throw new DogfoodError("RATE_LIMITED", "Too many community actions; try again in a minute");
 }
 
-async function consumeCredentialVoteLimit(eventId: string, credentialId: string): Promise<void> {
+async function consumeCredentialVoteLimit(eventId: string, identity: { credentialId?: string; voterTokenHash?: string }): Promise<void> {
   const now = new Date();
   const windowStart = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
-  const [bucket] = await db.insert(schema.votingCredentialRateLimits).values({ eventId, credentialId, action: "vote", windowStart, count: 1 })
+  const values = { eventId, credentialId: identity.credentialId ?? null, voterTokenHash: identity.voterTokenHash ?? null, action: "vote", windowStart, count: 1 };
+  const [bucket] = await db.insert(schema.votingCredentialRateLimits).values(values)
     .onConflictDoUpdate({
-      target: [schema.votingCredentialRateLimits.eventId, schema.votingCredentialRateLimits.credentialId, schema.votingCredentialRateLimits.action, schema.votingCredentialRateLimits.windowStart],
+      target: identity.credentialId
+        ? [schema.votingCredentialRateLimits.eventId, schema.votingCredentialRateLimits.credentialId, schema.votingCredentialRateLimits.action, schema.votingCredentialRateLimits.windowStart]
+        : [schema.votingCredentialRateLimits.eventId, schema.votingCredentialRateLimits.voterTokenHash, schema.votingCredentialRateLimits.action, schema.votingCredentialRateLimits.windowStart],
+      targetWhere: identity.credentialId
+        ? sql`${schema.votingCredentialRateLimits.credentialId} is not null`
+        : sql`${schema.votingCredentialRateLimits.voterTokenHash} is not null`,
       set: { count: sql`${schema.votingCredentialRateLimits.count} + 1` },
     }).returning({ count: schema.votingCredentialRateLimits.count });
   if (bucket.count <= WRITE_LIMIT_PER_MINUTE) return;
@@ -296,23 +310,29 @@ export async function castVote(actor: Actor | null, eventId: string, projectId: 
   await assertVotingWindow(event);
   const config = await getVotingConfig(eventId);
   let credentialId: string | null = null;
+  let voterTokenHash: string | null = null;
   if (config.accessMode === "AUTHENTICATED") {
     if (!actor) throw new DogfoodError("UNAUTHENTICATED", "Sign in to vote in this event");
   } else {
-    const credential = await findCredential(eventId, rawCredential, config.accessMode);
-    if (!credential) throw new DogfoodError("UNAUTHENTICATED", config.accessMode === "EMAIL_GATED" ? "Enter a valid voting invitation code" : "Voting link is unavailable; reload the ballot");
-    credentialId = credential.id;
+    if (config.accessMode === "OPEN_LINK") {
+      if (!rawCredential || !/^[A-Za-z0-9_-]{43}$/.test(rawCredential)) throw new DogfoodError("UNAUTHENTICATED", "Voting link is unavailable; reload the ballot");
+      voterTokenHash = tokenHash(rawCredential);
+    } else {
+      const credential = await findCredential(eventId, rawCredential, "EMAIL_GATED");
+      if (!credential) throw new DogfoodError("UNAUTHENTICATED", "Enter a valid voting invitation code");
+      credentialId = credential.id;
+    }
   }
   await requireVisibleProject(eventId, projectId);
-  if (actor && config.accessMode === "AUTHENTICATED") await rejectProjectTeamVote(actor, eventId, projectId);
+  if (actor) await rejectProjectTeamVote(actor, eventId, projectId);
   if (actor && config.accessMode === "AUTHENTICATED") await consumeWriteLimit(actor, eventId, "vote");
-  else await consumeCredentialVoteLimit(eventId, credentialId!);
+  else await consumeCredentialVoteLimit(eventId, { credentialId: credentialId ?? undefined, voterTokenHash: voterTokenHash ?? undefined });
   try {
     await db.transaction(async (tx) => {
       const transactionalMode = await assertVotingWindowInTransaction(tx, eventId);
       if (transactionalMode !== config.accessMode) throw new DogfoodError("CONFLICT", "Voting access settings changed; reload the ballot");
       if (config.accessMode === "AUTHENTICATED" && !actor) throw new DogfoodError("UNAUTHENTICATED", "Sign in to vote in this event");
-      if (config.accessMode !== "AUTHENTICATED") {
+      if (config.accessMode === "EMAIL_GATED") {
         const [credential] = await tx.select({ id: schema.votingCredentials.id }).from(schema.votingCredentials).where(and(
           eq(schema.votingCredentials.id, credentialId!), eq(schema.votingCredentials.eventId, eventId),
           eq(schema.votingCredentials.accessMode, config.accessMode), sql`${schema.votingCredentials.revokedAt} is null`,
@@ -320,7 +340,7 @@ export async function castVote(actor: Actor | null, eventId: string, projectId: 
         )).for("update").limit(1);
         if (!credential) throw new DogfoodError("UNAUTHENTICATED", "This voting credential has expired or was revoked");
       }
-      await tx.insert(schema.votes).values({ eventId, voterId: config.accessMode === "AUTHENTICATED" ? actor!.userId : null, credentialId, projectId });
+      await tx.insert(schema.votes).values({ eventId, voterId: config.accessMode === "AUTHENTICATED" ? actor!.userId : null, credentialId, voterTokenHash, projectId });
       await appendAuditEvent(tx, { eventId, actorId: null, action: "vote.cast", resourceType: "vote" });
     });
   } catch (error) {
