@@ -18,6 +18,13 @@ export {
   addCriterion,
   activateRubric,
   assignJudge,
+  assignJudges,
+  getJudgeAssignments,
+  generateAssignmentProposal,
+  commitAssignmentProposal,
+  createJudgeRecusal,
+  listJudgeRecusals,
+  deleteJudgeRecusal,
   unassignJudge,
   getJudgeQueue,
   getJudgeQueueItem,
@@ -32,6 +39,9 @@ export {
 } from "./service";
 export type {
   AssignJudgeInput,
+  GenerateAssignmentInput,
+  JudgeAssignmentFilters,
+  JudgeRecusalInput,
   AssignedProjectDetail,
   CreateRubricInput,
   EvaluationDetail,

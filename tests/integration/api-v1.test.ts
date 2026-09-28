@@ -23,6 +23,11 @@ import * as eventDetailRoute from "../../apps/web/app/api/v1/events/[eventId]/ro
 import * as teamsRoute from "../../apps/web/app/api/v1/events/[eventId]/teams/route";
 import * as projectsRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/route";
 import * as judgeQueueRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-queue/route";
+import * as judgeAssignmentsRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-assignments/route";
+import * as judgeAssignmentRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-assignments/[assignmentId]/route";
+import * as generateAssignmentsRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-assignments/generate/route";
+import * as judgeRecusalsRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-recusals/route";
+import * as judgeRecusalRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-recusals/[recusalId]/route";
 import * as evaluationsRoute from "../../apps/web/app/api/v1/events/[eventId]/evaluations/[assignmentId]/route";
 import * as rankingsRoute from "../../apps/web/app/api/v1/events/[eventId]/rankings/route";
 import * as resultsRoute from "../../apps/web/app/api/v1/events/[eventId]/results/route";
@@ -474,5 +479,192 @@ describe("api/v1", () => {
     expect(missingField.res.status).toBe(422);
     expect(missingField.body.error.code).toBe("VALIDATION_FAILED");
     expect(missingField.body.error.fields.name).toBeTruthy();
+  });
+
+  it("previews and commits generated assignments while applying persisted recusals", async () => {
+    await resetDb();
+    const organizer = await seedAuthUser(uniqueEmail("org"));
+    const judge = await seedAuthUser(uniqueEmail("judge"));
+    const judgeB = await seedAuthUser(uniqueEmail("judge"));
+    const participant = await seedAuthUser(uniqueEmail("participant"));
+    const event = await createEvent(organizer.actor, {
+      name: "Assignment API",
+      slug: `assignment-api-${Date.now()}`,
+      timezone: "UTC",
+      submissionOpensAt: new Date(Date.now() - 60_000),
+      submissionClosesAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
+    await grantEventMembership(organizer.actor, event.id, judge.userId, "JUDGE");
+    await grantEventMembership(organizer.actor, event.id, judgeB.userId, "JUDGE");
+    const team = await createTeam(participant.actor, event.id, { name: "API Team" });
+    await transitionEvent(organizer.actor, event.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
+    const project = await createProject(participant.actor, event.id, {
+      teamId: team.id,
+      title: "API Project",
+      description: "Testing assignment routes",
+    });
+    await submitProject(participant.actor, event.id, project.id);
+    const [track] = await db
+      .insert(schema.eventTracks)
+      .values({ eventId: event.id, name: "API track" })
+      .returning();
+    const [projectRow] = await db
+      .select({ currentRevisionId: schema.projects.currentRevisionId })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, project.id));
+    await db
+      .update(schema.projectRevisions)
+      .set({ trackId: track.id })
+      .where(eq(schema.projectRevisions.id, projectRow.currentRevisionId!));
+    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_CLOSED");
+    await transitionEvent(organizer.actor, event.id, "JUDGING");
+
+    const recusal = await invoke(
+      judgeRecusalsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-recusals`, organizer.cookie, {
+        judgeId: judge.userId,
+        projectId: project.id,
+        reason: "Prior collaboration",
+      }),
+      { eventId: event.id },
+    );
+    expect(recusal.res.status).toBe(201);
+    expect(recusal.body.recusal).toMatchObject({ judgeId: judge.userId, projectId: project.id });
+
+    const preview = await invoke(
+      generateAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments/generate`, organizer.cookie, {
+        strategy: "round_robin",
+        reviewsPerProject: 1,
+        judgeIds: [judge.userId],
+        recusals: [],
+        commit: false,
+      }),
+      { eventId: event.id },
+    );
+    expect(preview.res.status).toBe(200);
+    expect(preview.body.proposal).toEqual([]);
+    expect(preview.body.coverage.underCovered).toMatchObject([
+      { projectId: project.id, assignedReviews: 0, requiredReviews: 1 },
+    ]);
+    expect(preview.body.warnings).toEqual([`Project ${project.id} has insufficient eligible judges`]);
+
+    const manual = await invoke(
+      judgeAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments`, organizer.cookie, {
+        judgeId: judge.userId,
+        projectId: project.id,
+      }),
+      { eventId: event.id },
+    );
+    expect(manual.res.status).toBe(409);
+    expect(manual.body.error.code).toBe("CONFLICT");
+
+    const listed = await invoke(
+      judgeRecusalsRoute.GET,
+      request("GET", `/api/v1/events/${event.id}/judge-recusals`, organizer.cookie),
+      { eventId: event.id },
+    );
+    expect(listed.body.recusals).toHaveLength(1);
+    const deleted = await invoke(
+      judgeRecusalRoute.DELETE,
+      request("DELETE", `/api/v1/events/${event.id}/judge-recusals/${recusal.body.recusal.id}`, organizer.cookie),
+      { eventId: event.id, recusalId: recusal.body.recusal.id },
+    );
+    expect(deleted.body).toEqual({ deleted: true });
+
+    const staleCommit = await invoke(
+      generateAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments/generate`, organizer.cookie, {
+        strategy: "balanced_by_track",
+        reviewsPerProject: 1,
+        judgeIds: [judge.userId],
+        expectedProposal: preview.body.proposal,
+        commit: true,
+      }),
+      { eventId: event.id },
+    );
+    expect(staleCommit.res.status).toBe(409);
+    expect(staleCommit.body.error.code).toBe("CONFLICT");
+
+    const freshPreview = await invoke(
+      generateAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments/generate`, organizer.cookie, {
+        strategy: "balanced_by_track",
+        reviewsPerProject: 1,
+        judgeIds: [judge.userId],
+        commit: false,
+      }),
+      { eventId: event.id },
+    );
+
+    const committed = await invoke(
+      generateAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments/generate`, organizer.cookie, {
+        strategy: "balanced_by_track",
+        reviewsPerProject: 1,
+        judgeIds: [judge.userId],
+        expectedProposal: freshPreview.body.proposal,
+        commit: true,
+      }),
+      { eventId: event.id },
+    );
+    expect(committed.res.status).toBe(200);
+    expect(committed.body.proposal).toEqual([{ judgeId: judge.userId, projectId: project.id }]);
+    const assignments = await db
+      .select()
+      .from(schema.judgeAssignments)
+      .where(eq(schema.judgeAssignments.eventId, event.id));
+    expect(assignments).toHaveLength(1);
+
+    const invalidBatch = await invoke(
+      judgeAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments`, organizer.cookie, {
+        assignments: [
+          { judgeId: judgeB.userId, projectId: project.id },
+          { judgeId: participant.userId, projectId: project.id },
+        ],
+      }),
+      { eventId: event.id },
+    );
+    expect(invalidBatch.res.status).toBe(422);
+    const afterRollback = await db
+      .select()
+      .from(schema.judgeAssignments)
+      .where(eq(schema.judgeAssignments.eventId, event.id));
+    expect(afterRollback).toHaveLength(1);
+
+    const batch = await invoke(
+      judgeAssignmentsRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/judge-assignments`, organizer.cookie, {
+        assignments: [{ judgeId: judgeB.userId, projectId: project.id }],
+      }),
+      { eventId: event.id },
+    );
+    expect(batch.res.status).toBe(201);
+    expect(batch.body.assignments).toHaveLength(1);
+    const filtered = await invoke(
+      judgeAssignmentsRoute.GET,
+      request(
+        "GET",
+        `/api/v1/events/${event.id}/judge-assignments?judgeId=${judgeB.userId}&projectId=${project.id}&trackId=${track.id}&status=ASSIGNED`,
+        organizer.cookie,
+      ),
+      { eventId: event.id },
+    );
+    expect(filtered.body.assignments).toHaveLength(1);
+    expect(filtered.body.assignments[0]).toMatchObject({
+      judgeId: judgeB.userId,
+      projectId: project.id,
+      trackId: track.id,
+      status: "ASSIGNED",
+    });
+    const unassigned = await judgeAssignmentRoute.DELETE(
+      request("DELETE", `/api/v1/events/${event.id}/judge-assignments/${batch.body.assignments[0].id}`, organizer.cookie),
+      { params: Promise.resolve({ eventId: event.id, assignmentId: batch.body.assignments[0].id }) },
+    );
+    expect(unassigned.status).toBe(204);
   });
 });
