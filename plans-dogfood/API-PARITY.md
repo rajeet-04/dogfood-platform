@@ -1,11 +1,11 @@
 # API inventory and UI/API parity audit
 
 **Audited:** 2026-09-28 against the route handlers and Server Actions in this checkout.  
-**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 41 route modules (39 under `/api/v1`, plus `/api/health` and `/api/ready`) and all 56 implemented HTTP operations.
+**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 42 route modules (39 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 57 implemented HTTP operations.
 
 ## What has an HTTP API
 
-The contract includes event listing/creation/detail/settings; public global and event galleries; image upload/read; team and project draft creation; judge assignment, generation, queue, evaluation draft/submission, invitation and recusal operations; signed public judge participation records; ranking generation/listing, persisted judge pairwise choices and pairwise calculation; published results; authenticated community voting, voting invitations, comments, configuration and audit; prizes; certificate issue/read; and CSV/application-attachment downloads. Session-protected routes use the `dogfood_session` cookie. Public and optionally authenticated reads are marked per operation.
+The contract includes event listing/creation/detail/settings; public global, event, and embeddable galleries; image upload/read; team and project draft creation; judge assignment, generation, queue, evaluation draft/submission, invitation and recusal operations; signed public judge participation records; ranking generation/listing, persisted judge pairwise choices and pairwise calculation; published results; authenticated community voting, voting invitations, comments, configuration and audit; prizes; certificate issue/read; and CSV/application-attachment downloads. Session-protected routes use the `dogfood_session` cookie. Public and optionally authenticated reads are marked per operation.
 
 The contract was assembled from `apps/web/app/api/**/route.ts`. It records methods, paths, parameters, implemented request fields, auth mode, and response status/content types. Many JSON response envelopes intentionally use a permissive object schema; this is a route inventory, not yet a strict generated contract for every domain response.
 

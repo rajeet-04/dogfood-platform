@@ -19,6 +19,32 @@ tags:
   - name: Prizes and certificates
   - name: Assets and exports
 paths:
+  /embed/gallery:
+    get:
+      operationId: getEmbeddableGallery
+      tags: [Gallery]
+      summary: Serve the public iframe gallery
+      description: Read-only HTML widget. It uses the same q, event, track, and tag filters as the anonymous gallery API and allows framing by external sites.
+      security: []
+      parameters:
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: event, schema: { type: string, format: uuid } }
+        - { in: query, name: track, schema: { type: string, format: uuid } }
+        - { in: query, name: tag, schema: { type: string, maxLength: 40 } }
+      responses:
+        '200':
+          description: Standalone responsive iframe widget
+          content:
+            text/html:
+              schema: { type: string }
+          headers:
+            Content-Security-Policy:
+              schema: { type: string }
+              description: Includes frame-ancestors * and restricts scripts, styles, images, and API calls to this origin.
+        '400':
+          description: Invalid gallery filter
+          content:
+            text/plain: { schema: { type: string } }
   /api/v1/events:
     get:
       operationId: listEvents
