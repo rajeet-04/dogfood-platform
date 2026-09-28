@@ -92,3 +92,17 @@ export const votingCredentialRateLimits = pgTable("voting_credential_rate_limits
   uniqueIndex("voting_token_rate_limits_bucket_unique").on(t.eventId, t.voterTokenHash, t.action, t.windowStart).where(sql`${t.voterTokenHash} is not null`),
   check("voting_credential_rate_limits_count_positive", sql`${t.count} > 0`),
 ]);
+
+export const votingAbuseRateLimits = pgTable("voting_abuse_rate_limits", {
+  eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull(),
+  keyHash: text("key_hash").notNull(),
+  action: text("action").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull().default(1),
+}, (t) => [
+  check("voting_abuse_rate_limits_scope_check", sql`${t.scope} in ('EVENT', 'NETWORK')`),
+  check("voting_abuse_rate_limits_count_positive", sql`${t.count} > 0`),
+  uniqueIndex("voting_abuse_rate_limits_bucket_unique").on(t.eventId, t.scope, t.keyHash, t.action, t.windowStart),
+  index("voting_abuse_rate_limits_event_window_idx").on(t.eventId, t.windowStart),
+]);
