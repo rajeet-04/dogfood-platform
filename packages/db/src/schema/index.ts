@@ -32,4 +32,4 @@ export type { NotificationType } from "./notifications";
 export { auditEvents } from "./audit";
 export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";
-export { projectComments, votingConfigs, votingRateLimits, votes } from "./voting";
+export { projectComments, votingConfigs, votingCredentials, votingCredentialRateLimits, votingRateLimits, votes } from "./voting";

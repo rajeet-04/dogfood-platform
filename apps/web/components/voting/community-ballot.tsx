@@ -10,7 +10,7 @@ import { EmptyStatePanel } from "../ui/empty-state";
 import { Textarea } from "../ui/input";
 
 type BallotProject = { id: string; title: string };
-type Ballot = { eventId: string; hasVoted: boolean; projects: BallotProject[] };
+type Ballot = { eventId: string; accessMode: "AUTHENTICATED" | "OPEN_LINK" | "EMAIL_GATED"; hasVoted: boolean; projects: BallotProject[] };
 type Comment = { id: string; body: string; createdAt: string };
 type CommentPanel = {
   comments: Comment[] | null;
@@ -65,6 +65,8 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
   const [ballot, setBallot] = useState<Ballot | null>(null);
   const [loading, setLoading] = useState(true);
   const [authRequired, setAuthRequired] = useState(false);
+  const [invitationRequired, setInvitationRequired] = useState(false);
+  const [invitationToken, setInvitationToken] = useState("");
   const [closed, setClosed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -78,16 +80,24 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
     let current = true;
     setLoading(true);
     setAuthRequired(false);
+    setInvitationRequired(false);
     setClosed(false);
     setLoadError(null);
-    requestJson<{ ballot: Ballot }>(votePath(eventId), { cache: "no-store" })
+    const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("invite") ?? "";
+    const token = fragmentToken || invitationToken;
+    if (fragmentToken) {
+      setInvitationToken(fragmentToken);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    requestJson<{ ballot: Ballot }>(votePath(eventId), { cache: "no-store", headers: token ? { "X-Voting-Invitation": token } : undefined })
       .then(({ ballot: next }) => {
         if (current) setBallot(next);
       })
       .catch((error: unknown) => {
         if (!current) return;
         if (error instanceof RequestError && error.code === "UNAUTHENTICATED") {
-          setAuthRequired(true);
+          if (error.message.toLowerCase().includes("invitation")) setInvitationRequired(true);
+          else setAuthRequired(true);
         } else if (error instanceof RequestError && error.code === "CONFLICT") {
           setClosed(true);
         } else {
@@ -111,6 +121,7 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
       await requestJson("/api/v1/events/" + eventId + "/votes", {
         method: "POST",
         body: JSON.stringify({ projectId: selectedProjectId }),
+        headers: invitationToken ? { "X-Voting-Invitation": invitationToken } : undefined,
       });
       setBallot((current) => current ? { ...current, hasVoted: true } : current);
     } catch (error) {
@@ -122,6 +133,13 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function submitInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!invitationToken.trim()) return;
+    setInvitationToken(invitationToken.trim());
+    setReloadKey((key) => key + 1);
   }
 
   function updateCommentPanel(projectId: string, update: Partial<CommentPanel>) {
@@ -209,6 +227,13 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
     );
   }
 
+  if (invitationRequired) {
+    return <Alert tone="info" title="Use your voting invitation" testId="ballot-invitation-required">
+      <p>This bearer link was issued for an email address, but the app does not verify email ownership. Use the invitation link supplied by the organizer.</p>
+      <form onSubmit={submitInvitation} className="mt-3 flex flex-col gap-2 sm:flex-row"><label className="sr-only" htmlFor="voting-invitation-code">Invitation code</label><input id="voting-invitation-code" aria-label="Voting invitation code" value={invitationToken} onChange={(event) => setInvitationToken(event.target.value)} className="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2 text-small text-fg" /><Button type="submit" variant="secondary">Continue</Button></form>
+    </Alert>;
+  }
+
   if (closed) {
     return (
       <EmptyStatePanel
@@ -250,12 +275,12 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
   return (
     <div data-testid="community-ballot" className="space-y-5">
       <Alert tone="info" title="Choose one project">
-        Your vote is private. Community tallies stay hidden until voting closes.
+        Your vote is private. Community tallies stay hidden until voting closes. Comments require a signed-in account.
       </Alert>
 
       {ballot.hasVoted ? (
         <Alert tone="success" title="Your vote is recorded." testId="vote-success">
-          The community tally will be available after voting closes. You can still read and add comments.
+          The community tally will be available after voting closes.{ballot.accessMode === "AUTHENTICATED" ? " You can still read and add comments." : " Comments require a signed-in account."}
         </Alert>
       ) : null}
       {voteError ? <Alert tone="danger" title="Vote not recorded" testId="vote-error">{voteError}</Alert> : null}
@@ -297,7 +322,7 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
                       </Link>
                     </div>
                     <div className="border-t border-line-subtle px-4 py-3 sm:px-5">
-                      <Button
+                      {ballot.accessMode === "AUTHENTICATED" ? <Button
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -308,7 +333,7 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
                         <MessageCircle aria-hidden="true" className="size-4" />
                         {commentsOpen ? "Hide comments" : "Comments"}
                         {panel.comments?.length ? <span className="text-fg-faint">({panel.comments.length})</span> : null}
-                      </Button>
+                      </Button> : <Link href={signInHref} className="text-small font-medium text-accent underline underline-offset-2">Sign in for comments</Link>}
                       {commentsOpen ? (
                         <section id={commentsId} aria-label={"Comments on " + project.title} className="mt-3 border-t border-line-subtle pt-3">
                           {panel.loading ? (
@@ -376,7 +401,7 @@ export function CommunityBallot({ eventId }: { eventId: string }) {
           </fieldset>
         {!ballot.hasVoted ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
-            <p className="text-caption text-fg-subtle">One vote per account. Your choice cannot be changed.</p>
+            <p className="text-caption text-fg-subtle">{ballot.accessMode === "AUTHENTICATED" ? "One vote per account." : ballot.accessMode === "OPEN_LINK" ? "One vote per browser link token." : "One vote per invitation."} Your choice cannot be changed.</p>
             <Button type="submit" disabled={!selectedProjectId || submitting} aria-busy={submitting || undefined}>
               {submitting ? "Submitting…" : "Submit vote"}
               {!submitting ? <ArrowRight aria-hidden="true" className="size-4" /> : null}

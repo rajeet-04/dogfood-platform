@@ -17,11 +17,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ even
     const { eventId } = await params;
     const actor = await requireApiActor(request);
     const parsed = z.object({
+      accessMode: z.enum(["AUTHENTICATED", "OPEN_LINK", "EMAIL_GATED"]).default("AUTHENTICATED"),
       opensAt: z.string().datetime().nullable(),
       closesAt: z.string().datetime().nullable(),
     }).safeParse(await readJsonBody(request));
     if (!parsed.success) throwValidation(parsed.error.issues);
     const config = await updateVotingConfig(actor, eventId, {
+      accessMode: parsed.data.accessMode,
       opensAt: parsed.data.opensAt ? new Date(parsed.data.opensAt) : null,
       closesAt: parsed.data.closesAt ? new Date(parsed.data.closesAt) : null,
     });
