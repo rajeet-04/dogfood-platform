@@ -26,6 +26,13 @@ PostgreSQL 17 + Drizzle ORM. All configuration below is generated from
   default true, `created_at`.
   - Unique `(event_id, user_id)`; indexes on `(user_id, event_id)`,
     `(event_id, role, is_active)`.
+- **judge_invitations** — `id` pk, `event_id` fk (cascade), normalized `email`,
+  `token_hash`, `created_by` fk (restrict), `created_at`, `expires_at`, nullable
+  `accepted_at`, `accepted_by` fk (set null), and `revoked_at`. Token hash is
+  unique; `(event_id, created_at)` is indexed. The application stores only a
+  hash of the 32-byte random token, claims active invitations once
+  transactionally, and checks the accepting account's normalized email. Email
+  ownership itself is not verified.
 
 ### teams
 
@@ -87,6 +94,22 @@ PostgreSQL 17 + Drizzle ORM. All configuration below is generated from
   version string), `configuration` (jsonb), `results` (jsonb), `generated_by`,
   `generated_at`, `published_at` (null until published). Index
   `(event_id, generated_at)`. Results are never recomputed on read.
+
+### community voting
+
+- **voting_configs** — `event_id` pk/fk→events (cascade), `access_mode`
+  (default `AUTHENTICATED` and constrained to that value), nullable `opens_at`
+  and `closes_at`, `updated_by` fk→users, `updated_at`.
+- **votes** — `id` pk, `event_id` fk→events (cascade), `voter_id` fk→users
+  (restrict), `project_id` fk→projects (cascade), `created_at`. Unique
+  `(event_id, voter_id)` enforces one vote per account per event; indexed by
+  `(event_id, project_id)`.
+- **project_comments** — `id` pk, `event_id` fk→events (cascade), `project_id`
+  fk→projects (cascade), `author_id` fk→users (restrict), `body`, `created_at`.
+  Indexed by `(project_id, created_at)` and `(event_id, author_id, created_at)`.
+- **voting_rate_limits** — event/account/action/window bucket with `count`.
+  Unique `(event_id, actor_id, action, window_start)` supports atomic vote and
+  comment counters; `count > 0` is enforced. Event/account deletion cascades.
 
 ### audit
 

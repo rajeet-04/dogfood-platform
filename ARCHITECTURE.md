@@ -40,6 +40,7 @@ packages/
   auth/            Password hashing (Argon2id) and opaque session tokens
   permissions/     Event-scoped action policy engine (can / requirePermission)
   events/          Events, lifecycle state machine, memberships
+  voting/          Authenticated community ballots, comments, rate limits
   teams/           Team lifecycle and membership
   submissions/     Projects with immutable revisions, deadlines
   judging/         Rubrics, judge assignments, evaluations, revision history
@@ -67,6 +68,12 @@ Every protected object is event-scoped; presenting an ID from another event
 returns denied-typed errors and never another event's payload. Judges reach a
 project only through an explicit `JudgeAssignment`. No route or component
 inlines role checks for protected business actions.
+
+Community voting is bounded in `packages/voting`: it exposes a public-project
+ballot to signed-in accounts, accepts one immutable vote per account and event
+during the configured judging window, rate-limits vote/comment writes, and
+withholds aggregate tallies until the window closes. The database currently
+allows only `AUTHENTICATED` access mode.
 
 ## State machines
 
@@ -118,6 +125,10 @@ responses share the stable envelope in `apps/web/server/errors/map-error.ts`:
 - Sessions are opaque random tokens stored hashed server-side; cookie is
   Secure, HttpOnly, SameSite=Lax.
 - Passwords are Argon2id hashes only.
+- Judge-invitation URLs carry a random one-time token; only its SHA-256 hash is
+  stored. Acceptance also requires an account with the normalized invited
+  email, but the application does not verify email ownership. Invitations are
+  shared manually and expire after seven days.
 - Addressed threats: role escalation, IDOR, cross-event access, judge score
   leakage, deadline bypass, invalid rubric/score submission, audit bypass,
   ranking configuration tampering, session compromise.

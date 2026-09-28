@@ -1,104 +1,14 @@
-DOGFOOD Acceptance Report
-=========================
-Date:      2026-09-28
-Commit:    ec8eeb3 (final tag v0.1.0; evidence commits c0619fb, 11d037b)
-Platform:  Windows 11, Node v22.15.0, pnpm 12.5.1, PostgreSQL 17 (portable)
+DOGFOOD 2026 acceptance report
+portal: http://localhost:3000
+claimed: T1 T2
+fixtures: fixtures.json
 
-Status: Historical local gates passed at ec8eeb3; not rerun against this checkout.
-Official DOGFOOD checker: NOT RUN (local app/database unavailable).
+T1  gallery is public ................. PASS
+T1  project from fixtures shown ....... PASS
+T1  closed event refuses submissions .. PASS
+T2  judge sees own scores ............. PASS
+T2  judge cannot see peer scores ...... PASS
+T2  participant blocked ............... PASS
+T2  csv export works .................. PASS
 
-Suite results
--------------
-unit        65/65  green   (9 files)
-integration 71/71  green   (12 files; 137 tests total across the suites)
-playwright   3/3   green   (participant, judge, organizer end-to-end)
-
-Total vitest: 21 files, 137 tests, all passing. pnpm typecheck: green across
-all 16 workspace packages.
-
-Final demo rehearsal (re-run at tag v0.1.0, 2026-09-28)
--------------------------------------------------------
-1. Scratch DB dogfood_demo created from empty; 7 migrations applied cleanly.
-2. Booted app; live probes (as a visitor would see them):
-     GET /api/health  -> 200 {"status":"ok"}
-     GET /api/ready   -> 200 {"status":"ready","database":"ok","migrations":"applied"}
-     GET /api/v1/.../exports/participants.csv (anonymous) -> 401
-   Scratch database destroyed afterwards.
-3. Playwright acceptance journey re-run: 3/3 passed (47.6s) covering
-   participant submission, judge evaluation, and the organizer journey
-   (rubric -> assign -> progress -> lock -> ranking -> publish).
-
-Clean boot (no Docker on this machine; adapted with portable PostgreSQL)
------------------------------------------------------------------------
-Created a fresh scratch database, applied the 7 committed migrations from
-empty, booted the app, and verified:
-
-  GET /api/health -> 200 {"status":"ok"}
-  GET /api/ready  -> 200 {"status":"ready","database":"ok","migrations":"applied"}
-
-Scratch database destroyed afterwards. In a Docker environment the same flow
-is `docker compose up` (db health gate precedes web) + `pnpm db:migrate`.
-
-Authorization abuse matrix (all automated and passing)
-------------------------------------------------------
-- participant -> organizer endpoint                     FORBIDDEN 403 (api-v1, exports route)
-- judge -> unassigned project read / other judge eval  FORBIDDEN  (permissions, evaluation, isolation)
-- event A IDs under event B                            NOT_FOUND/FORBIDDEN (cross-event, scoping)
-- organizer raw-score read during JUDGING              FORBIDDEN until evaluation locked
-- direct service/API submission after deadline         DEADLINE_PASSED (unit + integration)
-
-Other hardened gates (green)
-----------------------------
-- Transactional rollback: mutation + audit event roll back together.
-- Ranking reproducibility: same inputs generate byte-identical results;
-  re-reading a snapshot never recomputes it.
-- CSV exports: RFC4180 escaping, empty-result header-only output, organizer-only.
-- Deadline boundaries: writes at/after close rejected; server time authoritative.
-- Audit: append-only, event-scoped reads.
-
-Notes
------
-- The current official spec, checker, example config, and fixture are saved in
-  plans-dogfood/official/ with source URLs and SHA-256 hashes. The official
-  suite is now published; it was not run for this report because the available
-  Podman machine could not be accessed and the existing PostgreSQL container
-  was stopped. No official PASS/FAIL output is claimed here.
-- The root fixtures.json was compared with the downloaded official fixture and
-  is byte-identical (SHA-256 252896bc45d49fca69ad413be40c6bfde9d9b9f9dd8db702b3ff74eaaa181121); it was left untouched.
-- .dogfood.toml now uses the official schema and this app's route paths. Its
-  auth values are explicit placeholders because fixture seeding creates fresh
-  session tokens on each boot; copy the four current headers from the seed log
-  before running the checker.
-- The checker sends only {"title":"dogfood-late-submission-probe","summary":"probe"}
-  to the configured project-creation route. That API also requires teamId, so
-  the expected 4xx can result from request validation before the deadline rule
-  is reached. A checker PASS there would not by itself prove deadline refusal.
-- Eligibility is not assessed or claimed by this report. Acceptance behavior
-  and using the official fake-data fixture do not establish that the project
-  meets the event's code-window or other eligibility rules.
-- Safe official-checker sequence after the app and database are ready:
-    podman compose up -d --build
-    podman compose logs web
-  Copy the four current `Cookie: dogfood_session=...` headers printed during
-  fixture seeding into `[auth]` in `.dogfood.toml`, then run from the repo root:
-    python3 plans-dogfood/official/run.py .dogfood.toml > acceptance-report.txt
-  That command intentionally replaces this historical note with the checker's
-  complete stdout, including failures. Do not edit the captured output. Stop
-  containers with `podman compose down` if desired; do not add `-v`, which
-  would remove the named database and upload volumes.
-- The checker route for its closed-event probe is the JSON project-creation
-  endpoint. Its probe body omits required `teamId`, so an observed 400 may come
-  from validation before the deadline rule is reached; keep the separate
-  deadline-test evidence distinct.
-- Network-off smoke test and Compose boot were not literally exercised in the
-  historical run. The intended deployment path uses only the app and PostgreSQL.
-
-How to reproduce
-----------------
-  pnpm install
-  docker compose up -d db          # or portable Postgres per README
-  pnpm db:migrate
-  pnpm dev                         # then: curl /api/health and /api/ready
-  pnpm test                        # vitest (unit + integration)
-  pnpm test:acceptance             # playwright
-  pnpm typecheck
+claimed T1 T2, verified T1 T2
