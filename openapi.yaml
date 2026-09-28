@@ -1,0 +1,782 @@
+openapi: 3.1.0
+info:
+  title: DOGFOOD Platform API
+  version: 1.0.0
+  description: >-
+    HTTP API exposed by this checkout under /api/v1. Session-authenticated operations
+    use the dogfood_session cookie. Error responses use the shared error envelope.
+servers:
+  - url: /
+    description: Same-origin application server
+security:
+  - sessionCookie: []
+tags:
+  - name: Events
+  - name: Gallery
+  - name: Teams and projects
+  - name: Judging
+  - name: Voting
+  - name: Prizes and certificates
+  - name: Assets and exports
+paths:
+  /api/v1/events:
+    get:
+      operationId: listEvents
+      tags: [Events]
+      summary: List visible events
+      security: [{}, { sessionCookie: [] }]
+      parameters:
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: state, schema: { type: string, enum: [DRAFT, REGISTRATION, SUBMISSIONS_OPEN, SUBMISSIONS_CLOSED, JUDGING, RESULTS_READY, PUBLISHED, ARCHIVED] } }
+      responses:
+        '200':
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventSummary' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createEvent
+      tags: [Events]
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEvent' }
+      responses:
+        '201':
+          description: Created event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event: { $ref: '#/components/schemas/EventSummary' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getEvent
+      tags: [Events]
+      summary: Get event details and the current account roles
+      security: [{}, { sessionCookie: [] }]
+      responses:
+        '200': { description: Event detail, content: { application/json: { schema: { type: object, properties: { event: { allOf: [{ $ref: '#/components/schemas/EventSummary' }, { type: object, properties: { myRoles: { type: array, items: { type: string } } } }] } } } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/gallery:
+    get:
+      operationId: listGallery
+      tags: [Gallery]
+      summary: Search public gallery projects
+      description: Anonymous; excludes draft/private projects and redacts private answers.
+      security: []
+      parameters:
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: event, schema: { type: string, format: uuid } }
+        - { in: query, name: track, schema: { type: string, format: uuid } }
+        - { in: query, name: tag, schema: { type: string, maxLength: 40 } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/gallery:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listEventGallery
+      tags: [Gallery]
+      summary: Search public projects in one event
+      description: Uses the same q, track, and tag filters as the global public gallery.
+      security: []
+      parameters:
+        - { in: query, name: q, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: track, schema: { type: string, format: uuid } }
+        - { in: query, name: tag, schema: { type: string, maxLength: 40 } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/gallery/{projectId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    get:
+      operationId: getGalleryProject
+      tags: [Gallery]
+      summary: Get one publicly visible gallery project
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/teams:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: createTeam
+      tags: [Teams and projects]
+      summary: Create a team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 80 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: createProject
+      tags: [Teams and projects]
+      summary: Create a project draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProject' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/assets:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: uploadProjectAsset
+      tags: [Assets and exports]
+      summary: Upload a project image asset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [file], properties: { file: { type: string, format: binary, description: PNG or JPEG image file } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/assets/{assetId}:
+    parameters:
+      - { name: assetId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getProjectAsset
+      tags: [Assets and exports]
+      summary: Read an uploaded image asset
+      description: Returns the asset bytes with its stored image MIME type.
+      security: [{}, { sessionCookie: [] }]
+      responses:
+        '200': { description: Image bytes, content: { image/png: { schema: { type: string, format: binary } }, image/jpeg: { schema: { type: string, format: binary } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/evaluations/{assignmentId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getEvaluation
+      tags: [Judging]
+      summary: Read an assigned evaluation
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    put:
+      operationId: saveEvaluationDraft
+      tags: [Judging]
+      summary: Save an evaluation draft
+      requestBody: { $ref: '#/components/requestBodies/Evaluation' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: submitEvaluation
+      tags: [Judging]
+      summary: Submit an evaluation
+      requestBody: { $ref: '#/components/requestBodies/Evaluation' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-queue:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getJudgeQueue
+      tags: [Judging]
+      summary: List the current judge's queue
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-assignments:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listJudgeAssignments
+      tags: [Judging]
+      summary: List assignments visible to this account
+      parameters:
+        - { in: query, name: judgeId, schema: { type: string, format: uuid } }
+        - { in: query, name: projectId, schema: { type: string, format: uuid } }
+        - { in: query, name: trackId, schema: { type: string, format: uuid } }
+        - { in: query, name: status, schema: { type: string, enum: [ASSIGNED, IN_PROGRESS, SUBMITTED, LOCKED] } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: assignJudge
+      tags: [Judging]
+      summary: Assign one or more judge-project pairs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { type: object, required: [judgeId, projectId], properties: { judgeId: { type: string, format: uuid }, projectId: { type: string, format: uuid } } }
+                - { type: object, required: [assignments], properties: { assignments: { type: array, minItems: 1, maxItems: 500, items: { type: object, required: [judgeId, projectId], properties: { judgeId: { type: string, format: uuid }, projectId: { type: string, format: uuid } } } } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-assignments/generate:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: generateJudgeAssignmentProposal
+      tags: [Judging]
+      summary: Preview or commit a generated assignment proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignmentGeneration' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-assignments/{assignmentId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: unassignJudge
+      tags: [Judging]
+      summary: Remove an assignment
+      responses:
+        '204': { description: Assignment removed }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-recusals:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listJudgeRecusals
+      tags: [Judging]
+      summary: List event recusals
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createJudgeRecusal
+      tags: [Judging]
+      summary: Record a judge-project recusal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [judgeId, projectId, reason], properties: { judgeId: { type: string, format: uuid }, projectId: { type: string, format: uuid }, reason: { type: string, minLength: 1, maxLength: 1000 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-recusals/{recusalId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: recusalId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteJudgeRecusal
+      tags: [Judging]
+      summary: Remove a recusal
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-invitations:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listJudgeInvitations
+      tags: [Judging]
+      summary: List judge invitations
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createJudgeInvitation
+      tags: [Judging]
+      summary: Create a judge invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email, maxLength: 320 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-invitations/accept:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: acceptJudgeInvitation
+      tags: [Judging]
+      summary: Accept an invitation for the signed-in account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [token], properties: { token: { type: string, minLength: 32, maxLength: 128 } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-invitations/{invitationId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: invitationId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: revokeJudgeInvitation
+      tags: [Judging]
+      summary: Revoke a judge invitation
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/rankings:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listRankingSnapshots
+      tags: [Judging]
+      summary: List ranking snapshots for organizers
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: generateRanking
+      tags: [Judging]
+      summary: Generate a ranking snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { normalizationStrategy: { type: string, enum: [z-score, none], default: z-score }, minimumBatchSize: { type: integer, minimum: 0, maximum: 1000, default: 1 }, tieBreakers: { type: array, maxItems: 8, items: { type: string, enum: [secondary-score, project-id] }, default: [secondary-score, project-id] } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/results:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getPublishedResults
+      tags: [Judging]
+      summary: Read the latest published ranking
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/pairwise-ranking:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: calculatePairwiseRanking
+      tags: [Judging]
+      summary: Calculate a pairwise project ranking
+      description: Authenticated organizer operation; computes without persisting a score snapshot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectIds, comparisons]
+              properties:
+                projectIds: { type: array, minItems: 2, maxItems: 500, items: { type: string, minLength: 1, maxLength: 128 } }
+                comparisons:
+                  type: array
+                  minItems: 1
+                  maxItems: 20000
+                  items: { type: object, required: [winnerProjectId, loserProjectId], properties: { winnerProjectId: { type: string, minLength: 1, maxLength: 128 }, loserProjectId: { type: string, minLength: 1, maxLength: 128 } } }
+                maxIterations: { type: integer, minimum: 1, maximum: 100000 }
+                tolerance: { type: number, exclusiveMinimum: 0, maximum: 0.01 }
+                priorWins: { type: number, exclusiveMinimum: 0, maximum: 10 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/config:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getVotingConfig
+      tags: [Voting]
+      summary: Read voting window configuration
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    put:
+      operationId: updateVotingConfig
+      tags: [Voting]
+      summary: Set the voting open and close times
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [opensAt, closesAt], properties: { opensAt: { type: [string, 'null'], format: date-time }, closesAt: { type: [string, 'null'], format: date-time } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/ballot:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getVotingBallot
+      tags: [Voting]
+      summary: Get the authenticated account ballot
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/results:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getVotingResults
+      tags: [Voting]
+      summary: Read community vote results subject to privacy rules
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/audit:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getVotingAudit
+      tags: [Voting]
+      summary: Read voting-related audit events
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/invitations:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listVotingInvitations
+      tags: [Voting]
+      summary: List voting invitations
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createVotingInvitation
+      tags: [Voting]
+      summary: Create a voting invitation
+      description: Returns a one-time invitation token in the creation response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, minLength: 1, maxLength: 320 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/voting/invitations/{invitationId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: invitationId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: revokeVotingInvitation
+      tags: [Voting]
+      summary: Revoke a voting invitation
+      responses:
+        '204': { description: Invitation revoked }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/votes:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: castVote
+      tags: [Voting]
+      summary: Cast an authenticated account vote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [projectId], properties: { projectId: { type: string, format: uuid } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}/comments:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    get:
+      operationId: listProjectComments
+      tags: [Voting]
+      summary: List comments for a project
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createProjectComment
+      tags: [Voting]
+      summary: Add an authenticated account comment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [body], properties: { body: { type: string, minLength: 1, maxLength: 2000 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}/comments/{commentId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+      - { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteProjectComment
+      tags: [Voting]
+      summary: Delete a comment as authorized by the service
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/prizes:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listEventPrizes
+      tags: [Prizes and certificates]
+      summary: List event prizes
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createPrize
+      tags: [Prizes and certificates]
+      summary: Create a prize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrizeInput' }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/prizes/{prizeId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: prizeId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updatePrize
+      tags: [Prizes and certificates]
+      summary: Update a prize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrizePatch' }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: deletePrize
+      tags: [Prizes and certificates]
+      summary: Delete a prize
+      responses:
+        '204': { description: Prize deleted }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/certificates:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listCertificates
+      tags: [Prizes and certificates]
+      summary: List issued certificates
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: issueCertificates
+      tags: [Prizes and certificates]
+      summary: Issue certificates for published results
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/certificates/{certificateId}:
+    parameters:
+      - { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getCertificate
+      tags: [Prizes and certificates]
+      summary: Read a public certificate
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/exports/{name}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: name, in: path, required: true, description: Export key; an optional .csv suffix is accepted., schema: { type: string } }
+    get:
+      operationId: downloadEventExport
+      tags: [Assets and exports]
+      summary: Download an authorized CSV export
+      responses:
+        '200': { description: CSV file, content: { text/csv: { schema: { type: string } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-applications/{applicationId}/attachment:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: applicationId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: downloadJudgeApplicationAttachment
+      tags: [Assets and exports]
+      summary: Download an application attachment when authorized
+      responses:
+        '200': { description: Original attachment bytes, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/health:
+    get:
+      operationId: healthCheck
+      tags: [Operations]
+      summary: Liveness check
+      security: []
+      responses:
+        '200': { description: Process is responding, content: { application/json: { schema: { type: object, required: [status], properties: { status: { const: ok } } } } } }
+  /api/ready:
+    get:
+      operationId: readinessCheck
+      tags: [Operations]
+      summary: Readiness and database migration check
+      security: []
+      responses:
+        '200': { description: Database and migrations are ready, content: { application/json: { schema: { type: object, required: [status, database, migrations], properties: { status: { const: ready }, database: { const: ok }, migrations: { const: applied } } } } } }
+        '503': { description: Database or migrations are unavailable, content: { application/json: { schema: { type: object, required: [status, database], properties: { status: { const: unavailable }, database: { const: unreachable } } } } } }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: dogfood_session
+  parameters:
+    eventId: { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    projectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+  requestBodies:
+    Evaluation:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              scores:
+                type: array
+                maxItems: 200
+                items: { type: object, required: [criterionId, score], properties: { criterionId: { type: string, minLength: 1 }, score: { type: number }, comment: { type: [string, 'null'] } } }
+              overallComment: { type: [string, 'null'], maxLength: 2000 }
+    ApiError:
+      description: Authentication, permission, validation, conflict, or server error.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+            fields: { type: object, additionalProperties: { type: string } }
+    EventSummary:
+      type: object
+      required: [id, slug, name, description, timezone, state, createdBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        timezone: { type: string }
+        state: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    CreateEvent:
+      type: object
+      required: [slug, name, timezone]
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z0-9-]+$' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        registrationOpensAt: { type: [string, 'null'], format: date-time }
+        registrationClosesAt: { type: [string, 'null'], format: date-time }
+        submissionOpensAt: { type: [string, 'null'], format: date-time }
+        submissionClosesAt: { type: [string, 'null'], format: date-time }
+        judgingOpensAt: { type: [string, 'null'], format: date-time }
+        judgingClosesAt: { type: [string, 'null'], format: date-time }
+    CreateProject:
+      type: object
+      required: [teamId]
+      properties:
+        teamId: { type: string }
+        slug: { type: string, maxLength: 64 }
+        title: { type: string, maxLength: 120 }
+        tagline: { type: [string, 'null'], maxLength: 280 }
+        description: { type: string, maxLength: 4000 }
+        repositoryUrl: { type: [string, 'null'], format: uri }
+        liveUrl: { type: [string, 'null'], format: uri }
+        demoVideoUrl: { type: [string, 'null'], format: uri }
+        techTags: { type: array, maxItems: 20, items: { type: string, maxLength: 40 } }
+        trackId: { type: [string, 'null'], format: uuid }
+        thumbnailAssetId: { type: [string, 'null'], format: uuid }
+        imageAssetIds: { type: array, maxItems: 10, items: { type: string, format: uuid } }
+        customAnswers: { type: object, additionalProperties: { type: string, maxLength: 4000 } }
+    PrizeInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+        trackId: { type: [string, 'null'], format: uuid }
+        amount: { type: [string, 'null'], maxLength: 32 }
+        currency: { type: [string, 'null'], maxLength: 3 }
+        sortOrder: { type: integer, minimum: 0, maximum: 100000 }
+    PrizePatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+        trackId: { type: [string, 'null'], format: uuid }
+        amount: { type: [string, 'null'], maxLength: 32 }
+        currency: { type: [string, 'null'], maxLength: 3 }
+        sortOrder: { type: integer, minimum: 0, maximum: 100000 }
+    AssignmentGeneration:
+      type: object
+      required: [strategy, reviewsPerProject, judgeIds]
+      properties:
+        strategy: { type: string, enum: [round_robin, balanced_by_track] }
+        reviewsPerProject: { type: integer, minimum: 1, maximum: 100 }
+        judgeIds: { type: array, minItems: 1, maxItems: 500, uniqueItems: true, items: { type: string, format: uuid } }
+        trackIds: { type: array, maxItems: 500, items: { type: string, format: uuid } }
+        expectedProposal: { type: array, items: { type: object, required: [judgeId, projectId], properties: { judgeId: { type: string, format: uuid }, projectId: { type: string, format: uuid } } } }
+        commit: { type: boolean, default: false, description: Must be true with expectedProposal to commit the proposal. }
+  responses:
+    JsonObject:
+      description: JSON response object. Exact fields depend on the operation and are defined by the route implementation.
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    ApiError:
+      description: Standard API error envelope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
