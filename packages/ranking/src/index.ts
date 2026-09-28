@@ -10,6 +10,14 @@ export type {
   TieBreaker,
 } from "./engine";
 
+export { rankPairwiseProjects } from "./pairwise";
+export type {
+  PairwiseComparison,
+  PairwiseRankedProject,
+  PairwiseRanking,
+  PairwiseRankingOptions,
+} from "./pairwise";
+
 export {
   NORMALIZATION_VERSION,
   RANKING_ALLOWED_STATES,
