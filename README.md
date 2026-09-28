@@ -152,6 +152,12 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   (`participants`, `teams`, `projects`, `judge-assignments`, `evaluations`,
   `results`) served as `text/csv; charset=utf-8`. Results export returns 404 until
   a ranking snapshot has been published.
+- `GET /api/v1/events/:eventId/bulk/projects` — organizer-only project archive
+  export as JSON; add `?format=csv` for a CSV archive. `POST` imports JSON or CSV
+  project/revision archives in create-only mode. The archive references teams,
+  tracks, and image assets already present in the same event; it does not import
+  events, teams, or binary assets. Imports are limited to 10 MiB, 1,000 projects,
+  and 5,000 revisions, and fail if project IDs already exist.
 
 ## Known limits
 
@@ -166,7 +172,7 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   from the current database state on request, not persisted as immutable issue or
   revocation records; save a signed payload separately if you need a long-lived
   proof artifact. An unset key returns 503.
-- [`openapi.yaml`](./openapi.yaml) documents 57 HTTP methods in this checkout.
+- [`openapi.yaml`](./openapi.yaml) documents 59 HTTP operations in this checkout.
   UI/server-action workflows are not all available through the REST API, so
   full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are
