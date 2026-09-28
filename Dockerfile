@@ -41,5 +41,6 @@ COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
 COPY --from=build /app/packages /app/packages
+COPY --from=build /app/fixtures.json /app/fixtures.json
 EXPOSE 3000
-CMD ["sh", "-c", "cd /app/packages/db && pnpm migrate && cd /app && pnpm --filter @dogfood/web start"]
+CMD ["sh", "-c", "cd /app/packages/db && pnpm seed && cd /app && pnpm --filter @dogfood/web start"]
