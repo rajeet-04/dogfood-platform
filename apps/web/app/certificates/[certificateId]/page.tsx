@@ -38,20 +38,22 @@ export default async function CertificatePage({
     <main className="mx-auto max-w-3xl px-6 py-12">
       <div
         data-testid="certificate-card"
-        className="rounded-2xl border border-slate-200 bg-white p-10 shadow-sm"
+        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
       >
-        <div className="border-b border-slate-100 pb-6 text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+        <div className="border-b border-slate-100 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-10 py-8 text-center text-white">
+          <p className="text-xs font-semibold tracking-widest text-indigo-100 uppercase">
             Certificate of achievement
           </p>
-          <h1 className="mt-2 text-2xl font-semibold">{certificate.eventName}</h1>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+            {certificate.eventName}
+          </h1>
         </div>
 
-        <div className="py-10 text-center">
+        <div className="px-10 py-10 text-center">
           <p className="text-sm text-slate-500">This certifies that</p>
           <p
             data-testid="certificate-recipient"
-            className="mt-3 text-3xl font-semibold text-slate-900"
+            className="mt-3 text-3xl font-semibold tracking-tight text-slate-900"
           >
             {certificate.displayName}
           </p>
@@ -75,7 +77,7 @@ export default async function CertificatePage({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-6 text-xs text-slate-400">
+        <div className="flex items-center justify-between border-t border-slate-100 px-10 py-6 text-xs text-slate-400">
           <span>Serial {certificate.id.slice(0, 8).toUpperCase()}</span>
           <span>Issued {formatDate(certificate.issuedAt)}</span>
         </div>

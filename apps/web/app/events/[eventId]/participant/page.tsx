@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
+import { Badge, EmptyState, type BadgeTone } from "../../../../components/badge";
+import { Collapsible } from "../../../../components/collapsible";
 import { NotAllowed } from "../../../../components/not-allowed";
 import {
   ResultsMeta,
   ResultsTable,
 } from "../../../../components/results-table";
-import { EVENT_STATE_LABEL } from "../../../../lib/event-flow";
+import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
 import { getParticipantHome } from "../../../../server/read-models/participant";
 import {
@@ -29,6 +31,12 @@ import {
 } from "../../../../server/actions/project";
 
 export const dynamic = "force-dynamic";
+
+const PROJECT_STATE_TONE: Record<string, BadgeTone> = {
+  DRAFT: "slate",
+  SUBMITTED: "sky",
+  LOCKED: "indigo",
+};
 
 function formatDate(value: Date | null | undefined): string {
   if (!value) return "—";
@@ -69,35 +77,37 @@ export default async function ParticipantPage({
   );
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-8">
+    <main className="mx-auto max-w-3xl space-y-6 px-4 py-12">
+      <div>
         <p className="text-sm text-slate-500">
           <Link href={`/events/${home.event.id}`} className="hover:underline">
             {home.event.name}
           </Link>
         </p>
-        <h1 className="text-2xl font-bold">Participant dashboard</h1>
-        <p className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium">
+        <h1 className="text-2xl font-bold tracking-tight">
+          Participant dashboard
+        </h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <Badge tone={EVENT_STATE_TONE[home.event.state] ?? "slate"}>
             {EVENT_STATE_LABEL[home.event.state] ?? home.event.state}
-          </span>
-          <span>
-            Submission window: {formatDate(home.event.submissionOpensAt)} →
+          </Badge>
+          <span className="text-xs">
+            Submission window: {formatDate(home.event.submissionOpensAt)} →{" "}
             {formatDate(home.event.submissionClosesAt)}
           </span>
-        </p>
+        </div>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold">Team</h2>
         {home.team ? (
           <div>
             <p className="text-slate-700">
               <span className="font-medium">Team name:</span> {home.team.name}
               {home.team.isOwner ? (
-                <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                <Badge tone="blue" className="ml-2">
                   Leader
-                </span>
+                </Badge>
               ) : null}
             </p>
             <p
@@ -125,9 +135,9 @@ export default async function ParticipantPage({
                       {member.displayName}
                     </span>
                     {member.isOwner ? (
-                      <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      <Badge tone="blue" className="ml-2">
                         Leader
-                      </span>
+                      </Badge>
                     ) : null}
                     <span className="ml-2 text-xs text-slate-500">
                       {member.email}
@@ -215,13 +225,13 @@ export default async function ParticipantPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold">Project</h2>
         {home.project ? (
           <div>
-            <div className="rounded-md bg-slate-50 p-4">
+            <div className="rounded-xl bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-semibold">
                     {home.project.currentRevision.title}
                   </h3>
@@ -229,29 +239,28 @@ export default async function ParticipantPage({
                     {home.project.currentRevision.tagline || "—"}
                   </p>
                 </div>
-                <span
-                  data-testid="project-state"
-                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium"
+                <Badge
+                  testId="project-state"
+                  tone={PROJECT_STATE_TONE[home.project.state] ?? "slate"}
                 >
                   {home.project.state}
-                </span>
+                </Badge>
               </div>
-              <p className="mt-3 text-sm">{home.project.currentRevision.description}</p>
+              <p className="mt-3 text-sm whitespace-pre-wrap">
+                {home.project.currentRevision.description}
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {home.project.currentRevision.techTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-slate-200 px-2 py-0.5 text-xs"
-                  >
+                  <Badge key={tag} tone="slate">
                     {tag}
-                  </span>
+                  </Badge>
                 ))}
                 {home.project.currentRevision.repositoryUrl ? (
                   <a
                     href={home.project.currentRevision.repositoryUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-blue-600 hover:underline"
+                    className="self-center text-xs font-medium text-blue-600 hover:underline"
                   >
                     Repository
                   </a>
@@ -265,8 +274,13 @@ export default async function ParticipantPage({
             </div>
 
             {home.project.state === "DRAFT" ? (
-              <div className="mt-5">
-                <h3 className="mb-3 font-medium">Revise project</h3>
+              <div className="mt-5 border-t border-slate-100 pt-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-medium">Revise project</h3>
+                  <Badge tone={submissionsOpen ? "amber" : "slate"}>
+                    {submissionsOpen ? "Editable" : "Submissions closed"}
+                  </Badge>
+                </div>
                 <ReviseForm
                   eventId={eventIdBinded}
                   projectId={home.project.id}
@@ -331,7 +345,7 @@ export default async function ParticipantPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="mb-1 text-lg font-semibold">Results</h2>
         {!results ? (
           <p className="text-sm text-slate-500" data-testid="results-pending">
@@ -345,21 +359,32 @@ export default async function ParticipantPage({
           <div data-testid="results-section">
             <ResultsMeta results={results} />
             {myRank ? (
-              <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-                <p className="text-sm text-indigo-900">
-                  Your project ranked{" "}
-                  <span
-                    className="text-lg font-bold"
-                    data-testid="my-rank"
+              <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                <div>
+                  <p className="text-xs font-medium tracking-wide text-indigo-400 uppercase">
+                    Your rank
+                  </p>
+                  <p className="text-indigo-900">
+                    <span
+                      className="text-2xl font-bold"
+                      data-testid="my-rank"
+                    >
+                      #{myRank.rank}
+                    </span>{" "}
+                    <span className="text-sm">of {results.entries.length}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium tracking-wide text-indigo-400 uppercase">
+                    Your score
+                  </p>
+                  <p
+                    className="text-2xl font-bold text-indigo-900"
+                    data-testid="my-score"
                   >
-                    #{myRank.rank}
-                  </span>{" "}
-                  of {results.entries.length} with a score of{" "}
-                  <span className="font-semibold" data-testid="my-score">
                     {formatScore(myRank.weightedTotal ?? myRank.score)}
-                  </span>
-                  .
-                </p>
+                  </p>
+                </div>
               </div>
             ) : null}
             <ResultsTable
@@ -370,10 +395,17 @@ export default async function ParticipantPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Revision history</h2>
+      <Collapsible
+        title="Revision history"
+        meta={
+          <Badge tone="slate">
+            {home.revisions.length} revision
+            {home.revisions.length === 1 ? "" : "s"}
+          </Badge>
+        }
+      >
         {home.revisions.length === 0 ? (
-          <p className="text-sm text-slate-500">No revisions yet.</p>
+          <EmptyState className="!px-0">No revisions yet.</EmptyState>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -385,7 +417,7 @@ export default async function ParticipantPage({
             </thead>
             <tbody>
               {home.revisions.map((revision) => (
-                <tr key={revision.id} className="border-b">
+                <tr key={revision.id} className="border-b last:border-0">
                   <td className="py-2 pr-4" data-testid="revision-row">
                     #{revision.revisionNumber}
                   </td>
@@ -396,7 +428,7 @@ export default async function ParticipantPage({
             </tbody>
           </table>
         )}
-      </section>
+      </Collapsible>
     </main>
   );
 }

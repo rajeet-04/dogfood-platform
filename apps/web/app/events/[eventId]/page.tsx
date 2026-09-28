@@ -7,6 +7,8 @@ import {
 } from "@dogfood/applications";
 
 import { ActionForm } from "../../../components/action-form";
+import { Badge, Metric, Stat } from "../../../components/badge";
+import { Collapsible } from "../../../components/collapsible";
 import {
   ResultsMeta,
   ResultsTable,
@@ -17,7 +19,7 @@ import {
   withdrawJudgeApplicationAction,
 } from "../../../server/actions/applications";
 import { joinEventAction } from "../../../server/actions/members";
-import { getEventResults } from "../../../server/read-models/results";
+import { formatScore, getEventResults } from "../../../server/read-models/results";
 import { getPublicRubric } from "../../../server/read-models/rubric";
 import { getActor } from "../../../server/session";
 
@@ -29,15 +31,6 @@ function formatDateTime(value: Date | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-medium text-slate-700">{value}</dd>
-    </div>
-  );
 }
 
 const UUID_PATTERN =
@@ -122,13 +115,32 @@ export default async function EventLandingPage({
   const results = await getEventResults(eventId);
   const rubric = await getPublicRubric(eventId);
 
+  const scoredCriteria = new Set<string>();
+  let maxScorers = 0;
+  for (const entry of results?.entries ?? []) {
+    for (const criterion of entry.criteria) {
+      scoredCriteria.add(criterion.name);
+      if (criterion.scoredBy > maxScorers) maxScorers = criterion.scoredBy;
+    }
+  }
+
+  const briefExtras = [
+    event.prizeInfo ? "Prizes" : null,
+    event.timeline ? "Timeline" : null,
+    event.schedule ? "Schedule" : null,
+    event.rules ? "Rules" : null,
+  ].filter(Boolean) as string[];
+
   return (
     <main>
       <header className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-4 py-16 text-white sm:py-20">
         <div className="mx-auto max-w-5xl">
-          <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">
+          <Badge
+            tone="indigo"
+            className="bg-white/15 text-xs font-semibold tracking-wide text-white uppercase"
+          >
             {stateLabel}
-          </span>
+          </Badge>
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
             {event.name}
           </h1>
@@ -146,20 +158,15 @@ export default async function EventLandingPage({
       ) : null}
 
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0">
-          {event.description ||
-          event.prizeInfo ||
-          event.timeline ||
-          event.schedule ||
-          event.rules ||
-          event.websiteUrl ? (
+        <section className="min-w-0 space-y-6">
+          {event.description || event.websiteUrl || briefExtras.length > 0 ? (
             <div
               className="rounded-2xl border border-slate-200 bg-white p-6"
               data-testid="event-about"
             >
-              <h2 className="mb-3 text-lg font-semibold">About this event</h2>
+              <h2 className="text-lg font-semibold">About this event</h2>
               {event.description ? (
-                <p className="whitespace-pre-wrap text-slate-600">
+                <p className="mt-2 whitespace-pre-wrap text-slate-600">
                   {event.description}
                 </p>
               ) : null}
@@ -178,76 +185,128 @@ export default async function EventLandingPage({
                 </p>
               ) : null}
 
-              {event.prizeInfo ? (
-                <div className="mt-5">
-                  <h3 className="text-sm font-semibold text-slate-900">Prizes</h3>
-                  <p
-                    data-testid="event-prize"
-                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                  >
-                    {event.prizeInfo}
-                  </p>
-                </div>
-              ) : null}
+              {briefExtras.length > 0 ? (
+                <Collapsible
+                  variant="plain"
+                  className="mt-4 border-t border-slate-100 pt-1"
+                  title={
+                    <span className="text-base">Event brief</span>
+                  }
+                  meta={briefExtras.map((label) => (
+                    <Badge key={label} tone="slate">
+                      {label}
+                    </Badge>
+                  ))}
+                >
+                  {event.prizeInfo ? (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Prizes</h3>
+                      <p
+                        data-testid="event-prize"
+                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                      >
+                        {event.prizeInfo}
+                      </p>
+                    </div>
+                  ) : null}
 
-              {event.timeline ? (
-                <div className="mt-5">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    Timeline
-                  </h3>
-                  <p
-                    data-testid="event-timeline"
-                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                  >
-                    {event.timeline}
-                  </p>
-                </div>
-              ) : null}
+                  {event.timeline ? (
+                    <div className={event.prizeInfo ? "mt-5" : undefined}>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Timeline
+                      </h3>
+                      <p
+                        data-testid="event-timeline"
+                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                      >
+                        {event.timeline}
+                      </p>
+                    </div>
+                  ) : null}
 
-              {event.schedule ? (
-                <div className="mt-5">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    Schedule
-                  </h3>
-                  <p
-                    data-testid="event-schedule"
-                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                  >
-                    {event.schedule}
-                  </p>
-                </div>
-              ) : null}
+                  {event.schedule ? (
+                    <div
+                      className={
+                        event.prizeInfo || event.timeline ? "mt-5" : undefined
+                      }
+                    >
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Schedule
+                      </h3>
+                      <p
+                        data-testid="event-schedule"
+                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                      >
+                        {event.schedule}
+                      </p>
+                    </div>
+                  ) : null}
 
-              {event.rules ? (
-                <div className="mt-5">
-                  <h3 className="text-sm font-semibold text-slate-900">Rules</h3>
-                  <p
-                    data-testid="event-rules"
-                    className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                  >
-                    {event.rules}
-                  </p>
-                </div>
+                  {event.rules ? (
+                    <div
+                      className={
+                        event.prizeInfo || event.timeline || event.schedule
+                          ? "mt-5"
+                          : undefined
+                      }
+                    >
+                      <h3 className="text-sm font-semibold text-slate-900">Rules</h3>
+                      <p
+                        data-testid="event-rules"
+                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
+                      >
+                        {event.rules}
+                      </p>
+                    </div>
+                  ) : null}
+                </Collapsible>
               ) : null}
             </div>
           ) : null}
 
-          {rubric && rubric.criteria.length > 0 ? (
+          {results ? (
             <section
-              className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
-              data-testid="public-rubric"
+              className="rounded-2xl border border-slate-200 bg-white p-6"
+              data-testid="public-results"
             >
-              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-lg font-semibold">Judging rubric</h2>
-                <span className="text-xs text-slate-500">
-                  {rubric.name} · v{rubric.version}
-                </span>
+              <h2 className="text-lg font-semibold">Results</h2>
+              <ResultsMeta results={results} />
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <Metric
+                  label="Projects ranked"
+                  value={results.entries.length}
+                />
+                <Metric
+                  label="Top score"
+                  value={
+                    results.entries.length > 0
+                      ? formatScore(
+                          results.entries[0].weightedTotal ??
+                            results.entries[0].score,
+                        )
+                      : "—"
+                  }
+                />
+                <Metric
+                  label="Criteria scored"
+                  value={scoredCriteria.size}
+                  hint={`max ${maxScorers} judge${maxScorers === 1 ? "" : "s"}`}
+                />
               </div>
-              <p className="mb-4 text-sm text-slate-500">
+              <ResultsTable results={results} showCriteria={false} />
+            </section>
+          ) : null}
+
+          {rubric && rubric.criteria.length > 0 ? (
+            <Collapsible
+              title="Judging rubric"
+              testId="public-rubric"
+              meta={`${rubric.name} · v${rubric.version} · ${rubric.criteria.length} criteria · weight ${rubric.weightSum}`}
+            >
+              <p className="text-sm text-slate-500">
                 Judges score every submitted project against these criteria.
-                Total weight: {rubric.weightSum}.
               </p>
-              <ul className="divide-y divide-slate-100">
+              <ul className="mt-3 divide-y divide-slate-100">
                 {rubric.criteria.map((criterion) => (
                   <li key={criterion.name} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -272,11 +331,11 @@ export default async function EventLandingPage({
                   </li>
                 ))}
               </ul>
-            </section>
+            </Collapsible>
           ) : null}
 
           {links.length ? (
-            <section className="mt-6">
+            <section>
               <h2 className="mb-3 text-lg font-semibold">Your dashboard</h2>
               <ul className="grid gap-3 sm:grid-cols-2">
                 {links.map((link) => (
@@ -297,7 +356,7 @@ export default async function EventLandingPage({
           ) : null}
 
           {!links.length && !canJoin && !application ? (
-            <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
+            <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6">
               <p className="text-slate-500">
                 {actor
                   ? `Registration for this event is ${withinWindow ? "open" : "not open right now"}.`
@@ -315,40 +374,31 @@ export default async function EventLandingPage({
           ) : null}
         </section>
 
-        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Event details
-          </h2>
-          <dl className="space-y-3">
-            <DetailRow label="Status" value={stateLabel} />
-            <DetailRow
-              label="Applications open"
-              value={formatDateTime(event.registrationOpensAt)}
-            />
-            <DetailRow
-              label="Applications close"
-              value={formatDateTime(event.registrationClosesAt)}
-            />
-            <DetailRow
-              label="Submissions close"
-              value={formatDateTime(event.submissionClosesAt)}
-            />
-            <DetailRow label="Timezone" value={event.timezone} />
-          </dl>
+        <aside className="h-fit space-y-6 lg:sticky lg:top-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+              Event details
+            </h2>
+            <dl className="grid grid-cols-2 gap-4">
+              <Stat label="Status" value={stateLabel} />
+              <Stat label="Timezone" value={event.timezone} />
+              <Stat
+                label="Applications open"
+                value={formatDateTime(event.registrationOpensAt)}
+              />
+              <Stat
+                label="Applications close"
+                value={formatDateTime(event.registrationClosesAt)}
+              />
+              <Stat
+                label="Submissions close"
+                value={formatDateTime(event.submissionClosesAt)}
+              />
+            </dl>
+          </div>
 
-          <div className="mt-6 space-y-3">
-          {results ? (
-            <section
-              className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
-              data-testid="public-results"
-            >
-              <h2 className="mb-1 text-lg font-semibold">Results</h2>
-              <ResultsMeta results={results} />
-              <ResultsTable results={results} showCriteria={false} />
-            </section>
-          ) : null}
-
-          {links.length ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            {links.length ? (
               <span className="inline-block rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
                 You are part of this event
               </span>
@@ -384,6 +434,9 @@ export default async function EventLandingPage({
               </div>
             ) : canJoin || canApplyAsJudge ? (
               <div className="rounded-lg border border-slate-200 p-4">
+                <p className="mb-3 text-sm font-semibold text-slate-700">
+                  Take part in this event
+                </p>
                 <ActionForm
                   action={joinEventAction.bind(null, eventId)}
                   submitLabel="Join as participant"
@@ -425,7 +478,7 @@ export default async function EventLandingPage({
             {!actor && withinWindow ? (
               <Link
                 href={`/login?next=/events/${eventId}`}
-                className="block rounded-lg bg-indigo-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-indigo-500"
+                className="mt-3 block rounded-lg bg-indigo-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-indigo-500"
               >
                 Sign in to join this event
               </Link>

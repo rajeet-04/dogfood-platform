@@ -32,15 +32,18 @@ export function ResultsTable({
 }) {
   if (results.entries.length === 0) {
     return (
-      <p className="mt-4 text-sm text-slate-500">
+      <p className="mt-4 rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
         This snapshot does not contain any ranked projects.
       </p>
     );
   }
 
   return (
-    <div className="mt-4">
-      <table className="w-full text-sm" data-testid="results-table">
+    <div className="mt-4 overflow-x-auto">
+      <table
+        className="w-full text-sm"
+        data-testid="results-table"
+      >
         <thead>
           <tr className="border-b text-left text-slate-500">
             <th className="w-16 py-2 pr-4 font-medium">Rank</th>
@@ -71,6 +74,12 @@ export function ResultsTable({
   );
 }
 
+const PODIUM_CLASS: Record<number, string> = {
+  1: "bg-amber-100 text-amber-800",
+  2: "bg-slate-200 text-slate-700",
+  3: "bg-orange-100 text-orange-800",
+};
+
 function ResultsRow({
   entry,
   highlighted,
@@ -90,8 +99,14 @@ function ResultsRow({
           : "border-b border-slate-100"
       }
     >
-      <td className="py-2 pr-4 text-lg font-semibold text-slate-700">
-        {entry.rank}
+      <td className="py-2 pr-4">
+        <span
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold tabular-nums ${
+            PODIUM_CLASS[entry.rank] ?? "text-slate-500"
+          }`}
+        >
+          {entry.rank}
+        </span>
       </td>
       <td className="py-2 pr-4">
         <span className="font-medium text-slate-800">{entry.projectTitle}</span>
@@ -105,7 +120,7 @@ function ResultsRow({
         {entry.teamName ?? "—"}
       </td>
       <td
-        className="py-2 pr-4 text-right font-semibold text-slate-800"
+        className="py-2 pr-4 text-right font-semibold text-slate-800 tabular-nums"
         data-testid="result-score"
       >
         {formatScore(entry.weightedTotal ?? entry.score)}

@@ -3,9 +3,18 @@ import { notFound } from "next/navigation";
 import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
+import {
+  Badge,
+  type BadgeTone,
+  EmptyState,
+  Progress,
+} from "../../../../components/badge";
+import { Collapsible } from "../../../../components/collapsible";
 import { NotAllowed } from "../../../../components/not-allowed";
 import {
+  EVENT_ROLE_TONE,
   EVENT_STATE_LABEL,
+  EVENT_STATE_TONE,
   nextEventState,
 } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
@@ -77,10 +86,17 @@ const PROJECT_STATE_LABEL: Record<string, string> = {
   LOCKED: "Locked",
 };
 
-const ROLE_PILL: Record<string, string> = {
-  PARTICIPANT: "bg-sky-50 text-sky-700",
-  JUDGE: "bg-indigo-50 text-indigo-700",
-  ORGANIZER: "bg-violet-50 text-violet-700",
+const PROJECT_STATE_TONE: Record<string, BadgeTone> = {
+  DRAFT: "slate",
+  SUBMITTED: "sky",
+  LOCKED: "indigo",
+};
+
+const ASSIGNMENT_STATUS_TONE: Record<string, BadgeTone> = {
+  ASSIGNED: "slate",
+  IN_PROGRESS: "sky",
+  SUBMITTED: "emerald",
+  LOCKED: "indigo",
 };
 
 function initials(name: string): string {
@@ -135,24 +151,46 @@ export default async function OrganizerPage({
   const { coverage } = doc;
   const results = await getEventResults(eventId, { includeUnpublished: true });
 
+  const detailFields = [
+    ["Description", Boolean(doc.event.description)],
+    ["Website", Boolean(doc.event.websiteUrl)],
+    ["Prizes", Boolean(doc.event.prizeInfo)],
+    ["Timeline", Boolean(doc.event.timeline)],
+    ["Schedule", Boolean(doc.event.schedule)],
+    ["Rules", Boolean(doc.event.rules)],
+  ] as const;
+  const filledDetails = detailFields
+    .filter(([, filled]) => filled)
+    .map(([label]) => label);
+  const pendingApplications = doc.applications.filter(
+    (application) => application.status === "pending",
+  ).length;
+  const lockedProjects = doc.projects.filter(
+    (project) => project.state === "LOCKED",
+  ).length;
+
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <div className="mb-8 flex items-start justify-between gap-4">
+    <main className="mx-auto max-w-4xl space-y-6 px-4 py-12">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-500">
             <Link href={`/events/${doc.event.id}`} className="hover:underline">
               {doc.event.name}
             </Link>
           </p>
-          <h1 className="text-2xl font-bold">Organizer dashboard</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            <span
-              data-testid="event-state"
-              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium"
+          <h1 className="text-2xl font-bold tracking-tight">Organizer dashboard</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge
+              testId="event-state"
+              tone={EVENT_STATE_TONE[doc.event.state] ?? "slate"}
             >
               {EVENT_STATE_LABEL[doc.event.state] ?? doc.event.state}
+            </Badge>
+            <span className="text-xs text-slate-400">
+              {doc.members.length} member{doc.members.length === 1 ? "" : "s"} ·{" "}
+              {doc.projects.length} project{doc.projects.length === 1 ? "" : "s"}
             </span>
-          </p>
+          </div>
         </div>
         {nextState ? (
           <ActionForm
@@ -176,9 +214,19 @@ export default async function OrganizerPage({
         ) : null}
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Judging progress</h2>
-        <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 className="text-lg font-semibold">Judging progress</h2>
+        <div className="mt-4">
+          <Progress
+            value={coverage.completed}
+            max={coverage.total}
+            label="Judging completion"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            {coverage.completed} of {coverage.total} evaluations complete
+          </p>
+        </div>
+        <dl className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
           <div>
             <dt className="font-medium text-slate-500">Assignments</dt>
             <dd className="text-2xl font-bold" data-testid="coverage-total">
@@ -197,13 +245,16 @@ export default async function OrganizerPage({
             <dt className="font-medium text-slate-500">Locked</dt>
             <dd className="text-2xl font-bold">{coverage.locked}</dd>
           </div>
-          <div className="col-span-2">
-            <dt className="font-medium text-slate-500">Completed</dt>
-            <dd className="text-2xl font-bold" data-testid="coverage-completed">
-              {coverage.completed} / {coverage.total}
-            </dd>
-          </div>
         </dl>
+        <p className="mt-4 text-sm text-slate-500">
+          Completed{" "}
+          <span
+            className="font-semibold text-slate-700"
+            data-testid="coverage-completed"
+          >
+            {coverage.completed} / {coverage.total}
+          </span>
+        </p>
         {doc.scoresHidden ? (
           <p
             data-testid="scores-hidden-note"
@@ -221,8 +272,20 @@ export default async function OrganizerPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-1 text-lg font-semibold">Event details</h2>
+      <Collapsible
+        title="Event details"
+        meta={
+          filledDetails.length > 0 ? (
+            filledDetails.map((label) => (
+              <Badge key={label} tone="emerald">
+                {label}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-slate-400">Nothing filled in yet</span>
+          )
+        }
+      >
         <p className="mb-4 text-sm text-slate-500">
           Everything here is shown publicly on the event page under “About this
           event”.
@@ -308,10 +371,25 @@ export default async function OrganizerPage({
             </label>
           </div>
         </ActionForm>
-      </section>
+      </Collapsible>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-1 text-lg font-semibold">Registration window</h2>
+      <Collapsible
+        title="Registration window"
+        meta={
+          <>
+            <Badge tone={doc.event.registrationOpensAt ? "slate" : "amber"}>
+              {doc.event.registrationOpensAt
+                ? `Opens ${formatDate(doc.event.registrationOpensAt)}`
+                : "No opening date"}
+            </Badge>
+            <Badge tone={doc.event.registrationClosesAt ? "slate" : "amber"}>
+              {doc.event.registrationClosesAt
+                ? `Closes ${formatDate(doc.event.registrationClosesAt)}`
+                : "No closing date"}
+            </Badge>
+          </>
+        }
+      >
         <p className="mb-4 text-sm text-slate-500">
           The window during which participants can join and judges can apply.
           Leave a field empty to disable that boundary.
@@ -341,11 +419,26 @@ export default async function OrganizerPage({
             </label>
           </div>
         </ActionForm>
-      </section>
+      </Collapsible>
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <Collapsible
+        title="Submissions"
+        meta={
+          <>
+            <Badge tone="slate">
+              {doc.projects.length} submitted
+            </Badge>
+            {lockedProjects > 0 ? (
+              <Badge tone="emerald">{lockedProjects} locked</Badge>
+            ) : null}
+          </>
+        }
+        bodyClassName="!px-0 !py-0"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-          <h2 className="text-lg font-semibold">Submissions</h2>
+          <p className="text-sm text-slate-500">
+            Locking a project freezes its latest revision.
+          </p>
           <ActionForm
             action={lockAllProjectsAction.bind(null, eventId)}
             submitLabel="Lock all submissions"
@@ -353,9 +446,7 @@ export default async function OrganizerPage({
           />
         </div>
         {doc.projects.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-slate-500">
-            No projects yet.
-          </p>
+          <EmptyState>No projects yet.</EmptyState>
         ) : (
           <ul>
             {doc.projects.map((project) => (
@@ -372,9 +463,9 @@ export default async function OrganizerPage({
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  <Badge tone={PROJECT_STATE_TONE[project.state] ?? "slate"}>
                     {PROJECT_STATE_LABEL[project.state] ?? project.state}
-                  </span>
+                  </Badge>
                   {project.state !== "LOCKED" ? (
                     <ActionForm
                       action={lockProjectAction.bind(
@@ -391,14 +482,12 @@ export default async function OrganizerPage({
             ))}
           </ul>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-lg font-semibold">Members</h2>
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
-            {doc.members.length} total
-          </span>
+          <Badge tone="indigo">{doc.members.length} total</Badge>
         </div>
 
         <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-4">
@@ -436,9 +525,7 @@ export default async function OrganizerPage({
         </div>
 
         {doc.members.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-slate-500">
-            No members yet.
-          </p>
+          <EmptyState>No members yet.</EmptyState>
         ) : (
           <ul>
             {doc.members.map((member) => (
@@ -461,14 +548,12 @@ export default async function OrganizerPage({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span
-                    data-testid="member-role"
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      ROLE_PILL[member.role] ?? "bg-slate-100 text-slate-600"
-                    }`}
+                  <Badge
+                    testId="member-role"
+                    tone={EVENT_ROLE_TONE[member.role] ?? "slate"}
                   >
                     {ROLE_LABEL[member.role] ?? member.role}
-                  </span>
+                  </Badge>
                   <ActionForm
                     action={changeMemberRoleAction.bind(
                       null,
@@ -508,17 +593,20 @@ export default async function OrganizerPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-          <h2 className="text-lg font-semibold">Judge applications</h2>
-          <span className="text-sm text-slate-500">
-            {doc.applications.length} total
-          </span>
-        </div>
+      <Collapsible
+        title="Judge applications"
+        meta={
+          <>
+            <Badge tone="slate">{doc.applications.length} total</Badge>
+            {pendingApplications > 0 ? (
+              <Badge tone="amber">{pendingApplications} awaiting review</Badge>
+            ) : null}
+          </>
+        }
+        bodyClassName="!px-0 !py-0"
+      >
         {doc.applications.length === 0 ? (
-          <p className="px-6 py-8 text-sm text-slate-500">
-            No judge applications yet.
-          </p>
+          <EmptyState className="!py-8">No judge applications yet.</EmptyState>
         ) : (
           <ul className="divide-y divide-slate-100">
             {doc.applications.map((application) => (
@@ -534,7 +622,7 @@ export default async function OrganizerPage({
                     </span>
                   </p>
                   {application.rationale ? (
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">
                       {application.rationale}
                     </p>
                   ) : null}
@@ -557,14 +645,11 @@ export default async function OrganizerPage({
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <span
-                    data-testid="application-status"
-                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                  >
+                  <Badge testId="application-status" tone="slate">
                     {JUDGE_APPLICATION_STATUS_LABEL[
                       application.status as keyof typeof JUDGE_APPLICATION_STATUS_LABEL
                     ] ?? application.status}
-                  </span>
+                  </Badge>
                   {application.status === "pending" ? (
                     <>
                       <ActionForm
@@ -604,10 +689,17 @@ export default async function OrganizerPage({
             ))}
           </ul>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Rubrics</h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Rubrics</h2>
+          {doc.rubrics.length > 0 ? (
+            <Badge tone="slate">
+              {doc.rubrics.length} rubric{doc.rubrics.length === 1 ? "" : "s"}
+            </Badge>
+          ) : null}
+        </div>
         <div className="mb-4 rounded-md border border-dashed border-slate-300 p-4">
           <h3 className="mb-3 text-sm font-semibold">Create a rubric</h3>
           <ActionForm
@@ -632,7 +724,7 @@ export default async function OrganizerPage({
             {doc.rubrics.map((rubric) => (
               <li
                 key={rubric.id}
-                className="rounded-md border border-slate-200 p-4"
+                className="rounded-xl border border-slate-200 p-4"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -645,9 +737,9 @@ export default async function OrganizerPage({
                     <p className="text-xs text-slate-500">
                       Weight sum: {rubric.weightSum}
                       {rubric.active ? (
-                        <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+                        <Badge tone="emerald" className="ml-2">
                           Active
-                        </span>
+                        </Badge>
                       ) : null}
                     </p>
                   </div>
@@ -758,8 +850,13 @@ export default async function OrganizerPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Judge assignments</h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Judge assignments</h2>
+          {doc.assignments.length > 0 ? (
+            <Badge tone="slate">{doc.assignments.length} assigned</Badge>
+          ) : null}
+        </div>
         {doc.judges.length === 0 ? (
           <p className="mb-4 text-sm text-slate-500">
             No judges in this event yet.
@@ -827,9 +924,9 @@ export default async function OrganizerPage({
                   <td className="py-2 pr-4">{item.judgeName}</td>
                   <td className="py-2 pr-4">{item.projectTitle}</td>
                   <td className="py-2 pr-4">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium">
+                    <Badge tone={ASSIGNMENT_STATUS_TONE[item.status] ?? "slate"}>
                       {STATUS_LABEL[item.status] ?? item.status}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="py-2 pr-4">{formatDate(item.submittedAt)}</td>
                   <td className="py-2">
@@ -857,12 +954,9 @@ export default async function OrganizerPage({
                         />
                       ) : null}
                       {item.status === "LOCKED" ? (
-                        <span
-                          data-testid="assignment-locked-label"
-                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500"
-                        >
+                        <Badge testId="assignment-locked-label" tone="indigo">
                           Locked
-                        </span>
+                        </Badge>
                       ) : null}
                       {item.status === "IN_PROGRESS" ? (
                         <span className="text-xs text-slate-400">
@@ -878,8 +972,16 @@ export default async function OrganizerPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Rankings &amp; publication</h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Rankings &amp; publication</h2>
+          {doc.snapshots.length > 0 ? (
+            <Badge tone="slate">
+              {doc.snapshots.length} snapshot
+              {doc.snapshots.length === 1 ? "" : "s"}
+            </Badge>
+          ) : null}
+        </div>
         {doc.event.state === "JUDGING" ? (
           <div className="flex flex-wrap items-center gap-3">
             <ActionForm
@@ -943,9 +1045,7 @@ export default async function OrganizerPage({
                   </p>
                 </div>
                 {snapshot.publishedAt ? (
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                    Published
-                  </span>
+                  <Badge tone="emerald">Published</Badge>
                 ) : canRunRanking(doc.event.state) ? (
                   <ActionForm
                     action={publishRankingAction.bind(
@@ -970,31 +1070,34 @@ export default async function OrganizerPage({
         ) : null}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+      <Collapsible
+        title="Certificates"
+        meta={
+          <Badge tone={doc.certificatesCount > 0 ? "emerald" : "slate"}>
+            {doc.certificatesCount} issued
+          </Badge>
+        }
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Certificates</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {doc.certificatesCount} certificate
-              {doc.certificatesCount === 1 ? "" : "s"} issued for this event.
-              Issued certificates are public via shareable links.
-            </p>
-          </div>
+          <p className="text-sm text-slate-500">
+            Issued certificates are public via shareable links.
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <ActionForm
               action={issueCertificatesAction.bind(null, eventId)}
               submitLabel="Issue certificates"
+              className="[&_button]:mt-0"
             />
             {doc.certificatesCount > 0 ? (
               <>
                 <ActionForm
                   action={revokeCertificatesAction.bind(null, eventId)}
                   submitLabel="Revoke all"
-                  className="[&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
+                  className="[&_button]:mt-0 [&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
                 />
                 <Link
                   href={`/events/${eventId}/certificates`}
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="self-center text-sm font-medium text-blue-600 hover:underline"
                 >
                   Open certificates
                 </Link>
@@ -1026,14 +1129,11 @@ export default async function OrganizerPage({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span
-                    data-testid="certificate-tier"
-                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                  >
+                  <Badge testId="certificate-tier" tone="violet">
                     {CERTIFICATE_TIER_LABEL[certificate.tier as keyof typeof CERTIFICATE_TIER_LABEL] ??
                       certificate.tier}
                     {certificate.rank ? ` · #${certificate.rank}` : ""}
-                  </span>
+                  </Badge>
                   <span className="text-xs text-slate-400">
                     {formatDate(certificate.issuedAt)}
                   </span>
@@ -1042,7 +1142,7 @@ export default async function OrganizerPage({
             ))}
           </ul>
         )}
-      </section>
+      </Collapsible>
     </main>
   );
 }

@@ -4,8 +4,10 @@ import { isJudgingClosed } from "@dogfood/judging";
 import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
+import { Badge, type BadgeTone, Stat } from "../../../../components/badge";
+import { Collapsible } from "../../../../components/collapsible";
 import { NotAllowed } from "../../../../components/not-allowed";
-import { EVENT_STATE_LABEL } from "../../../../lib/event-flow";
+import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../../../lib/event-flow";
 import { requireActor } from "../../../../server/session";
 import {
   getJudgeAssignmentDetail,
@@ -24,6 +26,13 @@ const STATUS_LABEL: Record<string, string> = {
   IN_PROGRESS: "In progress",
   SUBMITTED: "Submitted",
   LOCKED: "Locked",
+};
+
+const STATUS_TONE: Record<string, BadgeTone> = {
+  ASSIGNED: "slate",
+  IN_PROGRESS: "sky",
+  SUBMITTED: "emerald",
+  LOCKED: "indigo",
 };
 
 function formatDate(value: Date | null | undefined): string {
@@ -73,36 +82,41 @@ export default async function JudgePage({
               ← Back to queue
             </Link>
           </p>
-          <h1 className="mt-2 text-2xl font-bold">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight">
             {detail.item.project.currentRevision.title}
           </h1>
-          <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-            <span
-              data-testid="assignment-status"
-              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium"
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            <Badge
+              testId="assignment-status"
+              tone={STATUS_TONE[detail.item.status] ?? "slate"}
             >
               {STATUS_LABEL[detail.item.status] ?? detail.item.status}
-            </span>
-            <span>Assigned {formatDate(detail.item.assignedAt)}</span>
+            </Badge>
+            <span className="text-xs">Assigned {formatDate(detail.item.assignedAt)}</span>
           </div>
         </div>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="mb-3 font-semibold">Project</h2>
-          <p className="text-sm text-slate-600">
+        <Collapsible
+          title="Project details"
+          meta={
+            <Badge tone="slate">
+              {detail.item.project.state} ·{" "}
+              {detail.item.project.currentRevision.techTags.length} tags
+            </Badge>
+          }
+        >
+          <p className="text-sm whitespace-pre-wrap text-slate-600">
             {detail.item.project.currentRevision.description}
           </p>
-          <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="font-medium">Tagline</dt>
-              <dd className="text-slate-600">
-                {detail.item.project.currentRevision.tagline || "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium">Repository</dt>
-              <dd className="text-slate-600">
-                {detail.item.project.currentRevision.repositoryUrl ? (
+          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+            <Stat
+              label="Tagline"
+              value={detail.item.project.currentRevision.tagline || "—"}
+            />
+            <Stat
+              label="Repository"
+              value={
+                detail.item.project.currentRevision.repositoryUrl ? (
                   <a
                     href={detail.item.project.currentRevision.repositoryUrl}
                     target="_blank"
@@ -113,24 +127,28 @@ export default async function JudgePage({
                   </a>
                 ) : (
                   "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium">Submitted</dt>
-              <dd className="text-slate-600">
-                {formatDate(detail.item.project.submittedAt)}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium">State</dt>
-              <dd className="text-slate-600">{detail.item.project.state}</dd>
-            </div>
+                )
+              }
+            />
+            <Stat
+              label="Submitted"
+              value={formatDate(detail.item.project.submittedAt)}
+            />
+            <Stat label="State" value={detail.item.project.state} />
           </dl>
-        </section>
+          {detail.item.project.currentRevision.techTags.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {detail.item.project.currentRevision.techTags.map((tag) => (
+                <Badge key={tag} tone="slate">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </Collapsible>
 
         <section
-          className="mt-6 rounded-lg border border-slate-200 bg-white p-6"
+          className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
           data-testid="evaluation-panel"
         >
           <h2 className="mb-4 text-lg font-semibold">Evaluation</h2>
@@ -158,25 +176,25 @@ export default async function JudgePage({
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-8">
+    <main className="mx-auto max-w-3xl space-y-6 px-4 py-12">
+      <div>
         <p className="text-sm text-slate-500">
           <Link href={`/events/${home.event.id}`} className="hover:underline">
             {home.event.name}
           </Link>
         </p>
-        <h1 className="text-2xl font-bold">Judge queue</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium">
+        <h1 className="text-2xl font-bold tracking-tight">Judge queue</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <Badge tone={EVENT_STATE_TONE[home.event.state] ?? "slate"}>
             {EVENT_STATE_LABEL[home.event.state] ?? home.event.state}
-          </span>
-          <span className="ml-2">
+          </Badge>
+          <span className="text-xs">
             {home.completedCount} of {home.queue.length} complete
           </span>
-        </p>
+        </div>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         {home.queue.length === 0 ? (
           <p className="p-6 text-sm text-slate-500">
             You have no assignments in this event.
@@ -193,17 +211,17 @@ export default async function JudgePage({
             </thead>
             <tbody>
               {home.queue.map((item) => (
-                <tr key={item.assignmentId} className="border-b">
+                <tr key={item.assignmentId} className="border-b last:border-0">
                   <td className="px-6 py-3 font-medium">
                     {item.project.currentRevision.title}
                   </td>
                   <td className="px-6 py-3">
-                    <span
-                      data-testid={`queue-status-${item.status}`}
-                      className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium"
+                    <Badge
+                      testId={`queue-status-${item.status}`}
+                      tone={STATUS_TONE[item.status] ?? "slate"}
                     >
                       {STATUS_LABEL[item.status] ?? item.status}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-6 py-3 text-slate-500">
                     {formatDate(item.assignedAt)}
@@ -211,7 +229,7 @@ export default async function JudgePage({
                   <td className="px-6 py-3 text-right">
                     <Link
                       href={`/events/${eventId}/judge?assignment=${item.assignmentId}`}
-                      className="text-blue-600 hover:underline"
+                      className="font-medium text-blue-600 hover:underline"
                     >
                       {item.status === "LOCKED"
                         ? "View"
