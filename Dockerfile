@@ -41,6 +41,7 @@ RUN mkdir -p /app/apps/web/public \
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY --from=build /app/apps/web/.next /app/apps/web/.next
 COPY --from=build /app/apps/web/public /app/apps/web/public
 COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
@@ -49,4 +50,4 @@ COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
 COPY --from=build /app/packages /app/packages
 COPY --from=build /app/fixtures.json /app/fixtures.json
 EXPOSE 3000
-CMD ["sh", "-c", "cd /app/packages/db && pnpm seed && cd /app && pnpm --filter @dogfood/web start"]
+CMD ["sh", "-c", "pnpm --filter @dogfood/db seed && pnpm --filter @dogfood/web start"]
