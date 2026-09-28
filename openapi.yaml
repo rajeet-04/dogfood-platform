@@ -19,6 +19,7 @@ tags:
   - name: Voting
   - name: Prizes and certificates
   - name: Assets and exports
+  - name: Webhooks
 paths:
   /embed/gallery:
     get:
@@ -277,6 +278,78 @@ paths:
             schema: { $ref: '#/components/schemas/CreateProject' }
       responses:
         '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    patch:
+      operationId: reviseProject
+      tags: [Teams and projects]
+      summary: Create a project revision
+      description: Requires a member of the project's team and an open submission window. `expectedCurrentRevisionId` prevents overwriting a revision created since the client last read the project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedCurrentRevisionId, title, description]
+              properties:
+                expectedCurrentRevisionId: { type: string, format: uuid }
+                title: { type: string, maxLength: 120 }
+                tagline: { type: [string, 'null'], maxLength: 280 }
+                description: { type: string, maxLength: 4000 }
+                repositoryUrl: { type: [string, 'null'], format: uri }
+                liveUrl: { type: [string, 'null'], format: uri }
+                demoVideoUrl: { type: [string, 'null'], format: uri }
+                techTags: { type: array, maxItems: 20, items: { type: string, maxLength: 40 } }
+                trackId: { type: [string, 'null'], format: uuid }
+                thumbnailAssetId: { type: [string, 'null'], format: uuid }
+                imageAssetIds: { type: array, maxItems: 10, items: { type: string, format: uuid } }
+                customAnswers: { type: object, additionalProperties: { type: string, maxLength: 4000 } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}/submit:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    post:
+      operationId: submitProject
+      tags: [Teams and projects]
+      summary: Submit the current project revision
+      description: Requires a member of the project's team, a complete current revision, and an open submission window.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}/withdraw:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    post:
+      operationId: withdrawProject
+      tags: [Teams and projects]
+      summary: Withdraw a submitted project to draft
+      description: Requires a member of the project's team and an open submission window. Locked projects cannot be withdrawn.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/projects/{projectId}/lock:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { $ref: '#/components/parameters/projectId' }
+    post:
+      operationId: lockProject
+      tags: [Teams and projects]
+      summary: Lock one project against further changes
+      description: Requires event configure permission. This route locks one project; bulk project locking is not exposed here.
+      responses:
+        '200':
+          description: Project locked (or already locked)
+          content:
+            application/json:
+              schema: { type: object, required: [accepted], properties: { accepted: { const: true } } }
         default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/assets:
     parameters:
@@ -860,7 +933,7 @@ paths:
       operationId: importProjectArchive
       tags: [Assets and exports]
       summary: Import projects and revision history from an archive
-      description: Organizer-only, create-only import. The request is limited to 10 MiB, 1,000 projects, and 5,000 revisions. Referenced teams, tracks, and image assets must already exist in this event; events, teams, and binary assets are not imported. Existing project IDs cause a conflict.
+      description: Organizer-only, create-only import. The request is limited to 10 MiB, 1,000 projects, and 5,000 revisions. Referenced teams, tracks, and image assets must already exist in this event; events, teams, and binary assets are not imported. Existing project IDs cause a conflict. A successful import appends a projects.bulk_import audit event and queues matching webhook deliveries.
       security: [{ sessionCookie: [] }]
       requestBody:
         required: true
@@ -891,6 +964,88 @@ paths:
       summary: Download an application attachment when authorized
       responses:
         '200': { description: Original attachment bytes, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/webhooks:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listEventWebhooks
+      tags: [Webhooks]
+      summary: List webhook endpoints and deliveries
+      description: Organizer-only. Endpoint signing secrets are never returned.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createEventWebhook
+      tags: [Webhooks]
+      summary: Create a webhook endpoint
+      description: Organizer-only. The generated signing secret is returned once in this response. URLs must be public HTTPS endpoints.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, minLength: 1, maxLength: 2048, format: uri }
+                eventTypes: { type: array, minItems: 1, maxItems: 64, default: ['*'], items: { type: string, minLength: 1, maxLength: 96 } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/webhooks/{endpointId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: endpointId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateEventWebhook
+      tags: [Webhooks]
+      summary: Enable, disable, or rotate a webhook endpoint
+      description: Organizer-only. Provide enabled or rotateSecret=true; a rotated secret is returned once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              anyOf:
+                - required: [enabled]
+                - required: [rotateSecret]
+                  properties: { rotateSecret: { const: true } }
+              properties:
+                enabled: { type: boolean }
+                rotateSecret: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: deleteEventWebhook
+      tags: [Webhooks]
+      summary: Delete a webhook endpoint
+      description: Organizer-only.
+      responses:
+        '200': { description: Deleted endpoint, content: { application/json: { schema: { type: object, required: [deleted], properties: { deleted: { const: true } } } } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/webhooks/dispatch:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: dispatchEventWebhooks
+      tags: [Webhooks]
+      summary: Dispatch due webhook deliveries
+      description: Organizer-only. Claims and attempts due deliveries up to the requested limit, with a default of 20 and maximum of 100. Failed deliveries retry with bounded backoff and eventually become dead letters.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
   /api/health:
     get:
