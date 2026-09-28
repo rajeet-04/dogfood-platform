@@ -19,6 +19,7 @@ import {
 } from "../../../../server/actions/rubric";
 import {
   lockAllSubmissionsAction,
+  unassignJudgeAction,
 } from "../../../../server/actions/evaluation";
 import {
   addMemberAction,
@@ -471,7 +472,8 @@ export default async function OrganizerPage({
                 <th className="py-2 pr-4 font-medium">Judge</th>
                 <th className="py-2 pr-4 font-medium">Project</th>
                 <th className="py-2 pr-4 font-medium">Status</th>
-                <th className="py-2 font-medium">Submitted</th>
+                <th className="py-2 pr-4 font-medium">Submitted</th>
+                <th className="py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -484,7 +486,20 @@ export default async function OrganizerPage({
                       {STATUS_LABEL[item.status] ?? item.status}
                     </span>
                   </td>
-                  <td className="py-2">{formatDate(item.submittedAt)}</td>
+                  <td className="py-2 pr-4">{formatDate(item.submittedAt)}</td>
+                  <td className="py-2">
+                    {item.status === "ASSIGNED" ? (
+                      <ActionForm
+                        action={unassignJudgeAction.bind(
+                          null,
+                          eventId,
+                          item.id,
+                        )}
+                        submitLabel="Unassign"
+                        className="[&_button]:mt-0 [&_button]:bg-slate-100 [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
+                      />
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
