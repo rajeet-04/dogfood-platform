@@ -85,6 +85,13 @@ export function toLocalInput(value: Date | string | null | undefined): string {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** `Date` -> value for a UTC-backed `<input type="datetime-local">`. */
+export function toUtcLocalInput(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 16);
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat().format(value);
 }

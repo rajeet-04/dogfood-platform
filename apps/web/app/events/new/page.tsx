@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ActionForm } from "../../../components/action-form";
 import { ButtonLink } from "../../../components/ui/button";
 import { Field, Input, Textarea } from "../../../components/ui/input";
+import { EventWindowFields } from "../../../components/event-window-fields";
 import { Page, PageHeader } from "../../../components/ui/page-header";
 import { getActor } from "../../../server/session";
 import { createEventAction } from "../../../server/actions/event";
@@ -61,6 +62,14 @@ export default async function NewEventPage() {
           >
             <Textarea name="description" rows={3} />
           </Field>
+          <div className="space-y-3">
+            <p className="text-caption text-fg-subtle">
+              Times use UTC. Leave a boundary empty to keep it unrestricted.
+            </p>
+            <EventWindowFields
+              windows={["registration", "submission", "judging"]}
+            />
+          </div>
           <input type="hidden" name="timezone" value="UTC" />
         </ActionForm>
       </div>

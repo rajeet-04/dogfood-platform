@@ -11,6 +11,7 @@ import {
 } from "@dogfood/events";
 
 import type { FormState } from "../../lib/form-state";
+import { parseUtcDatetime, validateWindowOrder } from "../../lib/event-schedule";
 import { requireActor } from "../session";
 import { describeError, runAction } from "./common";
 
@@ -25,6 +26,12 @@ const createEventSchema = z.object({
   name: z.string().min(1, "Event name is required."),
   description: z.string().optional(),
   timezone: z.string().min(1, "Timezone is required."),
+  registrationOpensAt: z.string().optional(),
+  registrationClosesAt: z.string().optional(),
+  submissionOpensAt: z.string().optional(),
+  submissionClosesAt: z.string().optional(),
+  judgingOpensAt: z.string().optional(),
+  judgingClosesAt: z.string().optional(),
 });
 
 export async function createEventAction(
@@ -37,27 +44,38 @@ export async function createEventAction(
     name: formData.get("name"),
     description: formData.get("description") || undefined,
     timezone: formData.get("timezone") || "UTC",
+    registrationOpensAt: formData.get("registrationOpensAt"),
+    registrationClosesAt: formData.get("registrationClosesAt"),
+    submissionOpensAt: formData.get("submissionOpensAt"),
+    submissionClosesAt: formData.get("submissionClosesAt"),
+    judgingOpensAt: formData.get("judgingOpensAt"),
+    judgingClosesAt: formData.get("judgingClosesAt"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
   let eventId: string;
   try {
-    const event = await createEvent(actor, parsed.data);
+    const windows = {
+      registrationOpensAt: parseUtcDatetime(parsed.data.registrationOpensAt ?? null),
+      registrationClosesAt: parseUtcDatetime(parsed.data.registrationClosesAt ?? null),
+      submissionOpensAt: parseUtcDatetime(parsed.data.submissionOpensAt ?? null),
+      submissionClosesAt: parseUtcDatetime(parsed.data.submissionClosesAt ?? null),
+      judgingOpensAt: parseUtcDatetime(parsed.data.judgingOpensAt ?? null),
+      judgingClosesAt: parseUtcDatetime(parsed.data.judgingClosesAt ?? null),
+    };
+    const orderError =
+      validateWindowOrder(windows.registrationOpensAt, windows.registrationClosesAt, "Registration") ??
+      validateWindowOrder(windows.submissionOpensAt, windows.submissionClosesAt, "Submission") ??
+      validateWindowOrder(windows.judgingOpensAt, windows.judgingClosesAt, "Judging");
+    if (orderError) return { error: orderError };
+
+    const event = await createEvent(actor, { ...parsed.data, ...windows });
     eventId = event.id;
   } catch (err) {
     return { error: describeError(err) };
   }
   redirect(`/events/${eventId}/organizer`);
-}
-
-function parseOptionalDatetime(raw: FormDataEntryValue | null): Date | null {
-  if (!raw || typeof raw !== "string" || raw.trim() === "") return null;
-  const value = new Date(raw);
-  if (Number.isNaN(value.getTime())) {
-    throw new Error("Enter a valid date and time.");
-  }
-  return value;
 }
 
 export async function updateRegistrationWindowAction(
@@ -67,12 +85,18 @@ export async function updateRegistrationWindowAction(
 ): Promise<FormState | undefined> {
   const actor = await requireActor();
   try {
-    const registrationOpensAt = parseOptionalDatetime(
+    const registrationOpensAt = parseUtcDatetime(
       formData.get("registrationOpensAt"),
     );
-    const registrationClosesAt = parseOptionalDatetime(
+    const registrationClosesAt = parseUtcDatetime(
       formData.get("registrationClosesAt"),
     );
+    const orderError = validateWindowOrder(
+      registrationOpensAt,
+      registrationClosesAt,
+      "Registration",
+    );
+    if (orderError) return { error: orderError };
     await updateEventRegistrationWindow(actor, eventId, {
       registrationOpensAt,
       registrationClosesAt,
