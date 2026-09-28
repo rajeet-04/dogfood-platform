@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
 import { ActionForm } from "../../components/action-form";
+import { AuthLink, AuthShell } from "../../components/auth-shell";
+import { Field, Input } from "../../components/ui/input";
 import { getActor } from "../../server/session";
 import { registerAction } from "../../server/actions/auth";
+
+export const metadata: Metadata = { title: "Register" };
 
 export default async function RegisterPage({
   searchParams,
@@ -14,54 +19,50 @@ export default async function RegisterPage({
   if (actor) redirect(next && next.startsWith("/") ? next : "/events");
 
   return (
-    <main className="mx-auto max-w-md px-4 py-16">
-      <div className="rounded-2xl border border-slate-200 bg-white p-8">
-        <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          One account per person. You can hold several roles per event.
-        </p>
-        <ActionForm action={registerAction} submitLabel="Register">
-          {next ? <input type="hidden" name="next" value={next} /> : null}
-          <label className="block text-sm font-medium">
-            Email
-            <input
-              type="email"
-              name="email"
-              required
-              autoComplete="email"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium">
-            Display name
-            <input
-              type="text"
-              name="displayName"
-              required
-              autoComplete="name"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium">
-            Password
-            <input
-              type="password"
-              name="password"
-              minLength={8}
-              required
-              autoComplete="new-password"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            />
-          </label>
-          <p className="mt-1 text-xs text-slate-400">At least 8 characters.</p>
-        </ActionForm>
-      </div>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        Already registered?{" "}
-        <a href="/login" className="font-medium text-slate-700 hover:underline">
-          Log in
-        </a>
-      </p>
-    </main>
+    <AuthShell
+      title="Create an account"
+      description="One account per person. You can hold several roles per event."
+      footer={
+        <>
+          Already registered? <AuthLink href="/login">Log in</AuthLink>
+        </>
+      }
+    >
+      <ActionForm
+        action={registerAction}
+        submitLabel="Register"
+        className="space-y-4"
+      >
+        {next ? <input type="hidden" name="next" value={next} /> : null}
+        <Field label="Email">
+          <Input
+            type="email"
+            name="email"
+            required
+            autoComplete="email"
+            autoFocus
+            placeholder="you@example.com"
+          />
+        </Field>
+        <Field label="Display name">
+          <Input
+            type="text"
+            name="displayName"
+            required
+            autoComplete="name"
+            placeholder="Ada Lovelace"
+          />
+        </Field>
+        <Field label="Password" description="At least 8 characters.">
+          <Input
+            type="password"
+            name="password"
+            minLength={8}
+            required
+            autoComplete="new-password"
+          />
+        </Field>
+      </ActionForm>
+    </AuthShell>
   );
 }

@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { isJudgingClosed } from "@dogfood/judging";
 import { DogfoodError } from "@dogfood/validation";
 
 import { ActionForm } from "../../../../components/action-form";
-import { Badge, type BadgeTone, Stat } from "../../../../components/badge";
+import { Badge, type BadgeTone } from "../../../../components/badge";
 import { Collapsible } from "../../../../components/collapsible";
 import { NotAllowed } from "../../../../components/not-allowed";
+import { Alert } from "../../../../components/ui/alert";
+import { Card, CardBody, CardHeader } from "../../../../components/ui/card";
+import { EmptyStatePanel } from "../../../../components/ui/empty-state";
+import { Field, Input, Textarea } from "../../../../components/ui/input";
+import { Page, PageHeader } from "../../../../components/ui/page-header";
 import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../../../lib/event-flow";
+import { isUuidId } from "../../../../lib/ids";
 import { requireActor } from "../../../../server/session";
 import {
   getJudgeAssignmentDetail,
@@ -48,6 +55,7 @@ export default async function JudgePage({
   searchParams: Promise<{ assignment?: string }>;
 }) {
   const { eventId } = await params;
+  if (!isUuidId(eventId)) notFound();
   const { assignment } = await searchParams;
   const actor = await requireActor();
 
@@ -74,177 +82,217 @@ export default async function JudgePage({
       if (err instanceof DogfoodError && err.code === "NOT_FOUND") notFound();
       throw err;
     }
+    const revision = detail.item.project.currentRevision;
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12">
-        <div className="mb-6">
-          <p className="text-sm text-slate-500">
-            <Link href={`/events/${eventId}/judge`} className="hover:underline">
-              ← Back to queue
-            </Link>
-          </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">
-            {detail.item.project.currentRevision.title}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-            <Badge
-              testId="assignment-status"
-              tone={STATUS_TONE[detail.item.status] ?? "slate"}
-            >
-              {STATUS_LABEL[detail.item.status] ?? detail.item.status}
-            </Badge>
-            <span className="text-xs">Assigned {formatDate(detail.item.assignedAt)}</span>
-          </div>
-        </div>
+      <Page width="narrow">
+        <Link
+          href={`/events/${eventId}/judge`}
+          className="mb-3 inline-flex items-center gap-1.5 rounded-xs text-small font-medium text-fg-subtle transition-colors hover:text-fg"
+        >
+          <ArrowLeft aria-hidden="true" className="size-3.5" />
+          Back to queue
+        </Link>
 
-        <Collapsible
-          title="Project details"
+        <PageHeader
+          title={revision.title}
+          description={revision.tagline || undefined}
           meta={
-            <Badge tone="slate">
-              {detail.item.project.state} ·{" "}
-              {detail.item.project.currentRevision.techTags.length} tags
-            </Badge>
+            <>
+              <Badge
+                testId="assignment-status"
+                tone={STATUS_TONE[detail.item.status] ?? "slate"}
+              >
+                {STATUS_LABEL[detail.item.status] ?? detail.item.status}
+              </Badge>
+              <span className="text-caption text-fg-subtle">
+                Assigned {formatDate(detail.item.assignedAt)}
+              </span>
+            </>
           }
-        >
-          <p className="text-sm whitespace-pre-wrap text-slate-600">
-            {detail.item.project.currentRevision.description}
-          </p>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <Stat
-              label="Tagline"
-              value={detail.item.project.currentRevision.tagline || "—"}
-            />
-            <Stat
-              label="Repository"
-              value={
-                detail.item.project.currentRevision.repositoryUrl ? (
-                  <a
-                    href={detail.item.project.currentRevision.repositoryUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    Link
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Stat
-              label="Submitted"
-              value={formatDate(detail.item.project.submittedAt)}
-            />
-            <Stat label="State" value={detail.item.project.state} />
-          </dl>
-          {detail.item.project.currentRevision.techTags.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {detail.item.project.currentRevision.techTags.map((tag) => (
-                <Badge key={tag} tone="slate">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-        </Collapsible>
+        />
 
-        <section
-          className="mt-6 rounded-2xl border border-slate-200 bg-white p-6"
-          data-testid="evaluation-panel"
-        >
-          <h2 className="mb-4 text-lg font-semibold">Evaluation</h2>
-          {!detail.evaluation ? (
-            <div>
-              <p className="mb-3 text-sm text-slate-500">
-                Start the evaluation to open the scoring form.
-              </p>
-              <ActionForm
-                action={startEvaluationAction.bind(null, eventId, assignment)}
-                submitLabel="Start evaluation"
-              />
-            </div>
-          ) : (
-            <EvaluationForm
-              eventId={eventId}
-              assignmentId={assignment}
-              detail={detail.evaluation}
-              judgingClosed={isJudgingClosed(detail.event.state)}
+        <div className="mt-6 space-y-5">
+          <Collapsible
+            title="Project details"
+            defaultOpen
+            meta={
+              <Badge tone="slate">
+                {detail.item.project.state} · {revision.techTags.length} tags
+              </Badge>
+            }
+          >
+            <p className="text-small whitespace-pre-wrap text-fg-muted">
+              {revision.description}
+            </p>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md bg-surface-sunken/60 px-3 py-2">
+                <dt className="text-caption text-fg-subtle">Tagline</dt>
+                <dd className="text-small text-fg">
+                  {revision.tagline || "—"}
+                </dd>
+              </div>
+              <div className="rounded-md bg-surface-sunken/60 px-3 py-2">
+                <dt className="text-caption text-fg-subtle">Repository</dt>
+                <dd className="text-small text-fg">
+                  {revision.repositoryUrl ? (
+                    <a
+                      href={revision.repositoryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-accent hover:text-accent-hover hover:underline"
+                    >
+                      Link
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-md bg-surface-sunken/60 px-3 py-2">
+                <dt className="text-caption text-fg-subtle">Submitted</dt>
+                <dd className="text-small text-fg">
+                  {formatDate(detail.item.project.submittedAt)}
+                </dd>
+              </div>
+              <div className="rounded-md bg-surface-sunken/60 px-3 py-2">
+                <dt className="text-caption text-fg-subtle">State</dt>
+                <dd className="text-small text-fg">
+                  {detail.item.project.state}
+                </dd>
+              </div>
+            </dl>
+            {revision.techTags.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {revision.techTags.map((tag) => (
+                  <Badge key={tag} tone="slate">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+          </Collapsible>
+
+          <Card data-testid="evaluation-panel">
+            <CardHeader
+              title="Evaluation"
+              description="Your scores stay private until results are published."
             />
-          )}
-        </section>
-      </main>
+            <CardBody>
+              {!detail.evaluation ? (
+                <div>
+                  <p className="mb-3 text-small text-fg-subtle">
+                    Start the evaluation to open the scoring form.
+                  </p>
+                  <ActionForm
+                    action={startEvaluationAction.bind(null, eventId, assignment)}
+                    submitLabel="Start evaluation"
+                  />
+                </div>
+              ) : (
+                <EvaluationForm
+                  eventId={eventId}
+                  assignmentId={assignment}
+                  detail={detail.evaluation}
+                  judgingClosed={isJudgingClosed(detail.event.state)}
+                />
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      </Page>
     );
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-12">
-      <div>
-        <p className="text-sm text-slate-500">
-          <Link href={`/events/${home.event.id}`} className="hover:underline">
-            {home.event.name}
-          </Link>
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight">Judge queue</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <Badge tone={EVENT_STATE_TONE[home.event.state] ?? "slate"}>
-            {EVENT_STATE_LABEL[home.event.state] ?? home.event.state}
-          </Badge>
-          <span className="text-xs">
-            {home.completedCount} of {home.queue.length} complete
-          </span>
-        </div>
-      </div>
+    <Page width="narrow">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Events", href: "/events" },
+          { label: home.event.name, href: `/events/${home.event.id}` },
+        ]}
+        title="Judge queue"
+        description="Evaluate the projects assigned to you before the organizer generates results."
+        meta={
+          <>
+            <Badge tone={EVENT_STATE_TONE[home.event.state] ?? "slate"}>
+              {EVENT_STATE_LABEL[home.event.state] ?? home.event.state}
+            </Badge>
+            <span className="text-caption text-fg-subtle">
+              {home.completedCount} of {home.queue.length} complete
+            </span>
+          </>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="mt-6">
         {home.queue.length === 0 ? (
-          <p className="p-6 text-sm text-slate-500">
-            You have no assignments in this event.
-          </p>
+          <EmptyStatePanel
+            icon="inbox"
+            title="You have no assignments in this event."
+            description="The organizer assigns projects to judges once submissions close."
+          />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-slate-500">
-                <th className="px-6 py-3 font-medium">Project</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Assigned</th>
-                <th className="px-6 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {home.queue.map((item) => (
-                <tr key={item.assignmentId} className="border-b last:border-0">
-                  <td className="px-6 py-3 font-medium">
-                    {item.project.currentRevision.title}
-                  </td>
-                  <td className="px-6 py-3">
-                    <Badge
-                      testId={`queue-status-${item.status}`}
-                      tone={STATUS_TONE[item.status] ?? "slate"}
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-small">
+                <caption className="sr-only">Projects assigned to you</caption>
+                <thead>
+                  <tr className="border-b border-line text-left text-caption text-fg-subtle">
+                    <th scope="col" className="px-4 py-2.5 font-medium">
+                      Project
+                    </th>
+                    <th scope="col" className="px-4 py-2.5 font-medium">
+                      Status
+                    </th>
+                    <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">
+                      Assigned
+                    </th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-medium">
+                      <span className="sr-only">Action</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {home.queue.map((item) => (
+                    <tr
+                      key={item.assignmentId}
+                      className="border-b border-line-subtle last:border-0"
                     >
-                      {STATUS_LABEL[item.status] ?? item.status}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-3 text-slate-500">
-                    {formatDate(item.assignedAt)}
-                  </td>
-                  <td className="px-6 py-3 text-right">
-                    <Link
-                      href={`/events/${eventId}/judge?assignment=${item.assignmentId}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {item.status === "LOCKED"
-                        ? "View"
-                        : item.status === "SUBMITTED"
-                          ? "Re-evaluate"
-                          : "Evaluate"}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <td className="px-4 py-2.5 font-medium text-fg">
+                        {item.project.currentRevision.title}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge
+                          testId={`queue-status-${item.status}`}
+                          tone={STATUS_TONE[item.status] ?? "slate"}
+                        >
+                          {STATUS_LABEL[item.status] ?? item.status}
+                        </Badge>
+                      </td>
+                      <td className="hidden px-4 py-2.5 text-fg-subtle sm:table-cell">
+                        {formatDate(item.assignedAt)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Link
+                          href={`/events/${eventId}/judge?assignment=${item.assignmentId}`}
+                          className="font-medium text-accent hover:text-accent-hover hover:underline"
+                        >
+                          {item.status === "LOCKED"
+                            ? "View"
+                            : item.status === "SUBMITTED"
+                              ? "Re-evaluate"
+                              : "Evaluate"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
-      </section>
-    </main>
+      </div>
+    </Page>
   );
 }
 
@@ -265,40 +313,38 @@ function EvaluationForm({
   return (
     <div>
       {locked ? (
-        <p
-          data-testid="locked-banner"
-          className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600"
+        <Alert
+          tone="neutral"
+          testId="locked-banner"
+          className="mb-4"
+          title="This evaluation is locked"
         >
-          This evaluation is locked and can no longer be modified.
-        </p>
+          It can no longer be modified.
+        </Alert>
       ) : judgingClosed ? (
-        <p
-          data-testid="judging-closed-banner"
-          className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
-        >
-          Results have already been generated for this event, so evaluations
-          are read-only.
-        </p>
+        <Alert tone="warning" testId="judging-closed-banner" className="mb-4">
+          Results have already been generated for this event, so evaluations are
+          read-only.
+        </Alert>
       ) : submitted ? (
-        <div
-          data-testid="submitted-banner"
-          className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800"
+        <Alert
+          tone="success"
+          testId="submitted-banner"
+          className="mb-4 items-start"
+          title={`Submitted${detail.submittedAt ? ` on ${formatDate(detail.submittedAt)}` : ""}.`}
         >
-          <p className="font-medium">
-            Submitted{detail.submittedAt ? ` on ${formatDate(detail.submittedAt)}` : ""}.
-          </p>
-          <p className="mt-1">
-            Your scores are saved. Re-evaluate to change them before results
-            are generated.
+          <p>
+            Your scores are saved. Re-evaluate to change them before results are
+            generated.
           </p>
           <ActionForm
             action={reopenEvaluationAction.bind(null, eventId, assignmentId)}
             submitLabel="Re-evaluate"
-            className="[&_button]:mt-3 [&_button]:bg-emerald-600 [&_button]:text-white [&_button]:hover:bg-emerald-500"
+            className="mt-3"
           />
-        </div>
+        </Alert>
       ) : (
-        <p className="mb-4 text-sm text-slate-500">
+        <p className="mb-4 text-small text-fg-subtle">
           Score each criterion within its allowed range.
         </p>
       )}
@@ -307,70 +353,72 @@ function EvaluationForm({
         submitLabel={readOnly ? "Read only" : "Submit evaluation"}
         submitDisabled={readOnly}
       >
-        {detail.criteria.map((criterion) => (
-          <fieldset
-            key={criterion.criterionId}
-            className="mb-4 rounded-md border border-slate-200 p-4"
-          >
-            <legend className="px-1 text-sm font-medium">
-              {criterion.name}
-              {criterion.optional ? (
-                <span className="text-slate-400"> (optional)</span>
-              ) : null}{" "}
-              <span className="text-slate-500">
-                (weight {criterion.weight}, {criterion.minScore}–
-                {criterion.maxScore})
-              </span>
-            </legend>
-            <label className="mt-2 block text-sm font-medium">
-              Score
-              <input
-                type="number"
-                name={`score:${criterion.criterionId}`}
-                min={criterion.minScore}
-                max={criterion.maxScore}
-                step="any"
-                required={!criterion.optional}
-                disabled={readOnly}
-                defaultValue={
-                  criterion.score === null ? "" : String(criterion.score)
-                }
-                data-criterion-id={criterion.criterionId}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-              />
-            </label>
-            <label className="mt-2 block text-sm font-medium">
-              Comment
-              <textarea
-                name={`comment:${criterion.criterionId}`}
-                rows={2}
-                disabled={readOnly}
-                defaultValue={criterion.comment ?? ""}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-              />
-            </label>
-          </fieldset>
-        ))}
-        <label className="block text-sm font-medium">
-          Overall comment
-          <textarea
+        <div className="space-y-4">
+          {detail.criteria.map((criterion) => (
+            <fieldset
+              key={criterion.criterionId}
+              className="rounded-lg border border-line p-4"
+            >
+              <legend className="px-1 text-small font-medium text-fg">
+                {criterion.name}
+                {criterion.optional ? (
+                  <span className="text-fg-faint"> (optional)</span>
+                ) : null}{" "}
+                <span className="text-caption font-normal text-fg-subtle">
+                  (weight {criterion.weight}, {criterion.minScore}–
+                  {criterion.maxScore})
+                </span>
+              </legend>
+              <div className="space-y-3">
+                <Field label="Score">
+                  <Input
+                    type="number"
+                    name={`score:${criterion.criterionId}`}
+                    min={criterion.minScore}
+                    max={criterion.maxScore}
+                    step="any"
+                    required={!criterion.optional}
+                    disabled={readOnly}
+                    defaultValue={
+                      criterion.score === null ? "" : String(criterion.score)
+                    }
+                    data-criterion-id={criterion.criterionId}
+                    className="max-w-32"
+                  />
+                </Field>
+                <Field label="Comment">
+                  <Textarea
+                    name={`comment:${criterion.criterionId}`}
+                    rows={2}
+                    disabled={readOnly}
+                    defaultValue={criterion.comment ?? ""}
+                  />
+                </Field>
+              </div>
+            </fieldset>
+          ))}
+        </div>
+        <Field label="Overall comment" className="mt-4 block">
+          <Textarea
             name="overallComment"
             rows={3}
             disabled={readOnly}
             defaultValue={detail.overallComment ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
           />
-        </label>
+        </Field>
         {readOnly ? (
-          <div className="mt-3">
-            {detail.criteria.map((criterion) => (
-              <p key={criterion.criterionId} className="text-sm text-slate-600">
-                <span className="font-medium">{criterion.name}:</span>{" "}
-                {criterion.score === null
-                  ? "not scored"
-                  : String(criterion.score)}
-              </p>
-            ))}
+          <div className="mt-4 rounded-md bg-surface-sunken/60 p-3.5">
+            <p className="text-caption font-semibold text-fg-subtle">
+              Your recorded scores
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {detail.criteria.map((criterion) => (
+                <li key={criterion.criterionId} className="text-small text-fg-muted">
+                  <span className="font-medium text-fg">{criterion.name}:</span>{" "}
+                  {criterion.score === null ? "not scored" : String(criterion.score)}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </ActionForm>
