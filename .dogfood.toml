@@ -5,8 +5,12 @@
 base_url = "http://localhost:3000"
 
 [tiers]
+# Verified locally on the current combined image: official T1/T2 checker 7/7.
+# T3 and T4 remain partial; do not add them to claimed until complete.
+# Eligibility is unresolved: current source includes byte-identical pre-kickoff code.
+# This config is local checker evidence, not a competition submission.
 claimed = ["T1", "T2"]
-pitch = "Self-hosted hackathon submissions, judging, and results portal."
+pitch = "Self-hosted hackathon submissions, gallery, judging, and results portal with audited roles."
 
 [auth]
 organizer   = "Cookie: dogfood_session=dogfood-local-fixture-organizer-v1"
