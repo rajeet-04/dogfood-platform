@@ -1,11 +1,16 @@
 import {
   and,
   db,
+  desc,
   eq,
+  ilike,
+  ne,
+  or,
   schema,
   sql,
   type EventRole,
   type EventState,
+  type SQL,
 } from "@dogfood/db";
 import { ACTION, requirePermission, type Action } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
@@ -153,6 +158,58 @@ export async function updateEventRegistrationWindow(
     return row;
   });
   return updated;
+}
+
+export type EventSearchInput = {
+  q?: string | null;
+  state?: EventState | null;
+  limit?: number;
+};
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+export async function listEvents(
+  actor: Actor | null,
+  input: EventSearchInput = {},
+): Promise<EventRow[]> {
+  const conditions: SQL[] = [ne(schema.events.state, "ARCHIVED")];
+
+  if (actor && !actor.isPlatformAdmin) {
+    conditions.push(
+      or(
+        ne(schema.events.state, "DRAFT"),
+        eq(schema.events.createdBy, actor.userId),
+      )!,
+    );
+  } else if (!actor) {
+    conditions.push(ne(schema.events.state, "DRAFT"));
+  }
+
+  const search = input.q?.trim() ?? "";
+  if (search) {
+    const pattern = `%${escapeLike(search)}%`;
+    conditions.push(
+      or(
+        ilike(schema.events.name, pattern),
+        ilike(schema.events.slug, pattern),
+        ilike(schema.events.description, pattern),
+      )!,
+    );
+  }
+
+  if (input.state) conditions.push(eq(schema.events.state, input.state));
+
+  const requestedLimit = input.limit ?? 100;
+  const limit = Math.min(Math.max(requestedLimit, 1), 500);
+
+  return db
+    .select()
+    .from(schema.events)
+    .where(and(...conditions))
+    .orderBy(desc(schema.events.createdAt))
+    .limit(limit);
 }
 
 export async function transitionEvent(

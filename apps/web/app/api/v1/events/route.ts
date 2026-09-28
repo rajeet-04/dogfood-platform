@@ -1,6 +1,10 @@
-import { and, db, desc, eq, schema, sql } from "@dogfood/db";
+import { EVENT_STATES } from "@dogfood/db";
 import type { EventState } from "@dogfood/db";
-import { createEvent, type EventRow } from "@dogfood/events";
+import {
+  createEvent,
+  listEvents,
+  type EventRow,
+} from "@dogfood/events";
 import { z } from "@dogfood/validation";
 
 import {
@@ -9,6 +13,7 @@ import {
   readJsonBody,
   requireApiActor,
   throwValidation,
+  getActorFromRequest,
 } from "../../../../server/api/http";
 
 export type EventSummary = {
@@ -58,22 +63,28 @@ function toDate(value: string | null | undefined): Date | null {
   return value ? new Date(value) : null;
 }
 
+const listEventsSchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  state: z
+    .enum(EVENT_STATES as unknown as [EventState, ...EventState[]])
+    .optional(),
+});
+
 export async function GET(request: Request): Promise<Response> {
   return api(request, async () => {
     const url = new URL(request.url);
-    const q = url.searchParams.get("q");
-    const state = url.searchParams.get("state");
+    const parsed = listEventsSchema.safeParse({
+      q: url.searchParams.get("q")?.trim() || undefined,
+      state: url.searchParams.get("state") || undefined,
+    });
+    if (!parsed.success) throwValidation(parsed.error.issues);
 
-    const conditions = [];
-    if (q) conditions.push(sql`${schema.events.name} ilike ${`%${q}%`}`);
-    if (state) conditions.push(eq(schema.events.state, state as EventState));
-
-    const rows = await db
-      .select()
-      .from(schema.events)
-      .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(schema.events.createdAt))
-      .limit(50);
+    const actor = await getActorFromRequest(request);
+    const rows = await listEvents(actor, {
+      q: parsed.data.q,
+      state: parsed.data.state,
+      limit: 50,
+    });
 
     return json({ events: rows.map(toEventSummary) });
   });

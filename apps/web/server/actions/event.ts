@@ -106,5 +106,7 @@ export async function transitionEventAction(
   return runAction(async () => {
     await transitionEvent(actor, eventId, parsed.data.toState);
     revalidatePath(`/events/${eventId}/organizer`);
+    revalidatePath(`/events/${eventId}`);
+    revalidatePath("/events");
   });
 }
