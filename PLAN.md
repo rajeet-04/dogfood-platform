@@ -18,11 +18,12 @@
 
 The gallery/assets/custom-question/fixture slice was verified against a disposable local PostgreSQL 17 container (`dogfood_test`). These commands exited 0:
 
-- `bun run --cwd packages/db typecheck && bun run --cwd packages/events typecheck && bun run --cwd packages/submissions typecheck && bun run --cwd apps/web typecheck`
-- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun x vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts` — 4 files, 14 tests passed.
-- `DATABASE_URL=postgresql://dogfood:dogfood@localhost:5432/dogfood_test bun run --cwd apps/web build` — production build passed.
+- `bun run --cwd packages/db typecheck`, `bun run --cwd packages/events typecheck`, `bun run --cwd packages/submissions typecheck`, and `bun run --cwd apps/web typecheck` — all four passed.
+- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/submissions-lock.test.ts tests/integration/submission-settings.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts` — 6 files, 23 tests passed.
+- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd apps/web build` — production build passed.
+- Local seed/import smoke used `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd packages/db seed:fixtures`; `/api/health`, `/projects`, and `/api/v1/gallery?q=Glass%20Signal` each returned HTTP 200, and the gallery JSON contained the official fixture title `Glass Signal`.
 
-This checkpoint covers those focused paths and the web build; it does not establish whole-repository test completion, T1 completion, event eligibility, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
+This checkpoint covers those focused paths, the local seeded smoke, and the web build; it does not establish whole-repository test completion, T1 completion, event eligibility, Compose offline readiness, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
 
 ## Implemented in the current checkout
 
@@ -53,7 +54,7 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 ### P1 — Complete and prove all T1 Core requirements
 
 - [x] Implement an anonymous gallery with shared filters and public/private-answer redaction; focused public-gallery integration tests pass locally.
-- [x] Seed official fixture records in local/dev mode with stable IDs and preserve the duplicate project and its source scores; the fixture-seed integration test passes locally. The official checker is not available in this checkout.
+- [x] Seed official fixture records in local/dev mode with stable IDs and preserve the duplicate project and its source scores; integration tests and a seeded live smoke show the known `Glass Signal` title. The official checker is not available in this checkout.
 - [x] Implement event tracks and free-text custom questions with required-answer enforcement; submission integration coverage passes locally.
 - [x] Implement local event-scoped image assets, ordered gallery images, and thumbnails; focused asset/gallery integration tests pass locally.
 - [ ] Finish and verify the complete submission-field contract (including demo-video URL, repository URL, live link, tech tags, and custom answers) as one end-to-end participant workflow. Keep private/draft content out of public reads.
@@ -63,7 +64,7 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 ### P2 — Complete and prove all T2 Judging requirements
 
 - [ ] Add batch/algorithmic judge assignment and coverage preview; current source visibly exposes manual `assignJudge` and queues, but no assignment proposal/generator.
-- [ ] Implement track-scoped assignment and backend isolation across tracks. Current README says track features are out of scope.
+- [ ] Implement track-scoped judge assignment and backend isolation across tracks. Event tracks for T1 project submissions exist; judging assignment by track remains unverified/unimplemented.
 - [ ] Resolve organizer score visibility against the official role matrix; retain backend judge-to-judge and judge-to-track denials.
 - [ ] Document assignment, weighted rubric, normalization method, limitations, diagnostics, and CSV coverage in `JUDGING.md`; make sure written evidence matches current code.
 - [ ] Verify all advertised T2 behavior independently; the official checker covers only own/peer scores, participant denial, and organizer CSV export.
@@ -74,7 +75,7 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 - [ ] Reconcile `.dogfood.toml` with the official `[portal]`, `[tiers]`, `[auth]`, and `[routes]` shape, including actual paths for gallery, submit, own judge scores, peer-score probe, and CSV export. Current `[claims]`/`[notes]` configuration does not match that shape.
 - [ ] Once the runner is available and the config matches, run `python3 run.py .dogfood.toml` against a running portal and preserve its unedited output as `acceptance-report.txt`, including failures.
 - [ ] Refresh the stale `acceptance-report.txt`; its Sep 26 evidence predates the official checker and the current feature slice.
-- [ ] Verify a clean `docker compose up` and a network-disconnected run with the official fixture seed. The current report says neither Docker nor offline mode was literally exercised.
+- [ ] Verify a clean `docker compose up` and a network-disconnected run with the official fixture seed. Compose/offline acceptance has not been exercised in this verification checkpoint.
 - [ ] Do not equate seven passing checks with full advertised tier completion; preserve extra tests/docs/demo evidence for requirements the checker does not inspect.
 
 ### P4 — Finish submission readiness and evidence
