@@ -25,6 +25,12 @@ export type RankingGenerationConfig = {
   rankingVersion?: string;
 };
 
+export type CriterionBreakdown = {
+  name: string;
+  meanWeightedScore: number;
+  scoredBy: number;
+};
+
 export type RankingSnapshot = {
   id: string;
   eventId: string;
@@ -32,7 +38,9 @@ export type RankingSnapshot = {
   normalizationVersion: string;
   rankingVersion: string;
   configuration: RankingGenerationConfig;
-  results: RankingResult;
+  results: RankingResult & {
+    criteria?: Record<string, Record<string, CriterionBreakdown>>;
+  };
   generatedBy: string;
   generatedAt: Date;
   publishedAt: Date | null;
@@ -167,6 +175,10 @@ export async function generateRankingSnapshot(
   }
 
   const contributions: JudgeContribution[] = [];
+  const criteriaByProject = new Map<
+    string,
+    Map<string, { name: string; weightedSum: number; count: number }>
+  >();
   for (const evaluation of submitted) {
     const assignment = assignmentById.get(evaluation.assignmentId);
     if (!assignment) continue;
@@ -174,6 +186,7 @@ export async function generateRankingSnapshot(
     const weightByCriterion = new Map(
       criteria.map((c) => [c.id, Number.parseFloat(c.weight)]),
     );
+    const nameByCriterion = new Map(criteria.map((c) => [c.id, c.name]));
     const scores = await db
       .select()
       .from(schema.evaluationScores)
@@ -183,6 +196,22 @@ export async function generateRankingSnapshot(
       score: Number.parseFloat(s.score),
       weight: weightByCriterion.get(s.criterionId) ?? 0,
     }));
+    for (const s of scored) {
+      let byCriterion = criteriaByProject.get(assignment.projectId);
+      if (!byCriterion) {
+        byCriterion = new Map();
+        criteriaByProject.set(assignment.projectId, byCriterion);
+      }
+      const entry =
+        byCriterion.get(s.criterionId) ?? {
+          name: nameByCriterion.get(s.criterionId) ?? s.criterionId,
+          weightedSum: 0,
+          count: 0,
+        };
+      entry.weightedSum += s.score * s.weight;
+      entry.count += 1;
+      byCriterion.set(s.criterionId, entry);
+    }
     const { total: rawTotal } = calculateWeightedScore(scored);
     const scoredWeight = scored.reduce((sum, s) => sum + s.weight, 0);
     const targetWeight = criteria.reduce(
@@ -259,6 +288,25 @@ export async function generateRankingSnapshot(
   };
   const results = rankProjects(projects, rankingConfig);
 
+  const resultsWithBreakdown = {
+    ...results,
+    criteria: Object.fromEntries(
+      [...criteriaByProject].map(([projectId, byCriterion]) => [
+        projectId,
+        Object.fromEntries(
+          [...byCriterion].map(([criterionId, entry]) => [
+            criterionId,
+            {
+              name: entry.name,
+              meanWeightedScore: entry.weightedSum / entry.count,
+              scoredBy: entry.count,
+            },
+          ]),
+        ),
+      ]),
+    ),
+  };
+
   const snapshot = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(schema.rankingSnapshots)
@@ -268,7 +316,7 @@ export async function generateRankingSnapshot(
         normalizationVersion: NORMALIZATION_VERSION,
         rankingVersion: RANKING_VERSION,
         configuration: normalizedConfig as unknown as Record<string, unknown>,
-        results: results as unknown as Record<string, unknown>,
+        results: resultsWithBreakdown as unknown as Record<string, unknown>,
         generatedBy: actor.userId,
         generatedAt: new Date(),
       })

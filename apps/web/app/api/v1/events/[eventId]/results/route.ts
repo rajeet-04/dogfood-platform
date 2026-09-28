@@ -10,6 +10,16 @@ type StoredRankedProject = {
   displayOrder: number;
 };
 
+type StoredCriterionBreakdown = {
+  name: string;
+  meanWeightedScore: number;
+  scoredBy: number;
+};
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ eventId: string }> },
@@ -34,6 +44,11 @@ export async function GET(
     }
 
     const ranked = (snapshot.results as { ranked?: StoredRankedProject[] }).ranked ?? [];
+    const criteriaByProject =
+      (snapshot.results as {
+        criteria?: Record<string, Record<string, StoredCriterionBreakdown>>;
+      }).criteria ?? {};
+
     return json({
       results: {
         snapshotId: snapshot.id,
@@ -41,6 +56,15 @@ export async function GET(
         rankings: ranked.map((item) => ({
           rank: item.rank,
           projectId: item.projectId,
+          competitiveScore: item.competitiveScore,
+          criteria: Object.entries(
+            criteriaByProject[item.projectId] ?? {},
+          ).map(([criterionId, criterion]) => ({
+            criterionId,
+            name: criterion.name,
+            meanWeightedScore: round3(criterion.meanWeightedScore),
+            scoredBy: criterion.scoredBy,
+          })),
         })),
       },
     });
