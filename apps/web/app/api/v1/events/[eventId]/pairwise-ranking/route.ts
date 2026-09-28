@@ -10,7 +10,7 @@ const inputSchema = z.object({
   comparisons: z.array(z.object({
     winnerProjectId: z.string().trim().min(1).max(128),
     loserProjectId: z.string().trim().min(1).max(128),
-  })).min(1).max(20_000),
+  })).min(1).max(20_000).optional(),
   maxIterations: z.number().int().min(1).max(100_000).optional(),
   tolerance: z.number().positive().max(0.01).optional(),
   priorWins: z.number().positive().max(10).optional(),
@@ -50,9 +50,20 @@ export async function POST(
       throw new DogfoodError("VALIDATION_FAILED", "Pairwise ranking is available once judging has started");
     }
 
+    const comparisons = parsed.data.comparisons ?? (await db.select({
+      winnerProjectId: schema.pairwiseComparisons.winnerProjectId,
+      projectAId: schema.pairwiseComparisons.projectAId,
+      projectBId: schema.pairwiseComparisons.projectBId,
+    }).from(schema.pairwiseComparisons).where(eq(schema.pairwiseComparisons.eventId, eventId)))
+      .map((comparison) => ({
+        winnerProjectId: comparison.winnerProjectId,
+        loserProjectId: comparison.winnerProjectId === comparison.projectAId ? comparison.projectBId : comparison.projectAId,
+      }))
+      .filter((comparison) => parsed.data.projectIds.includes(comparison.winnerProjectId) && parsed.data.projectIds.includes(comparison.loserProjectId));
+
     const ranking = rankPairwiseProjects(
       parsed.data.projectIds,
-      parsed.data.comparisons,
+      comparisons,
       {
         maxIterations: parsed.data.maxIterations,
         tolerance: parsed.data.tolerance,
