@@ -4,6 +4,7 @@ import { and, db, eq, schema, type CustomQuestion } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { appendAuditEvent } from "@dogfood/audit";
 
 async function requireOrganizer(actor: Actor, eventId: string) {
   const [event] = await db.select().from(schema.events).where(eq(schema.events.id, eventId)).limit(1);
@@ -21,8 +22,11 @@ export async function addEventTrack(actor: Actor, eventId: string, name: string)
   const clean = name.trim();
   if (!clean || clean.length > 100) throw new DogfoodError("VALIDATION_FAILED", "Track name must be 1 to 100 characters");
   const existing = await db.select({ id: schema.eventTracks.id }).from(schema.eventTracks).where(eq(schema.eventTracks.eventId, eventId));
-  const [track] = await db.insert(schema.eventTracks).values({ eventId, name: clean, sortOrder: existing.length }).returning();
-  return track;
+  return db.transaction(async (tx) => {
+    const [track] = await tx.insert(schema.eventTracks).values({ eventId, name: clean, sortOrder: existing.length }).returning();
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.track.create", resourceType: "event_track", resourceId: track.id, metadata: { name: track.name } });
+    return track;
+  });
 }
 
 export async function updateEventTrack(actor: Actor, eventId: string, trackId: string, name: string): Promise<void> {
@@ -35,7 +39,10 @@ export async function updateEventTrack(actor: Actor, eventId: string, trackId: s
   const [duplicate] = await db.select({ id: schema.eventTracks.id }).from(schema.eventTracks)
     .where(and(eq(schema.eventTracks.eventId, eventId), eq(schema.eventTracks.name, clean)));
   if (duplicate && duplicate.id !== trackId) throw new DogfoodError("CONFLICT", "A track with this name already exists");
-  await db.update(schema.eventTracks).set({ name: clean }).where(eq(schema.eventTracks.id, trackId));
+  await db.transaction(async (tx) => {
+    await tx.update(schema.eventTracks).set({ name: clean }).where(eq(schema.eventTracks.id, trackId));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.track.update", resourceType: "event_track", resourceId: trackId, metadata: { previousName: track.name, name: clean } });
+  });
 }
 
 export async function moveEventTrack(actor: Actor, eventId: string, trackId: string, direction: "UP" | "DOWN"): Promise<void> {
@@ -51,7 +58,14 @@ export async function moveEventTrack(actor: Actor, eventId: string, trackId: str
     for (const [sortOrder, track] of tracks.entries()) {
       await tx.update(schema.eventTracks).set({ sortOrder }).where(eq(schema.eventTracks.id, track.id));
     }
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.track.reorder", resourceType: "event_track", resourceId: trackId, metadata: { direction } });
   });
+}
+
+export async function listEventTracks(actor: Actor, eventId: string) {
+  await requireOrganizer(actor, eventId);
+  return db.select().from(schema.eventTracks).where(eq(schema.eventTracks.eventId, eventId))
+    .orderBy(schema.eventTracks.sortOrder, schema.eventTracks.name);
 }
 
 export async function removeEventTrack(actor: Actor, eventId: string, trackId: string): Promise<void> {
@@ -85,8 +99,16 @@ export async function addCustomQuestion(
     throw new DogfoodError("VALIDATION_FAILED", "Invalid question visibility");
   }
   const question: CustomQuestion = { id: randomUUID(), prompt, required: input.required, visibility, order: event.customQuestions.length };
-  await db.update(schema.events).set({ customQuestions: [...event.customQuestions, question], updatedAt: new Date() }).where(eq(schema.events.id, eventId));
+  await db.transaction(async (tx) => {
+    await tx.update(schema.events).set({ customQuestions: [...event.customQuestions, question], updatedAt: new Date() }).where(eq(schema.events.id, eventId));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.custom_question.create", resourceType: "custom_question", resourceId: question.id, metadata: { prompt: question.prompt, required: question.required, visibility: question.visibility, order: question.order } });
+  });
   return question;
+}
+
+export async function listCustomQuestions(actor: Actor, eventId: string): Promise<CustomQuestion[]> {
+  const event = await requireOrganizer(actor, eventId);
+  return [...event.customQuestions].sort((a, b) => a.order - b.order);
 }
 
 export async function updateCustomQuestion(
@@ -101,10 +123,14 @@ export async function updateCustomQuestion(
     throw new DogfoodError("VALIDATION_FAILED", "Invalid question");
   }
   if (!event.customQuestions.some((question) => question.id === questionId)) throw new DogfoodError("NOT_FOUND", "Question not found");
-  await db.update(schema.events).set({
-    customQuestions: event.customQuestions.map((question) => question.id === questionId ? { ...question, prompt, required: input.required, visibility: input.visibility } : question),
-    updatedAt: new Date(),
-  }).where(eq(schema.events.id, eventId));
+  const updated = event.customQuestions.find((question) => question.id === questionId)!;
+  await db.transaction(async (tx) => {
+    await tx.update(schema.events).set({
+      customQuestions: event.customQuestions.map((question) => question.id === questionId ? { ...question, prompt, required: input.required, visibility: input.visibility } : question),
+      updatedAt: new Date(),
+    }).where(eq(schema.events.id, eventId));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.custom_question.update", resourceType: "custom_question", resourceId: questionId, metadata: { previousPrompt: updated.prompt, prompt, required: input.required, visibility: input.visibility } });
+  });
 }
 
 export async function moveCustomQuestion(actor: Actor, eventId: string, questionId: string, direction: "UP" | "DOWN"): Promise<void> {
@@ -115,10 +141,13 @@ export async function moveCustomQuestion(actor: Actor, eventId: string, question
   const other = index + (direction === "UP" ? -1 : 1);
   if (other < 0 || other >= questions.length) return;
   [questions[index], questions[other]] = [questions[other], questions[index]];
-  await db.update(schema.events).set({
-    customQuestions: questions.map((question, order) => ({ ...question, order })),
-    updatedAt: new Date(),
-  }).where(eq(schema.events.id, eventId));
+  await db.transaction(async (tx) => {
+    await tx.update(schema.events).set({
+      customQuestions: questions.map((question, order) => ({ ...question, order })),
+      updatedAt: new Date(),
+    }).where(eq(schema.events.id, eventId));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.custom_question.reorder", resourceType: "custom_question", resourceId: questionId, metadata: { direction } });
+  });
 }
 
 export async function removeCustomQuestion(actor: Actor, eventId: string, questionId: string): Promise<void> {
