@@ -184,6 +184,41 @@ describe("assigned judge pairwise comparisons", () => {
       },
     });
 
+    const makeSnapshot = async () => rankingRoute.POST(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking`, {
+        method: "POST",
+        headers: { cookie: `dogfood_session=${organizerSession.rawToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ projectIds: projects.slice(0, 2) }),
+      }),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    const [nextOne, nextTwo] = await Promise.all([makeSnapshot(), makeSnapshot()]);
+    expect(nextOne.status).toBe(201);
+    expect(nextTwo.status).toBe(201);
+    const nextOneBody = await nextOne.json();
+    const nextTwoBody = await nextTwo.json();
+    const [publishOne, publishTwo] = await Promise.all([
+      publishPairwiseRoute.POST(
+        new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking/${nextOneBody.snapshot.id}/publish`, {
+          method: "POST",
+          headers: { cookie: `dogfood_session=${organizerSession.rawToken}` },
+        }),
+        { params: Promise.resolve({ eventId: event.id, snapshotId: nextOneBody.snapshot.id }) },
+      ),
+      publishPairwiseRoute.POST(
+        new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking/${nextTwoBody.snapshot.id}/publish`, {
+          method: "POST",
+          headers: { cookie: `dogfood_session=${organizerSession.rawToken}` },
+        }),
+        { params: Promise.resolve({ eventId: event.id, snapshotId: nextTwoBody.snapshot.id }) },
+      ),
+    ]);
+    expect(publishOne.status).toBe(200);
+    expect(publishTwo.status).toBe(200);
+    const publicationLinks = [await publishOne.json(), await publishTwo.json()]
+      .map((body) => body.publication.supersedesSnapshotId);
+    expect(new Set(publicationLinks).size).toBe(2);
+
     const rejected = await pairwiseRoute.POST(
       request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-comparisons`, {
         method: "POST",
