@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { db, schema, sql, sqlState, type EventState } from "@dogfood/db";
+import { and, db, eq, schema, sql, sqlState, type EventState } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
@@ -8,7 +8,6 @@ import { appendAuditEvent } from "@dogfood/audit";
 
 import {
   countTeamMembers,
-  deleteTeamMember,
   eventMembershipRoles,
   findInviteByTokenHash,
   getEventState,
@@ -17,7 +16,6 @@ import {
   getTeamById,
   getTeamMembers,
   getTeamMembersWithProfiles,
-  insertInvite,
   type TeamMemberProfile,
 } from "./repository";
 
@@ -183,10 +181,20 @@ export async function createTeamInvite(
   }
 
   const rawToken = randomBytes(9).toString("base64url").replace(/[_-]/g, ""); // ~12 chars
-  await insertInvite({
-    teamId,
-    tokenHash: hashToken(rawToken),
-    createdBy: actor.userId,
+  await db.transaction(async (tx) => {
+    const [invite] = await tx.insert(schema.teamInvites).values({
+      teamId,
+      tokenHash: hashToken(rawToken),
+      createdBy: actor.userId,
+    }).returning({ id: schema.teamInvites.id });
+    await appendAuditEvent(tx, {
+      eventId: team.eventId,
+      actorId: actor.userId,
+      action: "team.invite.create",
+      resourceType: "team_invite",
+      resourceId: invite.id,
+      metadata: { teamId: team.id },
+    });
   });
   return { rawToken };
 }
@@ -266,7 +274,20 @@ export async function leaveTeam(
 
   const my = await getMembership(teamId, actor.userId);
   if (!my) throw new DogfoodError("FORBIDDEN", "[FORBIDDEN] Actor is not a team member");
-  await deleteTeamMember(teamId, actor.userId);
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.teamMembers).where(and(
+      eq(schema.teamMembers.teamId, teamId),
+      eq(schema.teamMembers.userId, actor.userId),
+    ));
+    await appendAuditEvent(tx, {
+      eventId: team.eventId,
+      actorId: actor.userId,
+      action: "team.leave",
+      resourceType: "team",
+      resourceId: team.id,
+      metadata: { memberId: actor.userId },
+    });
+  });
 }
 
 export async function getTeam(
