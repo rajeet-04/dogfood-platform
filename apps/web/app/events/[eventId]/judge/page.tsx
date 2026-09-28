@@ -225,6 +225,14 @@ export default async function JudgePage({
       />
 
       <div className="mt-6">
+        {home.queue.length >= 2 ? (
+          <Link
+            href={`/events/${eventId}/judge/pairwise`}
+            className="mb-4 inline-flex min-h-10 items-center rounded-md border border-line bg-surface px-3 text-small font-medium text-fg transition-colors hover:border-accent hover:text-accent"
+          >
+            Compare assigned projects
+          </Link>
+        ) : null}
         {home.queue.length === 0 ? (
           <EmptyStatePanel
             icon="inbox"
