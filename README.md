@@ -158,6 +158,12 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   tracks, and image assets already present in the same event; it does not import
   events, teams, or binary assets. Imports are limited to 10 MiB, 1,000 projects,
   and 5,000 revisions, and fail if project IDs already exist.
+- `GET /api/v1/events/:eventId` includes registration opening and closing times.
+- `PUT /api/v1/events/:eventId/registration-window` lets organizers replace
+  both timestamps (ISO 8601 strings or `null`).
+- `POST /api/v1/events/:eventId/transition` lets organizers request the next
+  lifecycle state, for example `{ "toState": "REGISTRATION" }`; invalid
+  transitions are rejected by the event state machine.
 
 ## Known limits
 
@@ -172,7 +178,7 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   from the current database state on request, not persisted as immutable issue or
   revocation records; save a signed payload separately if you need a long-lived
   proof artifact. An unset key returns 503.
-- [`openapi.yaml`](./openapi.yaml) documents 59 HTTP operations in this checkout.
+- [`openapi.yaml`](./openapi.yaml) documents 61 HTTP operations in this checkout.
   UI/server-action workflows are not all available through the REST API, so
   full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are

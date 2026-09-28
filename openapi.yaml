@@ -96,7 +96,23 @@ paths:
       summary: Get event details and the current account roles
       security: [{}, { sessionCookie: [] }]
       responses:
-        '200': { description: Event detail, content: { application/json: { schema: { type: object, properties: { event: { allOf: [{ $ref: '#/components/schemas/EventSummary' }, { type: object, properties: { myRoles: { type: array, items: { type: string } } } }] } } } } } }
+        '200':
+          description: Event detail, including registration windows and the current account roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event]
+                properties:
+                  event:
+                    allOf:
+                      - { $ref: '#/components/schemas/EventSummary' }
+                      - type: object
+                        required: [myRoles, registrationOpensAt, registrationClosesAt]
+                        properties:
+                          myRoles: { type: array, items: { type: string } }
+                          registrationOpensAt: { type: [string, 'null'], format: date-time }
+                          registrationClosesAt: { type: [string, 'null'], format: date-time }
         default: { $ref: '#/components/responses/ApiError' }
     put:
       operationId: updateEventDetails
@@ -122,6 +138,72 @@ paths:
                     allOf:
                       - { $ref: '#/components/schemas/EventSummary' }
                       - { $ref: '#/components/schemas/UpdateEventDetails' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/registration-window:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    put:
+      operationId: updateEventRegistrationWindow
+      tags: [Events]
+      summary: Replace an event's registration window
+      description: Requires an authenticated event organizer with configure permission. Both nullable timestamps are required; send null to clear a bound. The open time must be earlier than the close time when both are set.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [registrationOpensAt, registrationClosesAt]
+              properties:
+                registrationOpensAt: { type: [string, 'null'], format: date-time }
+                registrationClosesAt: { type: [string, 'null'], format: date-time }
+      responses:
+        '200':
+          description: Updated event and registration window
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event]
+                properties:
+                  event:
+                    allOf:
+                      - { $ref: '#/components/schemas/EventSummary' }
+                      - type: object
+                        required: [registrationOpensAt, registrationClosesAt]
+                        properties:
+                          registrationOpensAt: { type: [string, 'null'], format: date-time }
+                          registrationClosesAt: { type: [string, 'null'], format: date-time }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/transition:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: transitionEvent
+      tags: [Events]
+      summary: Advance an event through the lifecycle
+      description: Requires an authenticated event organizer with transition permission. The event service validates allowed state transitions and records the audit event and notifications.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toState]
+              properties:
+                toState: { type: string, enum: [DRAFT, REGISTRATION, SUBMISSIONS_OPEN, SUBMISSIONS_CLOSED, JUDGING, RESULTS_READY, PUBLISHED, ARCHIVED] }
+      responses:
+        '200':
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event]
+                properties:
+                  event: { $ref: '#/components/schemas/EventSummary' }
         default: { $ref: '#/components/responses/ApiError' }
   /api/v1/gallery:
     get:
