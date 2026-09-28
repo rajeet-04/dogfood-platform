@@ -19,6 +19,17 @@ export type {
 } from "./pairwise";
 
 export {
+  PAIRWISE_RANKING_VERSION,
+  generatePairwiseRankingSnapshot,
+  getPairwiseRankingSnapshot,
+  publishPairwiseRankingSnapshot,
+} from "./pairwise-service";
+export type {
+  PairwiseRankingSnapshot,
+  PairwiseSnapshotInput,
+} from "./pairwise-service";
+
+export {
   NORMALIZATION_VERSION,
   RANKING_ALLOWED_STATES,
   SCORING_VERSION,
