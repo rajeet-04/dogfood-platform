@@ -23,6 +23,7 @@ export type OrganizerDocument = {
     customQuestions: EventRow["customQuestions"];
   };
   tracks: Array<{ id: string; name: string; sortOrder: number }>;
+  prizes: Array<{ id: string; name: string; description: string | null; trackId: string | null; amount: string | null; currency: string | null; sortOrder: number }>;
   members: Array<{
     userId: string;
     email: string;
@@ -243,6 +244,8 @@ export async function getOrganizerDocument(
   const applications = await listJudgeApplications(actor, eventId);
   const tracks = await db.select({ id: schema.eventTracks.id, name: schema.eventTracks.name, sortOrder: schema.eventTracks.sortOrder })
     .from(schema.eventTracks).where(eq(schema.eventTracks.eventId, eventId)).orderBy(schema.eventTracks.sortOrder);
+  const prizes = await db.select({ id: schema.eventPrizes.id, name: schema.eventPrizes.name, description: schema.eventPrizes.description, trackId: schema.eventPrizes.trackId, amount: schema.eventPrizes.amount, currency: schema.eventPrizes.currency, sortOrder: schema.eventPrizes.sortOrder })
+    .from(schema.eventPrizes).where(eq(schema.eventPrizes.eventId, eventId)).orderBy(schema.eventPrizes.sortOrder, schema.eventPrizes.createdAt);
 
   return {
     event: {
@@ -262,6 +265,7 @@ export async function getOrganizerDocument(
     customQuestions: event.customQuestions,
   },
     tracks,
+    prizes,
     members,
     applications: applications.map((application) => ({
       id: application.id,

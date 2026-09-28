@@ -85,6 +85,9 @@ import {
   addTrackAction,
   moveQuestionAction,
   moveTrackAction,
+  addPrizeAction,
+  removePrizeAction,
+  updatePrizeAction,
   removeQuestionAction,
   removeTrackAction,
   updateQuestionAction,
@@ -362,14 +365,6 @@ export default async function OrganizerPage({
                   />
                 </Field>
               </div>
-              <Field label="Prizes">
-                <Textarea
-                  name="prizeInfo"
-                  rows={2}
-                  defaultValue={doc.event.prizeInfo ?? ""}
-                  placeholder="e.g. $5,000 for the winning team, plus sponsor prizes."
-                />
-              </Field>
               <Field label="Timeline">
                 <Textarea
                   name="timeline"
@@ -396,6 +391,35 @@ export default async function OrganizerPage({
                   placeholder="Eligibility, judging criteria, code of conduct…"
                 />
               </Field>
+            </div>
+          </ActionForm>
+        </Collapsible>
+
+        <Collapsible title="Prizes" meta={<Badge tone="slate">{doc.prizes.length} configured</Badge>}>
+          <p className="mb-4 text-small text-fg-subtle">Add event-wide awards or associate a prize with one of the event tracks.</p>
+          {doc.prizes.length ? <div className="mb-5 space-y-3">{doc.prizes.map((prize) => (
+            <div key={prize.id} className="rounded-lg border border-line-subtle p-3">
+              <ActionForm action={updatePrizeAction.bind(null, eventId, prize.id)} submitLabel="Save prize" layout="inline">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Prize name"><Input name="name" required maxLength={120} defaultValue={prize.name} /></Field>
+                  <Field label="Track"><Select name="trackId" defaultValue={prize.trackId ?? ""}><option value="">All tracks</option>{doc.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}</Select></Field>
+                  <Field label="Amount"><Input name="amount" defaultValue={prize.amount ?? ""} placeholder="5000" /></Field>
+                  <Field label="Currency"><Input name="currency" defaultValue={prize.currency ?? ""} placeholder="USD" maxLength={3} /></Field>
+                  <Field label="Sort order"><Input type="number" name="sortOrder" min={0} defaultValue={prize.sortOrder} /></Field>
+                  <Field label="Description"><Input name="description" defaultValue={prize.description ?? ""} maxLength={1000} /></Field>
+                </div>
+              </ActionForm>
+              <ActionForm action={removePrizeAction.bind(null, eventId, prize.id)} submitLabel="Delete" submitVariant="destructive" submitSize="sm" className="mt-2" />
+            </div>
+          ))}</div> : <p className="mb-4 text-small text-fg-faint">No prizes configured yet.</p>}
+          <ActionForm action={addPrizeAction.bind(null, eventId)} submitLabel="Add prize">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Prize name"><Input name="name" required maxLength={120} placeholder="First place" /></Field>
+              <Field label="Track"><Select name="trackId" defaultValue=""><option value="">All tracks</option>{doc.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}</Select></Field>
+              <Field label="Amount"><Input name="amount" placeholder="5000" /></Field>
+              <Field label="Currency"><Input name="currency" placeholder="USD" maxLength={3} /></Field>
+              <Field label="Sort order"><Input type="number" name="sortOrder" min={0} defaultValue={0} /></Field>
+              <Field label="Description"><Input name="description" maxLength={1000} /></Field>
             </div>
           </ActionForm>
         </Collapsible>

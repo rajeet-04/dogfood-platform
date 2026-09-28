@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CalendarClock, ExternalLink, Globe } from "lucide-react";
-import { and, db, eq, schema } from "@dogfood/db";
+import { and, db, eq, inArray, schema } from "@dogfood/db";
 import {
   getMyJudgeApplication,
   JUDGE_APPLICATION_STATUS_LABEL,
@@ -126,6 +126,15 @@ export default async function EventLandingPage({
 
   const results = await getEventResults(eventId);
   const rubric = await getPublicRubric(eventId);
+  const prizes = await db.select().from(schema.eventPrizes)
+    .where(eq(schema.eventPrizes.eventId, eventId))
+    .orderBy(schema.eventPrizes.sortOrder, schema.eventPrizes.createdAt);
+  const prizeTrackIds = [...new Set(prizes.map((prize) => prize.trackId).filter((id): id is string => Boolean(id)))];
+  const prizeTracks = prizeTrackIds.length
+    ? await db.select({ id: schema.eventTracks.id, name: schema.eventTracks.name }).from(schema.eventTracks)
+        .where(and(eq(schema.eventTracks.eventId, eventId), inArray(schema.eventTracks.id, prizeTrackIds)))
+    : [];
+  const prizeTrackNames = new Map(prizeTracks.map((track) => [track.id, track.name]));
 
   const scoredCriteria = new Set<string>();
   let maxScorers = 0;
@@ -137,7 +146,7 @@ export default async function EventLandingPage({
   }
 
   const briefExtras = [
-    event.prizeInfo ? "Prizes" : null,
+    event.prizeInfo || prizes.length ? "Prizes" : null,
     event.timeline ? "Timeline" : null,
     event.schedule ? "Schedule" : null,
     event.rules ? "Rules" : null,
@@ -224,7 +233,22 @@ export default async function EventLandingPage({
                   ))}
                 >
                   <div className="space-y-4">
-                    {briefSection("Prizes", event.prizeInfo, "event-prize")}
+                    {prizes.length ? (
+                      <div data-testid="event-prizes">
+                        <h3 className="text-small font-semibold text-fg">Prizes</h3>
+                        <ul className="mt-1 space-y-2 text-small text-fg-muted">
+                          {prizes.map((prize) => (
+                            <li key={prize.id} className="rounded-md bg-surface-subtle px-3 py-2">
+                              <span className="font-medium text-fg">{prize.name}</span>
+                              {prize.trackId ? <span> · {prizeTrackNames.get(prize.trackId) ?? "Track"}</span> : null}
+                              {prize.amount ? <span> · {prize.currency ? `${prize.currency} ` : ""}{prize.amount}</span> : null}
+                              {prize.description ? <p className="mt-0.5">{prize.description}</p> : null}
+                            </li>
+                          ))}
+                        </ul>
+                        {event.prizeInfo ? <p className="mt-2 whitespace-pre-wrap">{event.prizeInfo}</p> : null}
+                      </div>
+                    ) : briefSection("Prizes", event.prizeInfo, "event-prize")}
                     {briefSection("Timeline", event.timeline, "event-timeline")}
                     {briefSection("Schedule", event.schedule, "event-schedule")}
                     {briefSection("Rules", event.rules, "event-rules")}

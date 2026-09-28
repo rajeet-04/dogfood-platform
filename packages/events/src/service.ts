@@ -42,6 +42,113 @@ export type CreateEventInput = {
 
 export type EventRow = typeof schema.events.$inferSelect;
 export type MembershipRow = typeof schema.eventMemberships.$inferSelect;
+export type PrizeRow = typeof schema.eventPrizes.$inferSelect;
+
+export type PrizeInput = {
+  name: string;
+  description?: string | null;
+  trackId?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  sortOrder?: number;
+};
+
+function normalizePrizeInput(input: PrizeInput) {
+  const name = normalizeText(input.name);
+  if (!name || name.length > 120) {
+    throw new DogfoodError("VALIDATION_FAILED", "Prize name is required and must be at most 120 characters");
+  }
+  const amount = normalizeText(input.amount);
+  if (amount && !/^\d+(?:\.\d{1,2})?$/.test(amount)) {
+    throw new DogfoodError("VALIDATION_FAILED", "Prize amount must be a non-negative amount with up to two decimal places");
+  }
+  const currency = normalizeText(input.currency)?.toUpperCase() ?? null;
+  if (currency && !/^[A-Z]{3}$/.test(currency)) {
+    throw new DogfoodError("VALIDATION_FAILED", "Currency must be a three-letter code");
+  }
+  const sortOrder = input.sortOrder ?? 0;
+  if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 100000) {
+    throw new DogfoodError("VALIDATION_FAILED", "Sort order must be a whole number between 0 and 100000");
+  }
+  return {
+    name,
+    description: normalizeText(input.description),
+    trackId: normalizeText(input.trackId),
+    amount,
+    currency,
+    sortOrder,
+  };
+}
+
+export async function listEventPrizes(eventId: string): Promise<PrizeRow[]> {
+  const [event] = await db.select({ id: schema.events.id }).from(schema.events)
+    .where(eq(schema.events.id, eventId)).limit(1);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  return db.select().from(schema.eventPrizes)
+    .where(eq(schema.eventPrizes.eventId, eventId))
+    .orderBy(schema.eventPrizes.sortOrder, schema.eventPrizes.createdAt);
+}
+
+export async function createPrize(actor: Actor, eventId: string, input: PrizeInput): Promise<PrizeRow> {
+  const [event] = await db.select().from(schema.events).where(eq(schema.events.id, eventId)).limit(1);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state, ACTION.EVENT_CONFIGURE);
+  const values = normalizePrizeInput(input);
+  if (values.trackId) {
+    const [track] = await db.select({ id: schema.eventTracks.id }).from(schema.eventTracks)
+      .where(and(eq(schema.eventTracks.id, values.trackId), eq(schema.eventTracks.eventId, eventId))).limit(1);
+    if (!track) throw new DogfoodError("NOT_FOUND", "Track not found in this event");
+  }
+  return db.transaction(async (tx) => {
+    const [prize] = await tx.insert(schema.eventPrizes).values({ eventId, ...values }).returning();
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "prize.create", resourceType: "prize", resourceId: prize.id, metadata: { name: prize.name, trackId: prize.trackId } });
+    return prize;
+  });
+}
+
+export async function updatePrize(actor: Actor, eventId: string, prizeId: string, input: Partial<PrizeInput>): Promise<PrizeRow> {
+  const [event] = await db.select().from(schema.events).where(eq(schema.events.id, eventId)).limit(1);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state, ACTION.EVENT_CONFIGURE);
+  const [existing] = await db.select().from(schema.eventPrizes)
+    .where(and(eq(schema.eventPrizes.id, prizeId), eq(schema.eventPrizes.eventId, eventId))).limit(1);
+  if (!existing) throw new DogfoodError("NOT_FOUND", "Prize not found");
+  const next = normalizePrizeInput({
+    name: input.name ?? existing.name,
+    description: input.description === undefined ? existing.description : input.description,
+    trackId: input.trackId === undefined ? existing.trackId : input.trackId,
+    amount: input.amount === undefined ? existing.amount : input.amount,
+    currency: input.currency === undefined ? existing.currency : input.currency,
+    sortOrder: input.sortOrder ?? existing.sortOrder,
+  });
+  if (next.trackId) {
+    const [track] = await db.select({ id: schema.eventTracks.id }).from(schema.eventTracks)
+      .where(and(eq(schema.eventTracks.id, next.trackId), eq(schema.eventTracks.eventId, eventId))).limit(1);
+    if (!track) throw new DogfoodError("NOT_FOUND", "Track not found in this event");
+  }
+  return db.transaction(async (tx) => {
+    const [prize] = await tx.update(schema.eventPrizes).set(next)
+      .where(and(eq(schema.eventPrizes.id, prizeId), eq(schema.eventPrizes.eventId, eventId))).returning();
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "prize.update", resourceType: "prize", resourceId: prizeId, metadata: { name: prize.name, trackId: prize.trackId } });
+    return prize;
+  });
+}
+
+export async function deletePrize(actor: Actor, eventId: string, prizeId: string): Promise<void> {
+  const [event] = await db.select().from(schema.events).where(eq(schema.events.id, eventId)).limit(1);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(actor, eventId, event.state, ACTION.EVENT_CONFIGURE);
+  if (event.state === "PUBLISHED" || event.state === "ARCHIVED") {
+    throw new DogfoodError("CONFLICT", "Published event prizes cannot be deleted");
+  }
+  const [prize] = await db.select().from(schema.eventPrizes)
+    .where(and(eq(schema.eventPrizes.id, prizeId), eq(schema.eventPrizes.eventId, eventId))).limit(1);
+  if (!prize) throw new DogfoodError("NOT_FOUND", "Prize not found");
+  await db.transaction(async (tx) => {
+    await tx.delete(schema.eventPrizes).where(and(eq(schema.eventPrizes.id, prizeId), eq(schema.eventPrizes.eventId, eventId)));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "prize.delete", resourceType: "prize", resourceId: prizeId, metadata: { name: prize.name } });
+  });
+}
 
 async function membershipRoles(
   userId: string,
