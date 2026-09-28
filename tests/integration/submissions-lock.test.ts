@@ -101,6 +101,7 @@ describe("submission locking", () => {
 
     await expect(
       reviseProject(actorFor(participant.id), event.id, project.id, {
+        expectedCurrentRevisionId: project.currentRevision.id,
         title: "New Title",
         description: "new description",
       }),

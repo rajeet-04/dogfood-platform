@@ -5,6 +5,7 @@ import { ActionForm } from "../../../../components/action-form";
 import { Badge, type BadgeTone } from "../../../../components/badge";
 import { Collapsible } from "../../../../components/collapsible";
 import { NotAllowed } from "../../../../components/not-allowed";
+import { ProjectImagePicker } from "../../../../components/project-image-picker";
 import {
   ResultsMeta,
   ResultsTable,
@@ -12,7 +13,7 @@ import {
 import { Alert } from "../../../../components/ui/alert";
 import { Card, CardBody, CardFooter, CardHeader } from "../../../../components/ui/card";
 import { EmptyStatePanel } from "../../../../components/ui/empty-state";
-import { AddPanel, Field, Input, Textarea } from "../../../../components/ui/input";
+import { AddPanel, Field, Input, Select, Textarea } from "../../../../components/ui/input";
 import { Page, PageHeader } from "../../../../components/ui/page-header";
 import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../../../lib/event-flow";
 import { isUuidId } from "../../../../lib/ids";
@@ -298,7 +299,12 @@ export default async function ParticipantPage({
                           submitLabel="Save revision"
                         >
                           <ProjectFields
+                            eventId={eventId}
+                            tracks={home.tracks}
+                            questions={home.event.customQuestions}
                             defaults={{
+                              currentRevisionId:
+                                home.project.currentRevision.id,
                               title: home.project.currentRevision.title,
                               tagline: home.project.currentRevision.tagline ?? "",
                               description:
@@ -311,20 +317,27 @@ export default async function ParticipantPage({
                                 home.project.currentRevision.demoVideoUrl ?? "",
                               techTags:
                                 home.project.currentRevision.techTags.join(", "),
+                              trackId: home.project.currentRevision.trackId,
+                              thumbnailAssetId:
+                                home.project.currentRevision.thumbnailAssetId,
+                              imageAssetIds:
+                                home.project.currentRevision.imageAssetIds,
+                              customAnswers:
+                                home.project.currentRevision.customAnswers,
                             }}
                           />
                         </ActionForm>
                         <div className="border-t border-line-subtle pt-4">
-                          <p className="mb-3 text-small text-fg-subtle">
-                            Ready for the judges? Submitting locks the revision.
-                          </p>
+                          <Alert tone="warning" className="mb-3">
+                            Save the revision first. Submission uses the last saved revision and locks it for judging.
+                          </Alert>
                           <ActionForm
                             action={submitProjectAction.bind(
                               null,
                               eventId,
                               home.project.id,
                             )}
-                            submitLabel="Submit for judging"
+                            submitLabel="Submit saved revision"
                           />
                         </div>
                       </>
@@ -363,7 +376,11 @@ export default async function ParticipantPage({
                   submitLabel="Create project"
                 >
                   <input type="hidden" name="teamId" value={home.team.id} />
-                  <ProjectFields />
+                  <ProjectFields
+                    eventId={eventId}
+                    tracks={home.tracks}
+                    questions={home.event.customQuestions}
+                  />
                 </ActionForm>
               </div>
             ) : (
@@ -487,9 +504,22 @@ export default async function ParticipantPage({
 }
 
 function ProjectFields({
+  eventId,
+  tracks,
+  questions,
   defaults,
 }: {
+  eventId: string;
+  tracks: Array<{ id: string; name: string }>;
+  questions: Array<{
+    id: string;
+    prompt: string;
+    required: boolean;
+    visibility: "PUBLIC" | "ORGANIZER_ONLY";
+    order: number;
+  }>;
   defaults?: {
+    currentRevisionId: string;
     title: string;
     tagline: string;
     description: string;
@@ -497,21 +527,35 @@ function ProjectFields({
     liveUrl: string;
     demoVideoUrl: string;
     techTags: string;
+    trackId: string | null;
+    thumbnailAssetId: string | null;
+    imageAssetIds: string[];
+    customAnswers: Record<string, string>;
   };
 }) {
   return (
     <div className="space-y-4">
-      <Field label="Title" required>
-        <Input type="text" name="title" required defaultValue={defaults?.title} />
+      {defaults ? (
+        <input
+          type="hidden"
+          name="expectedCurrentRevisionId"
+          value={defaults.currentRevisionId}
+        />
+      ) : null}
+      <p className="text-caption text-fg-subtle">
+        Save a draft at any stage. Fields marked required must be complete before you submit for judging.
+      </p>
+      <Field label="Title">
+        <Input type="text" name="title" maxLength={120} defaultValue={defaults?.title} />
       </Field>
       <Field label="Tagline" description="One line that sells the project.">
         <Input type="text" name="tagline" defaultValue={defaults?.tagline} />
       </Field>
-      <Field label="Description" required>
+      <Field label="Description">
         <Textarea
           name="description"
-          required
           rows={4}
+          maxLength={4_000}
           defaultValue={defaults?.description}
         />
       </Field>
@@ -540,6 +584,38 @@ function ProjectFields({
           defaultValue={defaults?.techTags}
         />
       </Field>
+      {tracks.length > 0 ? (
+        <Field label="Track" description="Optional.">
+          <Select name="trackId" defaultValue={defaults?.trackId ?? ""}>
+            <option value="">Choose a track</option>
+            {tracks.map((track) => (
+              <option key={track.id} value={track.id}>
+                {track.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+      <ProjectImagePicker
+        eventId={eventId}
+        initialAssetIds={defaults?.imageAssetIds}
+        initialThumbnailAssetId={defaults?.thumbnailAssetId}
+      />
+      {questions.map((question) => (
+        <Field
+          key={question.id}
+          label={question.prompt}
+          required={question.required}
+          description={question.required ? "Answer this before submitting." : undefined}
+        >
+          <Textarea
+            name={`customAnswer:${question.id}`}
+            rows={3}
+            maxLength={4_000}
+            defaultValue={defaults?.customAnswers[question.id] ?? ""}
+          />
+        </Field>
+      ))}
     </div>
   );
 }

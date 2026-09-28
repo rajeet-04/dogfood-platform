@@ -80,6 +80,16 @@ import {
   generateRankingAction,
   publishRankingAction,
 } from "../../../../server/actions/ranking";
+import {
+  addQuestionAction,
+  addTrackAction,
+  moveQuestionAction,
+  moveTrackAction,
+  removeQuestionAction,
+  removeTrackAction,
+  updateQuestionAction,
+  updateTrackAction,
+} from "../../../../server/actions/submission-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -432,6 +442,212 @@ export default async function OrganizerPage({
               </Field>
             </div>
           </ActionForm>
+        </Collapsible>
+
+        <Collapsible
+          title="Submission settings"
+          meta={
+            <>
+              <Badge tone="slate">{doc.tracks.length} tracks</Badge>
+              <Badge tone="slate">
+                {doc.event.customQuestions.length} questions
+              </Badge>
+            </>
+          }
+          defaultOpen
+        >
+          <div className="grid gap-8 lg:grid-cols-2">
+            <section aria-labelledby="event-tracks-heading" className="min-w-0">
+              <div className="mb-3">
+                <h3 id="event-tracks-heading" className="text-subheading font-semibold text-fg">
+                  Tracks
+                </h3>
+                <p className="mt-0.5 text-caption text-fg-subtle">
+                  Give participants a category to select for their submission.
+                </p>
+              </div>
+              {doc.tracks.length ? (
+                <ul className="mb-4 divide-y divide-line-subtle rounded-lg border border-line-subtle">
+                  {doc.tracks.map((track, index) => (
+                    <li
+                      key={track.id}
+                      className="flex flex-wrap items-start justify-between gap-3 px-3.5 py-3"
+                    >
+                      <ActionForm
+                        action={updateTrackAction.bind(null, eventId, track.id)}
+                        submitLabel="Save track"
+                        className="min-w-0 flex-1 basis-48"
+                      >
+                        <Field label="Track name" required>
+                          <Input name="name" required maxLength={100} defaultValue={track.name} />
+                        </Field>
+                      </ActionForm>
+                      <div className="flex flex-wrap gap-2">
+                        <ActionForm
+                          action={moveTrackAction.bind(null, eventId, track.id, "UP")}
+                          submitLabel={`Move track ${index + 1} up`}
+                          submitVariant="outline"
+                          submitSize="sm"
+                          submitDisabled={index === 0}
+                        />
+                        <ActionForm
+                          action={moveTrackAction.bind(null, eventId, track.id, "DOWN")}
+                          submitLabel={`Move track ${index + 1} down`}
+                          submitVariant="outline"
+                          submitSize="sm"
+                          submitDisabled={index === doc.tracks.length - 1}
+                        />
+                        <ActionForm
+                          action={removeTrackAction.bind(null, eventId, track.id)}
+                          submitLabel="Remove"
+                          pendingLabel="Removing…"
+                          submitVariant="outline"
+                          submitSize="sm"
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-4 rounded-lg border border-dashed border-line-strong px-3.5 py-3 text-small text-fg-subtle">
+                  No tracks yet. Participants can submit without choosing one.
+                </p>
+              )}
+              <AddPanel title="Add a track">
+                <ActionForm
+                  action={addTrackAction.bind(null, eventId)}
+                  submitLabel="Add track"
+                  pendingLabel="Adding…"
+                >
+                  <Field label="Track name" required>
+                    <Input
+                      name="name"
+                      required
+                      maxLength={100}
+                      placeholder="e.g. Climate tech"
+                    />
+                  </Field>
+                </ActionForm>
+              </AddPanel>
+            </section>
+
+            <section aria-labelledby="custom-questions-heading" className="min-w-0">
+              <div className="mb-3">
+                <h3 id="custom-questions-heading" className="text-subheading font-semibold text-fg">
+                  Project questions
+                </h3>
+                <p className="mt-0.5 text-caption text-fg-subtle">
+                  Changing a public question to organizer-only hides existing answers. Making it public exposes answers only after participants save new revisions.
+                </p>
+              </div>
+              {doc.event.customQuestions.length ? (
+                <ul className="mb-4 divide-y divide-line-subtle rounded-lg border border-line-subtle">
+                  {doc.event.customQuestions.map((question, index) => (
+                    <li key={question.id} className="p-3.5">
+                      <div className="mb-2 text-caption font-semibold text-fg-subtle">
+                        Question {index + 1}
+                      </div>
+                      <div className="flex flex-wrap items-start gap-2">
+                        <ActionForm
+                          action={updateQuestionAction.bind(null, eventId, question.id)}
+                          submitLabel="Save question"
+                          pendingLabel="Saving…"
+                          className="min-w-0 flex-1 basis-64"
+                        >
+                          <Field label="Prompt" required>
+                            <Textarea
+                              name="prompt"
+                              rows={2}
+                              required
+                              maxLength={300}
+                              defaultValue={question.prompt}
+                            />
+                          </Field>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <label className="flex min-h-9 items-center gap-2 text-small text-fg">
+                              <Checkbox
+                                name="required"
+                                defaultChecked={question.required}
+                              />
+                              Required answer
+                            </label>
+                            <Field label="Answer visibility">
+                              <Select
+                                name="visibility"
+                                defaultValue={question.visibility}
+                              >
+                                <option value="PUBLIC">Public</option>
+                                <option value="ORGANIZER_ONLY">Organizers only</option>
+                              </Select>
+                            </Field>
+                          </div>
+                        </ActionForm>
+                        <ActionForm
+                          action={removeQuestionAction.bind(null, eventId, question.id)}
+                          submitLabel="Remove"
+                          pendingLabel="Removing…"
+                          submitVariant="outline"
+                          submitSize="sm"
+                          className="shrink-0"
+                        />
+                        <div className="flex shrink-0 flex-col gap-2">
+                          <ActionForm
+                            action={moveQuestionAction.bind(null, eventId, question.id, "UP")}
+                            submitLabel={`Move question ${index + 1} up`}
+                            submitVariant="outline"
+                            submitSize="sm"
+                            submitDisabled={index === 0}
+                          />
+                          <ActionForm
+                            action={moveQuestionAction.bind(null, eventId, question.id, "DOWN")}
+                            submitLabel={`Move question ${index + 1} down`}
+                            submitVariant="outline"
+                            submitSize="sm"
+                            submitDisabled={index === doc.event.customQuestions.length - 1}
+                          />
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-4 rounded-lg border border-dashed border-line-strong px-3.5 py-3 text-small text-fg-subtle">
+                  No custom questions yet.
+                </p>
+              )}
+              <AddPanel title="Add a project question">
+                <ActionForm
+                  action={addQuestionAction.bind(null, eventId)}
+                  submitLabel="Add question"
+                  pendingLabel="Adding…"
+                >
+                  <div className="space-y-3">
+                    <Field label="Prompt" required>
+                      <Textarea
+                        name="prompt"
+                        rows={2}
+                        required
+                        maxLength={300}
+                        placeholder="What would you like participants to tell you?"
+                      />
+                    </Field>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="flex min-h-9 items-center gap-2 text-small text-fg">
+                        <Checkbox name="required" />
+                        Required answer
+                      </label>
+                      <Field label="Answer visibility">
+                        <Select name="visibility" defaultValue="ORGANIZER_ONLY">
+                          <option value="PUBLIC">Public</option>
+                          <option value="ORGANIZER_ONLY">Organizers only</option>
+                        </Select>
+                      </Field>
+                    </div>
+                  </div>
+                </ActionForm>
+              </AddPanel>
+            </section>
+          </div>
         </Collapsible>
 
         <Collapsible

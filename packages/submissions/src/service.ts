@@ -42,6 +42,7 @@ export type CreateProjectInput = {
 };
 
 export type RevisionInput = {
+  expectedCurrentRevisionId: string;
   title: string;
   tagline?: string | null;
   description: string;
@@ -272,6 +273,10 @@ export async function reviseProject(
     event.state,
   );
 
+  if (project.currentRevisionId !== input.expectedCurrentRevisionId) {
+    throw new DogfoodError("CONFLICT", "This project changed since you opened it. Reload and try again.");
+  }
+
   assertProjectUnlocked(project);
   assertSubmissionWindow(new Date(), event);
 
@@ -281,44 +286,58 @@ export async function reviseProject(
   const imageAssetIds = input.imageAssetIds ?? await currentImageIds(previous.id);
   await validateProjectReferences(eventId, content.trackId, content.thumbnailAssetId, imageAssetIds);
 
-  await db.transaction(async (tx) => {
-    const latest = await tx
-      .select({ revisionNumber: schema.projectRevisions.revisionNumber })
-      .from(schema.projectRevisions)
-      .where(eq(schema.projectRevisions.projectId, projectId))
-      .orderBy(desc(schema.projectRevisions.revisionNumber))
-      .limit(1);
-    const next = (latest[0]?.revisionNumber ?? 0) + 1;
+  try {
+    await db.transaction(async (tx) => {
+      const latest = await tx
+        .select({ revisionNumber: schema.projectRevisions.revisionNumber })
+        .from(schema.projectRevisions)
+        .where(eq(schema.projectRevisions.projectId, projectId))
+        .orderBy(desc(schema.projectRevisions.revisionNumber))
+        .limit(1);
+      const next = (latest[0]?.revisionNumber ?? 0) + 1;
 
-    const [revision] = await tx
-      .insert(schema.projectRevisions)
-      .values({
-        projectId,
-        revisionNumber: next,
-        ...content,
-        createdBy: actor.userId,
-      })
-      .returning();
+      const [revision] = await tx
+        .insert(schema.projectRevisions)
+        .values({
+          projectId,
+          revisionNumber: next,
+          ...content,
+          createdBy: actor.userId,
+        })
+        .returning();
 
-    if (imageAssetIds.length) {
-      await tx.insert(schema.projectRevisionImages).values(
-        imageAssetIds.map((assetId, position) => ({ revisionId: revision.id, assetId, position })),
-      );
-    }
+      if (imageAssetIds.length) {
+        await tx.insert(schema.projectRevisionImages).values(
+          imageAssetIds.map((assetId, position) => ({ revisionId: revision.id, assetId, position })),
+        );
+      }
 
-    await tx
-      .update(schema.projects)
-      .set({ currentRevisionId: revision.id })
-      .where(eq(schema.projects.id, projectId));
-    await appendAuditEvent(tx, {
-      eventId,
-      actorId: actor.userId,
-      action: "project.revise",
-      resourceType: "project",
-      resourceId: projectId,
-      metadata: { revisionNumber: next, revisionId: revision.id },
+      const updatedProjects = await tx
+        .update(schema.projects)
+        .set({ currentRevisionId: revision.id })
+        .where(and(
+          eq(schema.projects.id, projectId),
+          eq(schema.projects.currentRevisionId, input.expectedCurrentRevisionId),
+        ))
+        .returning({ id: schema.projects.id });
+      if (!updatedProjects[0]) {
+        throw new DogfoodError("CONFLICT", "This project changed since you opened it. Reload and try again.");
+      }
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "project.revise",
+        resourceType: "project",
+        resourceId: projectId,
+        metadata: { revisionNumber: next, revisionId: revision.id },
+      });
     });
-  });
+  } catch (error) {
+    if (sqlState(error) === "23505") {
+      throw new DogfoodError("CONFLICT", "This project changed since you opened it. Reload and try again.");
+    }
+    throw error;
+  }
 
   const updated = await getProjectById(projectId);
   if (!updated) throw new DogfoodError("NOT_FOUND", "Project not found");

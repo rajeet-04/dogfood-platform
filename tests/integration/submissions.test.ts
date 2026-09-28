@@ -90,6 +90,7 @@ describe("projects and immutable revisions", () => {
       tagline: "original tagline",
     });
     const revised = await reviseProject(participant, event.id, project.id, {
+      expectedCurrentRevisionId: project.currentRevision.id,
       title: "Second Title",
       description: "second body",
       tagline: "revised tagline",
@@ -123,6 +124,32 @@ describe("projects and immutable revisions", () => {
     expect(persisted[0].currentRevisionId).toBe(rev2.id);
   });
 
+  it("rejects a save based on a stale revision without overwriting the latest", async () => {
+    const { event, participant, teamId } = await eventInSubmissions();
+    const project = await createProject(participant, event.id, {
+      teamId,
+      title: "First title",
+      description: "first body",
+    });
+    const latest = await reviseProject(participant, event.id, project.id, {
+      expectedCurrentRevisionId: project.currentRevision.id,
+      title: "Latest title",
+      description: "latest body",
+    });
+
+    await expect(reviseProject(participant, event.id, project.id, {
+      expectedCurrentRevisionId: project.currentRevision.id,
+      title: "Stale title",
+      description: "stale body",
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const [persisted] = await db.select().from(schema.projects).where(eq(schema.projects.id, project.id));
+    expect(persisted.currentRevisionId).toBe(latest.currentRevision.id);
+    const revisions = await db.select().from(schema.projectRevisions)
+      .where(eq(schema.projectRevisions.projectId, project.id));
+    expect(revisions).toHaveLength(2);
+  });
+
   it("submits and withdraws a project within the window", async () => {
     const { event, participant, teamId } = await eventInSubmissions();
     const project = await createProject(participant, event.id, {
@@ -151,6 +178,7 @@ describe("projects and immutable revisions", () => {
     });
     await expect(submitProject(participant, event.id, project.id)).rejects.toMatchObject({ code: "SUBMISSION_INCOMPLETE" });
     const revised = await reviseProject(participant, event.id, project.id, {
+      expectedCurrentRevisionId: project.currentRevision.id,
       title: "Answers", description: "A project", customAnswers: { impact: "Useful" },
     });
     expect(revised.currentRevision.customAnswers).toEqual({ impact: "Useful" });
@@ -182,6 +210,7 @@ describe("projects and immutable revisions", () => {
 
     await expect(
       reviseProject(participant, event.id, project.id, {
+        expectedCurrentRevisionId: project.currentRevision.id,
         title: "Late Edit",
         description: "nope",
       }),
@@ -241,6 +270,7 @@ describe("projects and immutable revisions", () => {
 
     await expect(
       reviseProject(actorFor(otherOrg.id), otherEvent.id, project.id, {
+        expectedCurrentRevisionId: project.currentRevision.id,
         title: "Hack",
         description: "cross-event",
       }),
