@@ -1,57 +1,69 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
 import { ActionForm } from "../../../components/action-form";
+import { ButtonLink } from "../../../components/ui/button";
+import { Field, Input, Textarea } from "../../../components/ui/input";
+import { Page, PageHeader } from "../../../components/ui/page-header";
 import { getActor } from "../../../server/session";
 import { createEventAction } from "../../../server/actions/event";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "New event" };
 
 export default async function NewEventPage() {
   const actor = await getActor();
   if (!actor) redirect("/login");
 
   return (
-    <main className="mx-auto max-w-lg px-4 py-16">
-      <div className="rounded-2xl border border-slate-200 bg-white p-8">
-        <h1 className="text-2xl font-bold tracking-tight">Create an event</h1>
-        <p className="mt-1 mb-6 text-sm text-slate-500">
-          You become the organizer of the new event automatically.
-        </p>
-        <ActionForm action={createEventAction} submitLabel="Create event">
-          <label className="block text-sm font-medium">
-            Slug
-            <input
+    <Page width="narrow">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Events", href: "/events" },
+          { label: "New event" },
+        ]}
+        title="Create an event"
+        description="You become the organizer of the new event automatically."
+        className="mb-6"
+      />
+
+      <div className="rounded-xl border border-line bg-surface p-5 shadow-xs sm:p-6">
+        <ActionForm
+          action={createEventAction}
+          submitLabel="Create event"
+          className="space-y-4"
+          footer={
+            <ButtonLink href="/events" variant="ghost">
+              Cancel
+            </ButtonLink>
+          }
+        >
+          <Field
+            label="Slug"
+            description="Lowercase letters, digits and dashes. This becomes the public URL."
+          >
+            <Input
               type="text"
               name="slug"
               required
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
               placeholder="summer-hack-2026"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              autoFocus
             />
-            <span className="mt-1 block text-xs text-slate-400">
-              Lowercase letters, digits and dashes. This becomes the public URL.
-            </span>
-          </label>
-          <label className="mt-4 block text-sm font-medium">
-            Name
-            <input
-              type="text"
-              name="name"
-              required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium">
-            Description (optional)
-            <textarea
-              name="description"
-              rows={3}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-            />
-          </label>
+          </Field>
+          <Field label="Name">
+            <Input type="text" name="name" required placeholder="Summer Hack 2026" />
+          </Field>
+          <Field
+            label="Description (optional)"
+            description="Shown on the public event page and in the catalogue."
+          >
+            <Textarea name="description" rows={3} />
+          </Field>
           <input type="hidden" name="timezone" value="UTC" />
         </ActionForm>
       </div>
-    </main>
+    </Page>
   );
 }

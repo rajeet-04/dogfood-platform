@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowRight, CalendarClock, ExternalLink, Globe } from "lucide-react";
 import { and, db, eq, schema } from "@dogfood/db";
 import {
   getMyJudgeApplication,
@@ -7,13 +8,15 @@ import {
 } from "@dogfood/applications";
 
 import { ActionForm } from "../../../components/action-form";
-import { Badge, Metric, Stat } from "../../../components/badge";
+import { Badge, Metric } from "../../../components/badge";
 import { Collapsible } from "../../../components/collapsible";
 import {
   ResultsMeta,
   ResultsTable,
 } from "../../../components/results-table";
-import { EVENT_STATE_LABEL } from "../../../lib/event-flow";
+import { Textarea } from "../../../components/ui/input";
+import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../../lib/event-flow";
+import { isUuidId } from "../../../lib/ids";
 import {
   applyAsJudgeAction,
   withdrawJudgeApplicationAction,
@@ -26,15 +29,12 @@ import { getActor } from "../../../server/session";
 export const dynamic = "force-dynamic";
 
 function formatDateTime(value: Date | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "Not set";
   return new Date(value).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   });
 }
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function EventLandingPage({
   params,
@@ -47,7 +47,7 @@ export default async function EventLandingPage({
   // The segment is an id, but slugs are accepted too: a non-UUID value can
   // never match the uuid column, so it is matched against the slug instead.
   // Everything downstream uses the resolved id.
-  const isUuid = UUID_PATTERN.test(eventParam);
+  const isUuid = isUuidId(eventParam);
   const rows = await db
     .select()
     .from(schema.events)
@@ -75,15 +75,27 @@ export default async function EventLandingPage({
     roles = memberships.map((m) => m.role);
   }
 
-  const links: Array<{ label: string; href: string }> = [];
+  const links: Array<{ label: string; href: string; hint: string }> = [];
   if (roles.includes("PARTICIPANT")) {
-    links.push({ label: "Participant dashboard", href: `/events/${eventId}/participant` });
+    links.push({
+      label: "Participant dashboard",
+      hint: "Team, project, submission deadlines and your result",
+      href: `/events/${eventId}/participant`,
+    });
   }
   if (roles.includes("JUDGE")) {
-    links.push({ label: "Judge queue", href: `/events/${eventId}/judge` });
+    links.push({
+      label: "Judge queue",
+      hint: "Assigned projects, evaluations in progress and coverage",
+      href: `/events/${eventId}/judge`,
+    });
   }
   if (roles.includes("ORGANIZER") || actor?.isPlatformAdmin) {
-    links.push({ label: "Organizer dashboard", href: `/events/${eventId}/organizer` });
+    links.push({
+      label: "Organizer dashboard",
+      hint: "Members, rubrics, judging, certificates and event state",
+      href: `/events/${eventId}/organizer`,
+    });
   }
 
   const stateLabel = EVENT_STATE_LABEL[event.state] ?? event.state;
@@ -131,55 +143,70 @@ export default async function EventLandingPage({
     event.rules ? "Rules" : null,
   ].filter(Boolean) as string[];
 
+  const briefSection = (heading: string, body: string | null, testId: string) =>
+    body ? (
+      <div>
+        <h3 className="text-small font-semibold text-fg">{heading}</h3>
+        <p
+          data-testid={testId}
+          className="mt-1 text-small whitespace-pre-wrap text-fg-muted"
+        >
+          {body}
+        </p>
+      </div>
+    ) : null;
+
   return (
     <main>
-      <header className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-4 py-16 text-white sm:py-20">
-        <div className="mx-auto max-w-5xl">
-          <Badge
-            tone="indigo"
-            className="bg-white/15 text-xs font-semibold tracking-wide text-white uppercase"
-          >
-            {stateLabel}
-          </Badge>
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
-            {event.name}
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm text-indigo-100">/{event.slug}</p>
+      <div className="border-b border-line bg-surface">
+        <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+          <Badge tone={EVENT_STATE_TONE[event.state]}>{stateLabel}</Badge>
+          <h1 className="mt-3 text-display font-semibold text-fg">{event.name}</h1>
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-small text-fg-subtle">
+            <span className="font-mono text-caption">/{event.slug}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Globe aria-hidden="true" className="size-3.5" />
+              {event.timezone}
+            </span>
+          </p>
         </div>
-      </header>
+      </div>
 
       {event.state === "ARCHIVED" ? (
         <div
           data-testid="archived-notice"
-          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-800"
+          className="border-b border-warning-border bg-warning-soft px-4 py-2.5 text-center text-small font-medium text-warning-fg"
         >
           This event has been archived and is no longer active.
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0 space-y-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8">
+        <div className="min-w-0 space-y-5">
           {event.description || event.websiteUrl || briefExtras.length > 0 ? (
-            <div
-              className="rounded-2xl border border-slate-200 bg-white p-6"
+            <section
+              className="rounded-xl border border-line bg-surface p-5"
               data-testid="event-about"
             >
-              <h2 className="text-lg font-semibold">About this event</h2>
+              <h2 className="text-heading font-semibold text-fg">
+                About this event
+              </h2>
               {event.description ? (
-                <p className="mt-2 whitespace-pre-wrap text-slate-600">
+                <p className="mt-2 text-body whitespace-pre-wrap text-fg-muted">
                   {event.description}
                 </p>
               ) : null}
 
               {event.websiteUrl ? (
-                <p className="mt-3 text-sm">
+                <p className="mt-3">
                   <a
                     href={event.websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="event-website-link"
-                    className="font-medium text-indigo-600 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-small font-medium text-accent hover:text-accent-hover hover:underline"
                   >
+                    <ExternalLink aria-hidden="true" className="size-3.5" />
                     Visit the event website
                   </a>
                 </p>
@@ -188,88 +215,31 @@ export default async function EventLandingPage({
               {briefExtras.length > 0 ? (
                 <Collapsible
                   variant="plain"
-                  className="mt-4 border-t border-slate-100 pt-1"
-                  title={
-                    <span className="text-base">Event brief</span>
-                  }
+                  className="mt-4 border-t border-line-subtle pt-1"
+                  title={<span className="text-body">Event brief</span>}
                   meta={briefExtras.map((label) => (
                     <Badge key={label} tone="slate">
                       {label}
                     </Badge>
                   ))}
                 >
-                  {event.prizeInfo ? (
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-900">Prizes</h3>
-                      <p
-                        data-testid="event-prize"
-                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                      >
-                        {event.prizeInfo}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {event.timeline ? (
-                    <div className={event.prizeInfo ? "mt-5" : undefined}>
-                      <h3 className="text-sm font-semibold text-slate-900">
-                        Timeline
-                      </h3>
-                      <p
-                        data-testid="event-timeline"
-                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                      >
-                        {event.timeline}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {event.schedule ? (
-                    <div
-                      className={
-                        event.prizeInfo || event.timeline ? "mt-5" : undefined
-                      }
-                    >
-                      <h3 className="text-sm font-semibold text-slate-900">
-                        Schedule
-                      </h3>
-                      <p
-                        data-testid="event-schedule"
-                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                      >
-                        {event.schedule}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {event.rules ? (
-                    <div
-                      className={
-                        event.prizeInfo || event.timeline || event.schedule
-                          ? "mt-5"
-                          : undefined
-                      }
-                    >
-                      <h3 className="text-sm font-semibold text-slate-900">Rules</h3>
-                      <p
-                        data-testid="event-rules"
-                        className="mt-1 whitespace-pre-wrap text-sm text-slate-600"
-                      >
-                        {event.rules}
-                      </p>
-                    </div>
-                  ) : null}
+                  <div className="space-y-4">
+                    {briefSection("Prizes", event.prizeInfo, "event-prize")}
+                    {briefSection("Timeline", event.timeline, "event-timeline")}
+                    {briefSection("Schedule", event.schedule, "event-schedule")}
+                    {briefSection("Rules", event.rules, "event-rules")}
+                  </div>
                 </Collapsible>
               ) : null}
-            </div>
+            </section>
           ) : null}
 
           {results ? (
             <section
-              className="rounded-2xl border border-slate-200 bg-white p-6"
+              className="rounded-xl border border-line bg-surface p-5"
               data-testid="public-results"
             >
-              <h2 className="text-lg font-semibold">Results</h2>
+              <h2 className="text-heading font-semibold text-fg">Results</h2>
               <ResultsMeta results={results} />
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <Metric
@@ -303,28 +273,28 @@ export default async function EventLandingPage({
               testId="public-rubric"
               meta={`${rubric.name} · v${rubric.version} · ${rubric.criteria.length} criteria · weight ${rubric.weightSum}`}
             >
-              <p className="text-sm text-slate-500">
+              <p className="text-small text-fg-subtle">
                 Judges score every submitted project against these criteria.
               </p>
-              <ul className="mt-3 divide-y divide-slate-100">
+              <ul className="mt-3 divide-y divide-line-subtle">
                 {rubric.criteria.map((criterion) => (
-                  <li key={criterion.name} className="py-3 first:pt-0 last:pb-0">
+                  <li key={criterion.name} className="py-2.5 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-small font-medium text-fg">
                         {criterion.name}
                         {criterion.optional ? (
-                          <span className="ml-2 text-xs font-normal text-slate-400">
+                          <span className="ml-2 text-caption font-normal text-fg-faint">
                             optional
                           </span>
                         ) : null}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-caption text-fg-subtle">
                         weight {criterion.weight} · {criterion.minScore}–
                         {criterion.maxScore}
                       </p>
                     </div>
                     {criterion.description ? (
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-small text-fg-muted">
                         {criterion.description}
                       </p>
                     ) : null}
@@ -336,17 +306,25 @@ export default async function EventLandingPage({
 
           {links.length ? (
             <section>
-              <h2 className="mb-3 text-lg font-semibold">Your dashboard</h2>
-              <ul className="grid gap-3 sm:grid-cols-2">
+              <h2 className="mb-2.5 text-heading font-semibold text-fg">
+                Your dashboard
+              </h2>
+              <ul className="grid gap-2.5 sm:grid-cols-2">
                 {links.map((link) => (
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4 font-medium hover:border-indigo-300 hover:shadow-sm"
+                      className="group flex h-full flex-col rounded-xl border border-line bg-surface p-4 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-sm"
                     >
-                      <span>{link.label}</span>
-                      <span className="text-slate-400 transition-transform group-hover:translate-x-0.5">
-                        →
+                      <span className="flex items-center justify-between gap-2 font-medium text-fg">
+                        {link.label}
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-fg-faint transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
+                        />
+                      </span>
+                      <span className="mt-1 text-small text-fg-subtle">
+                        {link.hint}
                       </span>
                     </Link>
                   </li>
@@ -356,8 +334,8 @@ export default async function EventLandingPage({
           ) : null}
 
           {!links.length && !canJoin && !application ? (
-            <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6">
-              <p className="text-slate-500">
+            <section className="rounded-xl border border-dashed border-line-strong bg-surface-sunken/40 p-5">
+              <p className="text-small text-fg-muted">
                 {actor
                   ? `Registration for this event is ${withinWindow ? "open" : "not open right now"}.`
                   : "Sign in to join this event."}
@@ -365,48 +343,67 @@ export default async function EventLandingPage({
               {!actor && withinWindow ? (
                 <Link
                   href={`/login?next=/events/${eventId}`}
-                  className="mt-4 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"
+                  className="mt-3 inline-flex items-center gap-1.5 text-small font-medium text-accent hover:text-accent-hover hover:underline"
                 >
                   Sign in to join
                 </Link>
               ) : null}
             </section>
           ) : null}
-        </section>
+        </div>
 
-        <aside className="h-fit space-y-6 lg:sticky lg:top-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <section className="rounded-xl border border-line bg-surface p-5">
+            <h2 className="text-caption font-semibold tracking-wide text-fg-faint uppercase">
               Event details
             </h2>
-            <dl className="grid grid-cols-2 gap-4">
-              <Stat label="Status" value={stateLabel} />
-              <Stat label="Timezone" value={event.timezone} />
-              <Stat
-                label="Applications open"
-                value={formatDateTime(event.registrationOpensAt)}
-              />
-              <Stat
-                label="Applications close"
-                value={formatDateTime(event.registrationClosesAt)}
-              />
-              <Stat
-                label="Submissions close"
-                value={formatDateTime(event.submissionClosesAt)}
-              />
+            <dl className="mt-3 space-y-2.5">
+              <div className="flex items-start justify-between gap-3 text-small">
+                <dt className="text-fg-subtle">Status</dt>
+                <dd className="text-right font-medium text-fg">{stateLabel}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-small">
+                <dt className="text-fg-subtle">Timezone</dt>
+                <dd className="text-right font-medium text-fg">
+                  {event.timezone}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-small">
+                <dt className="text-fg-subtle">Applications open</dt>
+                <dd className="text-right font-medium text-fg">
+                  {formatDateTime(event.registrationOpensAt)}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-small">
+                <dt className="text-fg-subtle">Applications close</dt>
+                <dd className="text-right font-medium text-fg">
+                  {formatDateTime(event.registrationClosesAt)}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-small">
+                <dt className="text-fg-subtle">Submissions close</dt>
+                <dd className="text-right font-medium text-fg">
+                  {formatDateTime(event.submissionClosesAt)}
+                </dd>
+              </div>
             </dl>
-          </div>
+          </section>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-line bg-surface p-5">
             {links.length ? (
-              <span className="inline-block rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
-                You are part of this event
-              </span>
+              <div className="rounded-md border border-success-border bg-success-soft px-3 py-2.5">
+                <p className="text-small font-semibold text-success-fg">
+                  You are part of this event
+                </p>
+                <p className="mt-0.5 text-caption text-fg-subtle">
+                  Use your dashboard above to keep working.
+                </p>
+              </div>
             ) : application ? (
-              <div className="rounded-lg border border-slate-200 p-4">
+              <div className="rounded-md border border-line bg-surface-sunken/50 p-3.5">
                 <p
                   data-testid="judge-application-status"
-                  className="text-sm font-semibold text-slate-700"
+                  className="text-small font-semibold text-fg"
                 >
                   Judge application:{" "}
                   {JUDGE_APPLICATION_STATUS_LABEL[
@@ -414,7 +411,7 @@ export default async function EventLandingPage({
                   ] ?? application.status}
                 </p>
                 {application.rationale ? (
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-small text-fg-subtle">
                     {application.rationale}
                   </p>
                 ) : null}
@@ -423,18 +420,18 @@ export default async function EventLandingPage({
                     <ActionForm
                       action={withdrawJudgeApplicationAction.bind(null, eventId)}
                       submitLabel="Withdraw application"
-                      className="[&_button]:w-full [&_button]:bg-slate-100 [&_button]:text-slate-600"
+                      className="[&_button]:w-full"
                     />
                   </div>
                 ) : (
-                  <p className="mt-3 text-xs text-slate-400">
+                  <p className="mt-3 text-caption text-fg-faint">
                     You can submit a new application at any time.
                   </p>
                 )}
               </div>
             ) : canJoin || canApplyAsJudge ? (
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="mb-3 text-sm font-semibold text-slate-700">
+              <div className="rounded-md border border-line bg-surface-sunken/50 p-3.5">
+                <p className="mb-3 text-small font-semibold text-fg">
                   Take part in this event
                 </p>
                 <ActionForm
@@ -445,45 +442,52 @@ export default async function EventLandingPage({
                 <ActionForm
                   action={applyAsJudgeAction.bind(null, eventId)}
                   submitLabel="Apply as judge"
-                  className="mt-2 [&_button]:w-full [&_button]:bg-white [&_button]:text-slate-700 [&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-slate-300 [&_button]:hover:bg-slate-50"
+                  className="mt-2 [&_button]:w-full"
+                  submitVariant="outline"
                 >
-                  <textarea
+                  <Textarea
                     name="rationale"
                     rows={3}
                     placeholder="Optional: tell organizers about your judging experience."
-                    className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="mt-3"
                   />
-                  <label className="mt-3 block text-xs font-medium text-slate-600">
+                  <label className="mt-3 block text-caption font-medium text-fg-subtle">
                     CV or resume (optional)
                     <input
                       type="file"
                       name="attachment"
                       data-testid="judge-application-attachment"
                       accept=".pdf,.doc,.docx,.txt,image/png,image/jpeg"
-                      className="mt-1 block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700"
+                      className="mt-1 block w-full text-caption text-fg-muted file:mr-3 file:rounded-sm file:border-0 file:bg-surface-hover file:px-3 file:py-1.5 file:text-caption file:font-medium file:text-fg"
                     />
                   </label>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-caption text-fg-faint">
                     PDF, Word, text, PNG or JPEG up to 5MB.
                   </p>
                 </ActionForm>
               </div>
             ) : (
-              <p className="rounded-lg bg-slate-50 px-4 py-2.5 text-sm text-slate-500">
-                {actor
-                  ? "Registration closed"
-                  : "Sign in to apply for this event"}
+              <p className="rounded-md bg-surface-sunken px-3 py-2.5 text-small text-fg-subtle">
+                {actor ? "Registration closed" : "Sign in to apply for this event"}
               </p>
             )}
             {!actor && withinWindow ? (
               <Link
                 href={`/login?next=/events/${eventId}`}
-                className="mt-3 block rounded-lg bg-indigo-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-indigo-500"
+                className="mt-3 block rounded-md bg-accent px-3.5 py-2.5 text-center text-small font-semibold text-fg-onAccent transition-colors hover:bg-accent-hover"
               >
                 Sign in to join this event
               </Link>
             ) : null}
-          </div>
+          </section>
+
+          {!actor ? (
+            <p className="flex items-start gap-2 px-1 text-caption text-fg-faint">
+              <CalendarClock aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+              Only the event organizer can change dates, publish results or issue
+              certificates.
+            </p>
+          ) : null}
         </aside>
       </div>
     </main>
