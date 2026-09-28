@@ -2,6 +2,7 @@ import { and, db, desc, eq, schema, type DbTx } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
+import { queueWebhookDeliveries } from "./webhooks";
 
 export type AuditEventInput = {
   eventId: string;
@@ -23,14 +24,15 @@ async function appendAuditEvent(
   tx: DbTx,
   input: AuditEventInput,
 ): Promise<void> {
-  await tx.insert(schema.auditEvents).values({
+  const [auditEvent] = await tx.insert(schema.auditEvents).values({
     eventId: input.eventId,
     actorId: input.actorId,
     action: input.action,
     resourceType: input.resourceType,
     resourceId: input.resourceId ?? null,
     metadata: input.metadata ?? null,
-  });
+  }).returning();
+  if (auditEvent) await queueWebhookDeliveries(tx, auditEvent);
 }
 
 async function queryAudit(

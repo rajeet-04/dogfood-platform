@@ -219,22 +219,27 @@ export default async function OrganizerPage({
           </>
         }
         actions={
-          nextState ? (
-            <ActionForm
-              action={transitionEventAction.bind(null, eventId)}
-              submitLabel={`Advance to ${EVENT_STATE_LABEL[nextState]}`}
-              submitVariant={nextState === "ARCHIVED" ? "destructive" : "primary"}
-            >
-              <input type="hidden" name="toState" value={nextState} />
-            </ActionForm>
-          ) : doc.event.state === "ARCHIVED" ? (
-            <ActionForm
-              action={transitionEventAction.bind(null, eventId)}
-              submitLabel="Unarchive event"
-            >
-              <input type="hidden" name="toState" value="PUBLISHED" />
-            </ActionForm>
-          ) : null
+          <>
+            <ButtonLink href={`/events/${eventId}/organizer/webhooks`} variant="outline">
+              Webhooks
+            </ButtonLink>
+            {nextState ? (
+              <ActionForm
+                action={transitionEventAction.bind(null, eventId)}
+                submitLabel={`Advance to ${EVENT_STATE_LABEL[nextState]}`}
+                submitVariant={nextState === "ARCHIVED" ? "destructive" : "primary"}
+              >
+                <input type="hidden" name="toState" value={nextState} />
+              </ActionForm>
+            ) : doc.event.state === "ARCHIVED" ? (
+              <ActionForm
+                action={transitionEventAction.bind(null, eventId)}
+                submitLabel="Unarchive event"
+              >
+                <input type="hidden" name="toState" value="PUBLISHED" />
+              </ActionForm>
+            ) : null}
+          </>
         }
       />
 
