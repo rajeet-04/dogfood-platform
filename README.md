@@ -156,9 +156,10 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   or competition eligibility; see `PLAN.md` for the current verification and
   remaining caveats.
 - A scoped offline verification used the built web image and a fresh internal
-  Podman PostgreSQL instance with networking disabled: migrations completed,
-  `/api/ready` returned 200, and the seed contained all 40 official fixture
-  projects including `Glass Signal`, with no hidden-state projects. This is
-  evidence for that setup; it does not resolve source eligibility or final
-  submission readiness. A reviewed five-minute demo video and final
-  team/contact/submission confirmations remain outstanding.
+  Podman PostgreSQL instance with networking disabled on fresh HEAD: migration
+  `0019` applied, `/api/ready` returned 200, and the unchanged official checker
+  passed 7/7. The seed contained all 40 official fixture projects including
+  `Glass Signal`, with zero non-submitted fixtures. This is evidence for that
+  setup; it does not resolve source eligibility or final submission readiness.
+  A reviewed five-minute demo video and final team/contact/submission
+  confirmations remain outstanding.
