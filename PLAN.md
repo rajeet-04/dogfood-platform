@@ -16,14 +16,15 @@
 
 ## Current local verification checkpoint — 2026-09-28
 
-The gallery/assets/custom-question/fixture/prize/judge-scope slice was verified against a disposable local PostgreSQL 17 container (`dogfood_test`). These commands exited 0:
+The T2 judge-assignment slice was verified against a disposable local PostgreSQL container (`dogfood_test`). The implementation supports deterministic `round_robin` and `balanced_by_track` proposal previews with coverage diagnostics, batch and singular manual assignment, filtered GET/DELETE assignment APIs, persistent organizer and judge self-recusals, stale-preview protection, active membership/track/team/recusal checks, event/project row locks, and atomic audit/write transactions. These focused local checks passed:
 
-- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/submissions-lock.test.ts tests/integration/submission-settings.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts tests/integration/event-prizes.test.ts tests/integration/judging/assignment-isolation.test.ts tests/integration/judging/assignment-guards.test.ts tests/integration/judging/evaluation.test.ts` — 10 files, 54 tests passed.
-- `bun run --cwd packages/db typecheck`, `bun run --cwd packages/events typecheck`, `bun run --cwd packages/submissions typecheck`, `bun run --cwd packages/judging typecheck`, and `bun run --cwd apps/web typecheck` — all five passed.
+- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run vitest run tests/integration/judging tests/integration/api-v1.test.ts tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/submission-settings.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts` — 11 files, 71 tests passed.
+- `bun run --cwd packages/db typecheck`, `bun run --cwd packages/judging typecheck`, and `bun run --cwd apps/web typecheck` — all three passed.
 - `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd apps/web build` — production build passed.
-- Local seed/import smoke used `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd packages/db seed:fixtures`; `/api/health`, `/projects`, and `/api/v1/gallery?q=Glass%20Signal` each returned HTTP 200, and the gallery JSON contained the official fixture title `Glass Signal`.
+- `git diff --check` — passed.
+- Impeccable detect returned `[]` for changed UI.
 
-This checkpoint covers those focused paths, the local seeded smoke, and the web build; it does not establish whole-repository test completion, full T1/T2 completion, event eligibility, Compose offline readiness, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
+These are focused local checks, not official acceptance or proof of whole-repository test completion, event eligibility, Compose offline readiness, or full T1/T2 completion. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run. Deferred minor review notes: recusal CRUD has no audit entries; `balanced_by_track` initializes its balancing counts from the current proposal rather than existing per-track loads; and the concurrency test uses short timing waits without deterministically choosing SQL lock order.
 
 ## Implemented in the current checkout
 
@@ -66,7 +67,7 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 
 ### P2 — Complete and prove all T2 Judging requirements
 
-- [ ] Add batch/algorithmic judge assignment and coverage preview; current source visibly exposes manual `assignJudge` and queues, but no assignment proposal/generator.
+- [x] Add batch/algorithmic judge assignment and coverage preview with deterministic `round_robin` and `balanced_by_track` strategies, diagnostics, filtered assignment API, and persistent recusal support; focused judging/API integration coverage passes locally. **P2 progress: 2/5 complete.**
 - [x] Enforce assigned judge track scope and preserve event-wide access for judges with no track scope; focused assignment isolation and guard tests pass.
 - [ ] Resolve organizer score visibility against the official role matrix; retain backend judge-to-judge and judge-to-track denials.
 - [ ] Document assignment, weighted rubric, normalization method, limitations, diagnostics, and CSV coverage in `JUDGING.md`; make sure written evidence matches current code.
@@ -114,3 +115,4 @@ Main prizes: 1st $800, 2nd $500, 3rd $350, 4th $200, 5th $150, Best Judging Engi
 
 - 2026-09-28: Created current-state tracker, added official DOGFOOD requirements/scoring/prize crosswalk to `plans-dogfood/`, and listed code provenance/official acceptance gaps.
 - 2026-09-28: Added the official DOGFOOD source crosswalk and implementation/remaining-work tracker; Graphify artifacts were regenerated from the updated planning corpus. The initial full deep Ollama pass flagged a semantic shrink in the existing architecture plan, so confirm graph extraction integrity separately.
+- 2026-09-28: Recorded the completed T2 judge-assignment/recusal slice, its focused local verification checkpoint, deferred minor review notes, and P2 progress at 2/5.
