@@ -108,9 +108,27 @@ export async function createEvent(
     });
   } catch (err) {
     if (sqlState(err) === "23505") {
+      const existing = await db
+        .select({
+          state: schema.events.state,
+          createdBy: schema.events.createdBy,
+          ownerEmail: schema.users.email,
+        })
+        .from(schema.events)
+        .innerJoin(schema.users, eq(schema.users.id, schema.events.createdBy))
+        .where(eq(schema.events.slug, input.slug))
+        .limit(1);
+      const row = existing[0];
+      if (row && row.state === "ARCHIVED") {
+        const message =
+          row.createdBy === actor.userId
+            ? `You archived an event with the slug "${input.slug}". Find it in the events list and choose Unarchive, or pick another slug.`
+            : `An archived event with the slug "${input.slug}" already exists under ${row.ownerEmail}. Log in with that account to reopen it, or pick another slug.`;
+        throw new DogfoodError("SLUG_TAKEN", message);
+      }
       throw new DogfoodError(
         "SLUG_TAKEN",
-        `An event with the slug "${input.slug}" already exists. Choose a different slug.`,
+        `An event with the slug "${input.slug}" already exists. Pick another slug.`,
       );
     }
     throw err;
@@ -195,17 +213,26 @@ export async function listEvents(
   actor: Actor | null,
   input: EventSearchInput = {},
 ): Promise<EventRow[]> {
-  const conditions: SQL[] = [ne(schema.events.state, "ARCHIVED")];
+  const conditions: SQL[] = [];
 
-  if (actor && !actor.isPlatformAdmin) {
+  if (actor && actor.isPlatformAdmin) {
+    conditions.push(ne(schema.events.state, "ARCHIVED"));
+  } else if (actor) {
     conditions.push(
       or(
         ne(schema.events.state, "DRAFT"),
         eq(schema.events.createdBy, actor.userId),
       )!,
+      or(
+        ne(schema.events.state, "ARCHIVED"),
+        eq(schema.events.createdBy, actor.userId),
+      )!,
     );
-  } else if (!actor) {
-    conditions.push(ne(schema.events.state, "DRAFT"));
+  } else {
+    conditions.push(
+      ne(schema.events.state, "DRAFT"),
+      ne(schema.events.state, "ARCHIVED"),
+    );
   }
 
   const search = input.q?.trim() ?? "";

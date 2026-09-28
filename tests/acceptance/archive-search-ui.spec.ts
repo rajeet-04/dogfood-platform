@@ -76,7 +76,7 @@ test("organizer archives and unarchives an event from the dashboard", async ({
   await context.close();
 });
 
-test("catalogue search filters events and hides drafts and archived events", async ({
+test("catalogue search filters events; drafts and archives stay out of public results", async ({
   browser,
 }) => {
   await resetDb();
@@ -138,7 +138,13 @@ test("catalogue search filters events and hides drafts and archived events", asy
     timeout: 15_000,
   });
   await expect(ownerPage.getByText("Zenith Hack")).toBeVisible();
-  await expect(ownerPage.getByText("Old Zenith")).toHaveCount(0);
+  await expect(ownerPage.getByText("Old Zenith")).toBeVisible();
+
+  const archivedCard = ownerPage.getByRole("link", {
+    name: /Old Zenith/,
+  });
+  await expect(archivedCard).toBeVisible();
+  await expect(archivedCard).toContainText("Archived");
 
   await owner.close();
 });
