@@ -139,10 +139,17 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
 ## Known limits
 
 - Normalization offers `z-score` and `none` strategies only (per-judge batch).
-- Pairwise judging has a tested Bradley–Terry-style estimator and an organizer
-  endpoint, but no comparison collection flow, persisted judge sessions, or
-  judge UI. Treat it as partial capability.
-- [`openapi.yaml`](./openapi.yaml) documents 52 HTTP methods in this checkout.
+- Pairwise judging now has a judge UI, authenticated assigned-project comparison
+  API, persisted latest choices, and an organizer calculation endpoint using
+  either those choices or explicit comparisons. The calculation does not create
+  a ranking snapshot, so pairwise results remain a separate partial capability.
+- Signed public judge participation records are available from
+  `GET /api/v1/events/:eventId/judge-records` after results are published. Set
+  `JUDGE_RECORD_SIGNING_PRIVATE_KEY` to an Ed25519 PKCS#8 PEM. Records are derived
+  from the current database state on request, not persisted as immutable issue or
+  revocation records; save a signed payload separately if you need a long-lived
+  proof artifact. An unset key returns 503.
+- [`openapi.yaml`](./openapi.yaml) documents 56 HTTP methods in this checkout.
   UI/server-action workflows are not all available through the REST API, so
   full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are
