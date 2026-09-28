@@ -1,4 +1,4 @@
-import { and, db, desc, eq, inArray, isNotNull, isNull, schema, type EventState } from "@dogfood/db";
+import { and, db, desc, eq, inArray, isNotNull, isNull, schema, sql, type EventState } from "@dogfood/db";
 import { appendAuditEvent } from "@dogfood/audit";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
@@ -190,24 +190,28 @@ export async function getPairwiseRankingSnapshot(actor: Actor, eventId: string, 
 export async function publishPairwiseRankingSnapshot(actor: Actor, eventId: string, snapshotId: string) {
   const event = await eventForRanking(eventId);
   await authorizeOrganizer(actor, eventId, event.state as EventState);
-  const [snapshot] = await db.select().from(schema.pairwiseRankingSnapshots).where(and(
-    eq(schema.pairwiseRankingSnapshots.id, snapshotId),
-    eq(schema.pairwiseRankingSnapshots.eventId, eventId),
-  )).limit(1);
-  if (!snapshot) throw new DogfoodError("NOT_FOUND", "Pairwise ranking snapshot not found");
-  if (snapshot.publishedAt) throw new DogfoodError("CONFLICT", "Pairwise ranking snapshot is already published");
-
-  const publishedAt = new Date();
-  const [latest] = await db.select({ id: schema.pairwiseRankingSnapshots.id })
-    .from(schema.pairwiseRankingSnapshots)
-    .where(and(
-      eq(schema.pairwiseRankingSnapshots.eventId, eventId),
-      isNotNull(schema.pairwiseRankingSnapshots.publishedAt),
-    ))
-    .orderBy(desc(schema.pairwiseRankingSnapshots.publishedAt))
-    .limit(1);
-  const supersedesSnapshotId = latest?.id === snapshot.id ? snapshot.supersedesSnapshotId : latest?.id ?? null;
   return db.transaction(async (tx) => {
+    // Serialize the read-current-link + publish transition for this event.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`pairwise-ranking-publish:${eventId}`}, 0))`);
+    const [snapshot] = await tx.select().from(schema.pairwiseRankingSnapshots).where(and(
+      eq(schema.pairwiseRankingSnapshots.id, snapshotId),
+      eq(schema.pairwiseRankingSnapshots.eventId, eventId),
+    )).limit(1);
+    if (!snapshot) throw new DogfoodError("NOT_FOUND", "Pairwise ranking snapshot not found");
+    if (snapshot.publishedAt) throw new DogfoodError("CONFLICT", "Pairwise ranking snapshot is already published");
+    const [latest] = await tx.select({ id: schema.pairwiseRankingSnapshots.id, publishedAt: schema.pairwiseRankingSnapshots.publishedAt })
+      .from(schema.pairwiseRankingSnapshots)
+      .where(and(
+        eq(schema.pairwiseRankingSnapshots.eventId, eventId),
+        isNotNull(schema.pairwiseRankingSnapshots.publishedAt),
+      ))
+      .orderBy(desc(schema.pairwiseRankingSnapshots.publishedAt))
+      .limit(1);
+    const supersedesSnapshotId = latest?.id ?? snapshot.supersedesSnapshotId;
+    const now = new Date();
+    const publishedAt = latest?.publishedAt && latest.publishedAt.getTime() >= now.getTime()
+      ? new Date(latest.publishedAt.getTime() + 1)
+      : now;
     const [published] = await tx.update(schema.pairwiseRankingSnapshots)
       .set({ publishedAt, supersedesSnapshotId })
       .where(and(
