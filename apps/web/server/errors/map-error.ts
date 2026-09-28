@@ -29,6 +29,7 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   JUDGING_INCOMPLETE: 409,
   RANKING_NOT_READY: 409,
   RATE_LIMITED: 429,
+  SLUG_TAKEN: 409,
 };
 
 function cleanMessage(message: string): string {

@@ -369,7 +369,7 @@ describe("api/v1", () => {
       request("GET", "/api/v1/events", organizer.cookie),
     );
     expect(owner.body.events.map((e: any) => e.slug)).toContain("hidden-draft");
-    expect(owner.body.events.map((e: any) => e.slug)).not.toContain("old-hack");
+    expect(owner.body.events.map((e: any) => e.slug)).toContain("old-hack");
 
     const stateFilter = await invoke(
       eventsRoute.GET,

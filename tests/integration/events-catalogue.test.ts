@@ -100,6 +100,20 @@ describe("event catalogue listEvents", () => {
     expect(ids).toContain(draft.id);
   });
 
+  it("lets the creator see their own archived events", async () => {
+    const { organizer, archived } = await scenario();
+    const rows = await listEvents(actorFor(organizer.id));
+    expect(rows.map((row) => row.id)).toContain(archived.id);
+  });
+
+  it("keeps archived events hidden from other users", async () => {
+    const { other, archived } = await scenario();
+    const rows = await listEvents(actorFor(other.id));
+    expect(rows.map((row) => row.id)).not.toContain(archived.id);
+    const anonymous = await listEvents(null);
+    expect(anonymous.map((row) => row.id)).not.toContain(archived.id);
+  });
+
   it("hides another user's drafts", async () => {
     const { other, draft } = await scenario();
     const rows = await listEvents(actorFor(other.id));
