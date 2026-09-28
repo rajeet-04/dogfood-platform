@@ -16,14 +16,14 @@
 
 ## Current local verification checkpoint — 2026-09-28
 
-The gallery/assets/custom-question/fixture slice was verified against a disposable local PostgreSQL 17 container (`dogfood_test`). These commands exited 0:
+The gallery/assets/custom-question/fixture/prize/judge-scope slice was verified against a disposable local PostgreSQL 17 container (`dogfood_test`). These commands exited 0:
 
-- `bun run --cwd packages/db typecheck`, `bun run --cwd packages/events typecheck`, `bun run --cwd packages/submissions typecheck`, and `bun run --cwd apps/web typecheck` — all four passed.
-- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/submissions-lock.test.ts tests/integration/submission-settings.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts` — 6 files, 23 tests passed.
+- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/submissions-lock.test.ts tests/integration/submission-settings.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts tests/integration/event-prizes.test.ts tests/integration/judging/assignment-isolation.test.ts tests/integration/judging/assignment-guards.test.ts tests/integration/judging/evaluation.test.ts` — 10 files, 54 tests passed.
+- `bun run --cwd packages/db typecheck`, `bun run --cwd packages/events typecheck`, `bun run --cwd packages/submissions typecheck`, `bun run --cwd packages/judging typecheck`, and `bun run --cwd apps/web typecheck` — all five passed.
 - `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd apps/web build` — production build passed.
 - Local seed/import smoke used `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun run --cwd packages/db seed:fixtures`; `/api/health`, `/projects`, and `/api/v1/gallery?q=Glass%20Signal` each returned HTTP 200, and the gallery JSON contained the official fixture title `Glass Signal`.
 
-This checkpoint covers those focused paths, the local seeded smoke, and the web build; it does not establish whole-repository test completion, T1 completion, event eligibility, Compose offline readiness, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
+This checkpoint covers those focused paths, the local seeded smoke, and the web build; it does not establish whole-repository test completion, full T1/T2 completion, event eligibility, Compose offline readiness, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
 
 ## Implemented in the current checkout
 
@@ -36,6 +36,9 @@ The following implementation areas exist in source. Earlier local verification i
 - Deterministic ranking and persisted ranking snapshots, publication, audit events, and role-checked CSV exports.
 - Participant, judge, and organizer UI flows with local Playwright evidence in the recorded report.
 - Anonymous gallery with shared search/filter behavior; event-scoped local image uploads, ordered revision gallery images, and thumbnails; event tracks; free-text custom submission questions with required-answer enforcement.
+- Structured event-scoped prizes with optional track, amount/currency, organizer CRUD, and public display; event-prize integration tests pass.
+- Judge access enforces assigned track scope; judges without a track scope remain event-wide. Assignment scope integration tests pass.
+- Participant submission round-trip covers the configured project fields; the full-field integration test passes.
 - Local/dev official-fixture seeding with stable IDs and retained duplicate-submission anomaly data. The focused integration test checks repeat seeding and fixture record counts; this is local fixture validation, not official checker acceptance.
 - PostgreSQL/Drizzle schema, migrations, a Docker Compose definition, health/readiness endpoints, MIT license, and root `README.md`, `ARCHITECTURE.md`, `DATA-MODEL.md`, and `JUDGING.md`.
 - Certificate issuance is present as a partial T4 capability; it does not by itself provide signed, publicly verifiable judge participation records.
@@ -57,14 +60,14 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 - [x] Seed official fixture records in local/dev mode with stable IDs and preserve the duplicate project and its source scores; integration tests and a seeded live smoke show the known `Glass Signal` title. The official checker is not available in this checkout.
 - [x] Implement event tracks and free-text custom questions with required-answer enforcement; submission integration coverage passes locally.
 - [x] Implement local event-scoped image assets, ordered gallery images, and thumbnails; focused asset/gallery integration tests pass locally.
-- [ ] Finish and verify the complete submission-field contract (including demo-video URL, repository URL, live link, tech tags, and custom answers) as one end-to-end participant workflow. Keep private/draft content out of public reads.
-- [ ] Add or verify organizer configuration for prizes; its presence is not established by the current feature-slice verification.
+- [x] Verify a participant submission round-trip across the full project field set, including demo-video URL, repository URL, live link, tech tags, track, images/thumbnail, and custom answers.
+- [x] Configure event-scoped prizes with optional track, amount/currency, organizer CRUD, and public display; event-prize integration tests pass.
 - [ ] Reconcile all five role types (visitor, participant, judge, organizer, admin) against the site matrix and document any deliberate policy difference.
 
 ### P2 — Complete and prove all T2 Judging requirements
 
 - [ ] Add batch/algorithmic judge assignment and coverage preview; current source visibly exposes manual `assignJudge` and queues, but no assignment proposal/generator.
-- [ ] Implement track-scoped judge assignment and backend isolation across tracks. Event tracks for T1 project submissions exist; judging assignment by track remains unverified/unimplemented.
+- [x] Enforce assigned judge track scope and preserve event-wide access for judges with no track scope; focused assignment isolation and guard tests pass.
 - [ ] Resolve organizer score visibility against the official role matrix; retain backend judge-to-judge and judge-to-track denials.
 - [ ] Document assignment, weighted rubric, normalization method, limitations, diagnostics, and CSV coverage in `JUDGING.md`; make sure written evidence matches current code.
 - [ ] Verify all advertised T2 behavior independently; the official checker covers only own/peer scores, participant denial, and organizer CSV export.
