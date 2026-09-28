@@ -71,6 +71,31 @@ paths:
       responses:
         '200': { description: Event detail, content: { application/json: { schema: { type: object, properties: { event: { allOf: [{ $ref: '#/components/schemas/EventSummary' }, { type: object, properties: { myRoles: { type: array, items: { type: string } } } }] } } } } } }
         default: { $ref: '#/components/responses/ApiError' }
+    put:
+      operationId: updateEventDetails
+      tags: [Events]
+      summary: Replace organizer-managed event details
+      description: All detail fields are required; use null to clear nullable fields. Only event organizers with configure permission may update details.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEventDetails' }
+      responses:
+        '200':
+          description: Updated event details
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event]
+                properties:
+                  event:
+                    allOf:
+                      - { $ref: '#/components/schemas/EventSummary' }
+                      - { $ref: '#/components/schemas/UpdateEventDetails' }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/gallery:
     get:
       operationId: listGallery
@@ -378,6 +403,33 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-records:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listPublicJudgeRecords
+      tags: [Judging]
+      summary: Read signed public judge participation records
+      description: Public records are available after the event is published or archived and a ranking snapshot exists. Requires JUDGE_RECORD_SIGNING_PRIVATE_KEY containing an Ed25519 PKCS#8 PEM. Records are derived at request time; signatures remain verifiable for saved payloads, but this is not a persisted issuance or revocation ledger. The response contains no scores, comments, project identifiers, or track assignments.
+      security: []
+      responses:
+        '200':
+          description: Signed Ed25519 participation records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [algorithm, keyId, publicKey, records]
+                properties:
+                  algorithm: { const: Ed25519 }
+                  keyId: { type: string, minLength: 24, maxLength: 24 }
+                  publicKey: { type: string, description: PEM-encoded Ed25519 SubjectPublicKeyInfo key }
+                  records:
+                    type: array
+                    items: { $ref: '#/components/schemas/SignedJudgeRecord' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '503': { description: Judge record signing is not configured }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/pairwise-ranking:
     parameters:
       - { $ref: '#/components/parameters/eventId' }
@@ -385,14 +437,14 @@ paths:
       operationId: calculatePairwiseRanking
       tags: [Judging]
       summary: Calculate a pairwise project ranking
-      description: Authenticated organizer operation; computes without persisting a score snapshot.
+      description: Authenticated organizer operation; computes without persisting a score snapshot. Supply comparisons explicitly or omit them to use saved event-wide judge choices filtered to the requested project IDs.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [projectIds, comparisons]
+              required: [projectIds]
               properties:
                 projectIds: { type: array, minItems: 2, maxItems: 500, items: { type: string, minLength: 1, maxLength: 128 } }
                 comparisons:
@@ -405,6 +457,47 @@ paths:
                 priorWins: { type: number, exclusiveMinimum: 0, maximum: 10 }
       responses:
         '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/pairwise-comparisons:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listPairwiseComparisons
+      tags: [Judging]
+      summary: Read the judge's assigned project pairs and saved choices
+      description: Requires a judge session. Projects are constrained to assignments and track scope. Saved choices contain the judge's latest winner for each pair.
+      responses:
+        '200':
+          description: Assigned projects and saved pairwise choices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects, comparisons]
+                properties:
+                  projects:
+                    type: array
+                    items: { type: object, required: [id, title], properties: { id: { type: string, format: uuid }, title: { type: string } } }
+                  comparisons:
+                    type: array
+                    items: { $ref: '#/components/schemas/PairwiseChoice' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: savePairwiseComparison
+      tags: [Judging]
+      summary: Save or replace the winner for an assigned project pair
+      description: Requires a judge session and JUDGING event state. Both projects must be assigned to this judge and pass track-scope checks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PairwiseChoice' }
+      responses:
+        '200':
+          description: Saved pairwise choice
+          content:
+            application/json:
+              schema: { type: object, required: [comparison], properties: { comparison: { $ref: '#/components/schemas/PairwiseChoice' } } }
         default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/voting/config:
     parameters:
@@ -722,6 +815,40 @@ components:
         submissionClosesAt: { type: [string, 'null'], format: date-time }
         judgingOpensAt: { type: [string, 'null'], format: date-time }
         judgingClosesAt: { type: [string, 'null'], format: date-time }
+    UpdateEventDetails:
+      type: object
+      required: [description, websiteUrl, prizeInfo, timeline, schedule, rules, maxTeamSize]
+      properties:
+        description: { type: [string, 'null'], maxLength: 5000 }
+        websiteUrl: { type: [string, 'null'], maxLength: 500 }
+        prizeInfo: { type: [string, 'null'], maxLength: 2000 }
+        timeline: { type: [string, 'null'], maxLength: 2000 }
+        schedule: { type: [string, 'null'], maxLength: 2000 }
+        rules: { type: [string, 'null'], maxLength: 5000 }
+        maxTeamSize: { type: [integer, 'null'], minimum: 2, maximum: 100 }
+    SignedJudgeRecord:
+      type: object
+      required: [payload, signature]
+      properties:
+        payload:
+          type: object
+          required: [version, recordId, eventSlug, eventName, judgeDisplayName, lockedEvaluations, firstLockedAt, lastLockedAt]
+          properties:
+            version: { const: dogfood.judge-participation.v1 }
+            recordId: { type: string, format: uuid }
+            eventSlug: { type: string }
+            eventName: { type: string }
+            judgeDisplayName: { type: string }
+            lockedEvaluations: { type: integer, minimum: 1 }
+            firstLockedAt: { type: string, format: date-time }
+            lastLockedAt: { type: string, format: date-time }
+        signature: { type: string, contentEncoding: base64url, description: Ed25519 signature over UTF-8 JSON.stringify(payload) }
+    PairwiseChoice:
+      type: object
+      required: [winnerProjectId, loserProjectId]
+      properties:
+        winnerProjectId: { type: string, format: uuid }
+        loserProjectId: { type: string, format: uuid }
     CreateProject:
       type: object
       required: [teamId]

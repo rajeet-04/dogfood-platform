@@ -207,6 +207,37 @@ describe("api/v1", () => {
     expect(publicDetail.res.status).toBe(200);
     expect(publicDetail.body.event.myRoles).toEqual([]);
 
+    const eventDetails = {
+      description: "A developer weekend.",
+      websiteUrl: "https://example.com/event",
+      prizeInfo: "Prizes for the top three teams.",
+      timeline: "Build, submit, present.",
+      schedule: "Saturday and Sunday.",
+      rules: "Be kind and build original work.",
+      maxTeamSize: 5,
+    };
+    const anonymousUpdate = await invoke(
+      eventDetailRoute.PUT,
+      request("PUT", `/api/v1/events/${eventId}`, undefined, eventDetails),
+      { eventId },
+    );
+    expect(anonymousUpdate.res.status).toBe(401);
+
+    const updated = await invoke(
+      eventDetailRoute.PUT,
+      request("PUT", `/api/v1/events/${eventId}`, organizer.cookie, eventDetails),
+      { eventId },
+    );
+    expect(updated.res.status).toBe(200);
+    expect(updated.body.event).toMatchObject(eventDetails);
+
+    const invalidUpdate = await invoke(
+      eventDetailRoute.PUT,
+      request("PUT", `/api/v1/events/${eventId}`, organizer.cookie, { ...eventDetails, maxTeamSize: 1 }),
+      { eventId },
+    );
+    expect(invalidUpdate.res.status).toBe(422);
+
     const missing = await invoke(
       eventDetailRoute.GET,
       request("GET", `/api/v1/events/00000000-0000-4000-8000-000000000000`),

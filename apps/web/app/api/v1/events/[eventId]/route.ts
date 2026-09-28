@@ -1,16 +1,30 @@
 import { and, db, eq, schema } from "@dogfood/db";
-import { DogfoodError } from "@dogfood/validation";
+import { updateEventDetails } from "@dogfood/events";
+import { DogfoodError, z } from "@dogfood/validation";
 
 import {
   api,
   getActorFromRequest,
   json,
+  readJsonBody,
+  requireApiActor,
+  throwValidation,
 } from "../../../../../server/api/http";
 import { toEventSummary, type EventSummary } from "../route";
 
 type EventDetail = EventSummary & {
   myRoles: string[];
 };
+
+const eventDetailsSchema = z.object({
+  description: z.string().max(5000).nullable(),
+  websiteUrl: z.string().max(500).nullable(),
+  prizeInfo: z.string().max(2000).nullable(),
+  timeline: z.string().max(2000).nullable(),
+  schedule: z.string().max(2000).nullable(),
+  rules: z.string().max(5000).nullable(),
+  maxTeamSize: z.number().int().min(2).max(100).nullable(),
+});
 
 export async function GET(
   request: Request,
@@ -45,5 +59,31 @@ export async function GET(
 
     const detail: EventDetail = { ...toEventSummary(event), myRoles };
     return json({ event: detail });
+  });
+}
+
+function toEventSettings(row: Awaited<ReturnType<typeof updateEventDetails>>) {
+  return {
+    ...toEventSummary(row),
+    websiteUrl: row.websiteUrl,
+    prizeInfo: row.prizeInfo,
+    timeline: row.timeline,
+    schedule: row.schedule,
+    rules: row.rules,
+    maxTeamSize: row.maxTeamSize,
+  };
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ eventId: string }> },
+): Promise<Response> {
+  return api(request, async () => {
+    const { eventId } = await params;
+    const actor = await requireApiActor(request);
+    const parsed = eventDetailsSchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) throwValidation(parsed.error.issues);
+    const event = await updateEventDetails(actor, eventId, parsed.data);
+    return json({ event: toEventSettings(event) });
   });
 }
