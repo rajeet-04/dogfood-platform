@@ -17,7 +17,11 @@ import { events } from "./events";
 import { teams } from "./teams";
 import { users } from "./users";
 
-export const projectState = pgEnum("project_state", ["DRAFT", "SUBMITTED"]);
+export const projectState = pgEnum("project_state", [
+  "DRAFT",
+  "SUBMITTED",
+  "LOCKED",
+]);
 
 export const projects = pgTable(
   "projects",

@@ -33,3 +33,12 @@ export function validateSubmissionCompleteness(
 ): boolean {
   return Boolean(revision.title?.trim() && revision.description?.trim());
 }
+
+export function assertProjectUnlocked(project: { state: string }): void {
+  if (project.state === "LOCKED") {
+    throw new DogfoodError(
+      "CONFLICT",
+      "Submissions are locked for this project",
+    );
+  }
+}

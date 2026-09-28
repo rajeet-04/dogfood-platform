@@ -50,6 +50,13 @@
       "when": 1790268306881,
       "tag": "0006_fat_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0007_locked_project_state",
+      "breakpoints": true
     }
   ]
 }

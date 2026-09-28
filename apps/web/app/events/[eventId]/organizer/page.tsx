@@ -27,6 +27,10 @@ import {
   removeMemberAction,
 } from "../../../../server/actions/members";
 import {
+  lockAllProjectsAction,
+  lockProjectAction,
+} from "../../../../server/actions/submissions";
+import {
   generateRankingAction,
   publishRankingAction,
 } from "../../../../server/actions/ranking";
@@ -44,6 +48,12 @@ const ROLE_LABEL: Record<string, string> = {
   PARTICIPANT: "Participant",
   JUDGE: "Judge",
   ORGANIZER: "Organizer",
+};
+
+const PROJECT_STATE_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Submitted",
+  LOCKED: "Locked",
 };
 
 const ROLE_PILL: Record<string, string> = {
@@ -163,6 +173,56 @@ export default async function OrganizerPage({
           <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
             Scores are visible after results are ready.
           </p>
+        )}
+      </section>
+
+      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+          <h2 className="text-lg font-semibold">Submissions</h2>
+          <ActionForm
+            action={lockAllProjectsAction.bind(null, eventId)}
+            submitLabel="Lock all submissions"
+            className="[&_button]:mt-0 [&_button]:rounded-md [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:font-semibold"
+          />
+        </div>
+        {doc.projects.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-slate-500">
+            No projects yet.
+          </p>
+        ) : (
+          <ul>
+            {doc.projects.map((project) => (
+              <li
+                key={project.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-50 px-6 py-4 last:border-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-800">
+                    {project.title}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {project.teamName}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                    {PROJECT_STATE_LABEL[project.state] ?? project.state}
+                  </span>
+                  {project.state !== "LOCKED" ? (
+                    <ActionForm
+                      action={lockProjectAction.bind(
+                        null,
+                        eventId,
+                        project.id,
+                      )}
+                      submitLabel="Lock"
+                      className="[&_button]:mt-0 [&_button]:rounded-md [&_button]:bg-slate-100 [&_button]:px-3 [&_button]:py-1.5 [&_button]:text-xs [&_button]:text-slate-600 [&_button]:hover:bg-red-50 [&_button]:hover:text-red-600"
+                    />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

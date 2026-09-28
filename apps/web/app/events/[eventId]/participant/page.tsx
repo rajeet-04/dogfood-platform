@@ -195,6 +195,14 @@ export default async function ParticipantPage({
                   </p>
                 )}
               </div>
+            ) : home.project.state === "LOCKED" ? (
+              <p
+                data-testid="project-locked-note"
+                className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700"
+              >
+                This submission is locked and can no longer be modified or
+                withdrawn.
+              </p>
             ) : (
               <div className="mt-4">
                 <ActionForm

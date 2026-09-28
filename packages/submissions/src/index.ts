@@ -3,7 +3,10 @@ export {
   reviseProject,
   submitProject,
   withdrawProject,
+  lockProject,
+  lockAllProjects,
   assertSubmissionWindow,
+  assertProjectUnlocked,
   validateSubmissionCompleteness,
 } from "./service";
 export type {
