@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { createWebhookEndpoint } from "@dogfood/audit";
 import { createSession, registerUser } from "@dogfood/auth";
 import { and, db, eq, schema } from "@dogfood/db";
 import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
@@ -71,6 +72,10 @@ describe("event project archives", () => {
     const target = await event(organizer.actor, "bulk-target");
     await grantEventMembership(organizer.actor, target.id, participant.actor.userId, "PARTICIPANT");
     const targetTeam = await createTeam(participant.actor, target.id, { name: "Archive team" });
+    const { endpoint } = await createWebhookEndpoint(organizer.actor, target.id, {
+      url: "https://hooks.example.com/dogfood",
+      eventTypes: ["projects.bulk_import"],
+    });
     const jsonArchive = structuredClone(sourceArchive);
     jsonArchive.eventId = target.id;
     jsonArchive.projects[0]!.teamId = targetTeam.id;
@@ -88,6 +93,7 @@ describe("event project archives", () => {
     const restored = await POST(request(target.id, "POST", organizer.cookie, JSON.stringify(jsonArchive)), { params: Promise.resolve({ eventId: target.id }) });
     expect(restored.status).toBe(201);
     expect(await restored.json()).toEqual({ imported: 1 });
+    expect(await db.select().from(schema.webhookDeliveries).where(eq(schema.webhookDeliveries.endpointId, endpoint.id))).toHaveLength(1);
     const stored = await exportProjectArchive(organizer.actor, target.id);
     expect(stored.projects[0]!.revisions.map(({ title, description, techTags }) => ({ title, description, techTags })))
       .toEqual(sourceArchive.projects[0]!.revisions.map(({ title, description, techTags }) => ({ title, description, techTags })));

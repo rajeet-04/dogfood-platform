@@ -1,4 +1,5 @@
 import { and, db, eq, inArray, schema, sqlState, type CustomQuestion } from "@dogfood/db";
+import { appendAuditEvent } from "@dogfood/audit";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError, z } from "@dogfood/validation";
@@ -262,7 +263,7 @@ export async function importProjectArchive(actor: Actor, eventId: string, input:
         }
         await tx.update(schema.projects).set({ currentRevisionId: project.currentRevisionId }).where(eq(schema.projects.id, project.id));
       }
-      await tx.insert(schema.auditEvents).values({
+      await appendAuditEvent(tx, {
         eventId, actorId: actor.userId, action: "projects.bulk_import", resourceType: "project",
         metadata: { count: archive.projects.length, revisionCount: archive.projects.reduce((sum, project) => sum + project.revisions.length, 0) },
       });
