@@ -64,7 +64,8 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 
 ### P0 — Resolve competition eligibility and source of truth
 
-- [ ] Audit when the project code was authored, not merely when later commits landed. The recorded implementation commit is Sep 26, before the Sep 26 18:00 UTC kickoff; the event rule says all submitted project code must be new within the 72-hour window.
+- [x] Audit when the project code was authored, not merely when later commits landed. The recorded implementation commit predates the Sep 26 18:00 UTC kickoff; the event rule says all submitted project code must be new within the 72-hour window.
+- [x] Audit the current branch against the pre-kickoff implementation: `ec8eeb3` is dated 2026-09-25 12:44:45 +05:30 and is outside this branch's ancestry, but 50 of 123 source paths shared with current `HEAD` have identical Git blob hashes. The current branch root `e92577b` is dated after kickoff. Later branch dates do not make reused pre-event code eligible.
 - [ ] Resolve whether this implementation can be entered under the new-code rule. If not, keep it as reference/planning material and build eligible code only from allowed pre-event materials; do not hide or rewrite the provenance.
 - [ ] Keep main-site rules/scoring separate from official `spec.md`/fixture/checker assertions. Reconcile the organizer raw-score policy: the site matrix permits organizer score access, while the current app hides raw scores until lock; the seven checks do not settle this.
 
