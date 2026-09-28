@@ -4,7 +4,7 @@
 
 ## API-first
 
-Every UI action maps to shared application services and a documented REST operation.
+Every action available in the UI maps to shared application services and a documented REST operation. Publish the OpenAPI contract and prove UI/API parity; the API-first bonus also requires a published OpenAPI spec.
 
 Artifacts:
 - `openapi.yaml`
@@ -68,4 +68,4 @@ Signed records must be publicly verifiable without privileged DB access.
 
 ## Exit gate
 
-T4 acceptance and API parity tests are green, migration/import paths are reversible/documented, and webhook/record security is tested.
+T4 feature checks and API parity tests are green, migration/import paths are reversible/documented, every UI action has an API, and webhook/record security is tested. The official seven-check acceptance program does not verify T4.

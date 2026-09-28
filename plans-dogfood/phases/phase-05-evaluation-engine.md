@@ -74,7 +74,9 @@ During JUDGING, progress endpoint returns:
 - per-track completion;
 - diagnostics without raw ballot values.
 
-Raw judge scores remain unavailable to organizer until judging lock, unless official spec explicitly requires organizer access earlier. Current public role matrix permits organizer score access generally, so reconcile exact timing against `spec.md`.
+The current plan withholds raw judge scores from organizers until judging lock. The official site role matrix, however, marks organizers as permitted to read own/peer/other-track/aggregate scores and audit data, without stating a lock-time restriction. The official seven-check suite tests judge-vs-judge isolation but does not test organizer score timing. Resolve this conflict against the main-site role matrix in Phase 0 before asserting compliance; never weaken judge-to-judge or judge-to-track isolation.
+
+The official shared fixtures intentionally include a judge who assigns the same score to every project and incomplete review batches. Normalize deterministically, avoid zero-variance division, expose a meaningful diagnostic, and keep missing evaluations absent rather than treating them as zero.
 
 ## Tests
 

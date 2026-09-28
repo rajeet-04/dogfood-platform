@@ -8,11 +8,13 @@ Phase windows below are gates, not a serial queue: within each window, engineers
 
 Write documentation as you go, not at the end. The moment a phase gate goes green, the owning engineer appends the relevant section to `ARCHITECTURE.md`, `DATA-MODEL.md`, or `JUDGING.md` (whichever the phase feeds) while the decision is fresh. Phase 8 then polishes and reconciles these docs instead of drafting them from scratch under acceptance-suite pressure. These three files feed roughly 60% of the scoring rubric (Judging Integrity, Adoptability, Code Quality) and are not safe to rush.
 
-## Hours 0-2: Phase 0, Spec Reconciliation
+## Before kickoff / Hours 0-2: Phase 0, Spec Reconciliation
 
-Read official `spec.md`, fixtures, and acceptance suite. Produce the spec delta and freeze exact contracts.
+The site lists the full tiers, scoring weights, bonuses, prizes, rules, and timeline; `spec.md`, `fixtures.json`, and `run.py` are already published. Read them before the coding window, reconcile the conflicting organizer-score policy, and freeze exact contracts. Project code may start only at kickoff, September 26, 2026 at 18:00 UTC.
 
 **Gate:** every official T1/T2 requirement maps to a phase, endpoint, table, and test.
+
+Remember that the main score weights Tier Completion & Correctness 40%, Judging Integrity 25%, Adoptability & Operability 20%, and Code Quality & Innovation 15%. Optional bonuses only break ties. Reserve evidence/docs effort across all criteria; a green seven-check acceptance report does not prove every advertised tier feature.
 
 ## Hours 2-8: Phase 1, Runtime / Identity / Sessions
 
@@ -68,13 +70,13 @@ Only release blockers, docs, demo, acceptance report, tier claim, license, final
 
 Reserve a dedicated 30-60 minute block inside this window solely for recording and rehearsing the 5-minute demo video (create → submit → judge → publish). Do not let it compete with last-minute bug fixing or doc edits for time; script the walkthrough once the docs stabilize so the recording is a single clean take.
 
-Script one deliberate beat into that walkthrough: a raw API call attempting a cross-judge or cross-track read, shown getting rejected on camera. This is cheap (no UI work) and turns Judging Integrity from an assumed property into something a grader watches happen. Pair it with a clean, skimmable `acceptance-report.txt` (not a raw test-runner dump) and a "Verify this yourself" section in `JUDGING.md` — a judge who never watches the video should still be able to confirm integrity from the docs alone.
+Script one deliberate beat into that walkthrough: a raw API call attempting a cross-judge or cross-track read, shown getting rejected on camera. This is cheap (no UI work) and turns Judging Integrity from an assumed property into something a grader watches happen. Commit `acceptance-report.txt` as the direct, unedited output of the official `run.py`; use `README.md` to explain the result and `JUDGING.md` for a "Verify this yourself" section so a judge who never watches the video can confirm integrity from the docs alone.
 
 Do not begin new features in this window.
 
 ## Stretch policy
 
-Phase 9 T3, Phase 10 T4, and Phase 11 bonuses start only if Phase 8 reaches green early enough to preserve submission buffer.
+Phase 9 T3, Phase 10 T4, and Phase 11 bonuses start only if Phase 8 reaches green early enough to preserve submission buffer. T3/T4 contribute to the Tier Completion score when implemented correctly; they are not mandatory acceptance-suite checks. Correctness outranks a higher but broken tier.
 
 Priority if ahead:
 1. Normalization Proof bonus if judging data is strong.
