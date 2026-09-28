@@ -12,7 +12,7 @@ security), [DATA-MODEL.md](./DATA-MODEL.md) (tables and constraints),
 
 - **App:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4
 - **Database:** PostgreSQL 17 + Drizzle ORM
-- **Packages:** pnpm workspaces (15 domain/db packages)
+- **Packages:** pnpm workspaces (18 domain/db packages)
 - **Tests:** Vitest (unit/integration), Playwright (acceptance)
 - **Runtime contract:** Docker Compose (`web` + `db`) with no mandatory third-party cloud service
 
@@ -34,8 +34,10 @@ podman compose up --build
 Then open http://localhost:3000. Docker Compose starts PostgreSQL, waits for
 its health check, and boots the web app. Migrations are applied before startup
 is considered ready (`GET /api/ready`). Compose seeds the official fixture and
-prints stable local-only fixture credentials that match `.dogfood.toml`. Never
-seed these fixture users or credentials in production.
+prints stable local-only fixture session credentials that match `.dogfood.toml`.
+The published ports bind to loopback; use `http://localhost:3000` and do not
+expose the stack on a LAN or public host. Never seed these fixture users or
+credentials in production.
 
 For local development instead:
 
@@ -63,11 +65,24 @@ this machine; see the script header for paths).
 ## Accounts and ports
 
 - Web app runs on **port 3000** (`PORT`), PostgreSQL on **port 5432**.
-- There are no built-in fixture accounts: the organizer registers through the
-  UI, creates an event, and invites/granted members act as participants and
-  judges. Every user authenticates with an email + password (Argon2id).
+- Compose seeds local-only organizer, judge, and participant fixture accounts.
+  Their role-specific session cookies are listed in `.dogfood.toml` and printed
+  by the seed command; these accounts have no password-login credentials. Use
+  the cookie on `localhost` only. Fixture seeding requires both
+  `DOGFOOD_MODE=local` and `DOGFOOD_SEED_FIXTURES=1`; normal user accounts
+  register with email and password (Argon2id).
 - Test suite uses a separate database (`DATABASE_URL_TEST`, defaults to
   `dogfood_test`) so it never clobbers development data.
+
+Organizers can create judge invitations with a one-time URL token, manually
+share it, and restrict acceptance to an account with the normalized invited
+email. Links expire after seven days; no email is sent, and account email
+ownership is not verified. Organizers configure the community-voting open and
+close timestamps in event settings; leaving either timestamp empty disables
+voting. Voting is authenticated-account only, with one immutable vote per
+account per event during the configured window. Comments and vote writes are
+rate-limited; tallies remain hidden until voting closes. Open-link and
+email-gated voting are unsupported.
 
 ## Repository layout
 
@@ -114,9 +129,13 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
 ## Known limits
 
 - Normalization offers `z-score` and `none` strategies only (per-judge batch).
-- Track features are out of scope for T1/T2 (schema rows exist for scoped
-  judging; no track UI/API).
-- No built-in fixture users; organizers/signups create their own accounts.
-- The official released acceptance suite and `.dogfood.toml` schema are
-  expected from the hackathon release; when they arrive, run them against this
-  commit and reconcile the tier claim file.
+- Tracks have organizer and participant UI plus server-action support; there are
+  no standalone versioned REST endpoints for track management.
+- Compose fixture accounts are synthetic, local-only test identities; they
+  cannot sign in with passwords and their fixed cookies must never be deployed.
+- The official checker, fixtures, and schema are checked in under
+  `plans-dogfood/official/`; all seven checks passed against the local portal.
+  The submission probe can return schema-validation HTTP 400 before exercising
+  deadline enforcement, and the checker does not establish full tier completion
+  or competition eligibility; see `PLAN.md` for the current verification and
+  remaining caveats.
