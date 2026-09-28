@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { registerUser } from "@dogfood/auth";
-import { db, eq, schema } from "@dogfood/db";
-import { createEvent, transitionEvent } from "@dogfood/events";
-import { getPublicGalleryProject, listPublicGallery } from "@dogfood/submissions";
+import { createSession, registerUser } from "@dogfood/auth";
+import { asc, db, eq, schema } from "@dogfood/db";
+import { createEvent, grantEventMembership, transitionEvent } from "@dogfood/events";
+import { getPublicGalleryProject, listPublicGallery, reviseProject, submitProject } from "@dogfood/submissions";
+import { createTeam } from "@dogfood/teams";
 
 import * as galleryRoute from "../../apps/web/app/api/v1/gallery/route";
 import * as eventGalleryRoute from "../../apps/web/app/api/v1/events/[eventId]/gallery/route";
 import * as projectGalleryRoute from "../../apps/web/app/api/v1/events/[eventId]/gallery/[projectId]/route";
+import * as projectsRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/route";
 import { resetDb } from "../fixtures/db";
 
 const actor = (userId: string) => ({ userId, isPlatformAdmin: false });
@@ -110,5 +112,142 @@ describe("public project gallery", () => {
       { id: "public", prompt: "Public question", required: false, visibility: "ORGANIZER_ONLY", order: 1 },
     ] }).where(eq(schema.events.id, event.id));
     expect((await getPublicGalleryProject(published.row.id))?.publicAnswers).toEqual([]);
+  });
+
+  it("round-trips participant project fields through create, revision, and public submit", async () => {
+    const organizer = await registerUser({ email: "contract-org@example.com", password: "pass", displayName: "Organizer" });
+    const participant = await registerUser({ email: "contract-participant@example.com", password: "pass", displayName: "Participant" });
+    const session = await createSession(participant.id);
+    const participantActor = actor(participant.id);
+    const event = await createEvent(actor(organizer.id), { slug: "contract-event", name: "Contract Event", timezone: "UTC" });
+    await grantEventMembership(actor(organizer.id), event.id, participant.id, "PARTICIPANT");
+    await transitionEvent(actor(organizer.id), event.id, "REGISTRATION");
+    const team = await createTeam(participantActor, event.id, { name: "Round Trip" });
+
+    const publicQuestionId = "11111111-1111-4111-8111-111111111111";
+    const privateQuestionId = "22222222-2222-4222-8222-222222222222";
+    await db.update(schema.events).set({ customQuestions: [
+      { id: publicQuestionId, prompt: "What did you build?", required: true, visibility: "PUBLIC", order: 0 },
+      { id: privateQuestionId, prompt: "Organizer context", required: false, visibility: "ORGANIZER_ONLY", order: 1 },
+    ] }).where(eq(schema.events.id, event.id));
+    const [track] = await db.insert(schema.eventTracks).values({ eventId: event.id, name: "Climate" }).returning();
+    const assets = await db.insert(schema.assets).values(["one", "two", "three", "four"].map((name) => ({
+      eventId: event.id,
+      uploadedBy: participant.id,
+      storageKey: `contract/${name}`,
+      originalName: `${name}.png`,
+      mimeType: "image/png",
+      byteSize: 10,
+      sha256: name.padEnd(64, name),
+    }))).returning();
+    const [thumbnail, imageOne, imageTwo, revisedThumbnail] = assets;
+    await transitionEvent(actor(organizer.id), event.id, "SUBMISSIONS_OPEN");
+
+    const createResponse = await projectsRoute.POST(new Request(`http://localhost/api/v1/events/${event.id}/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `dogfood_session=${session.rawToken}` },
+      body: JSON.stringify({
+        teamId: team.id,
+        title: "Contract v1",
+        tagline: "First cut",
+        description: "Initial project description",
+        repositoryUrl: "https://github.com/example/contract-v1",
+        liveUrl: "https://contract-v1.example.com",
+        demoVideoUrl: "https://video.example.com/contract-v1",
+        techTags: ["TypeScript", "PostgreSQL"],
+        trackId: track.id,
+        thumbnailAssetId: thumbnail.id,
+        imageAssetIds: [imageOne.id, imageTwo.id],
+        customAnswers: { [publicQuestionId]: "Initial public answer", [privateQuestionId]: "Initial private answer" },
+      }),
+    }), { params: Promise.resolve({ eventId: event.id }) });
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()).project;
+    expect(created.currentRevision).toMatchObject({
+      title: "Contract v1",
+      repositoryUrl: "https://github.com/example/contract-v1",
+      liveUrl: "https://contract-v1.example.com",
+      demoVideoUrl: "https://video.example.com/contract-v1",
+      techTags: ["TypeScript", "PostgreSQL"],
+      trackId: track.id,
+      thumbnailAssetId: thumbnail.id,
+      customAnswers: { [publicQuestionId]: "Initial public answer", [privateQuestionId]: "Initial private answer" },
+    });
+    const createdImages = await db.select({ assetId: schema.projectRevisionImages.assetId })
+      .from(schema.projectRevisionImages)
+      .where(eq(schema.projectRevisionImages.revisionId, created.currentRevision.id))
+      .orderBy(asc(schema.projectRevisionImages.position));
+    expect(createdImages.map((image) => image.assetId)).toEqual([imageOne.id, imageTwo.id]);
+    expect(await getPublicGalleryProject(created.id)).toBeNull();
+    const hiddenApiDetail = await projectGalleryRoute.GET(
+      new Request(`http://localhost/api/v1/events/${event.id}/gallery/${created.id}`),
+      { params: Promise.resolve({ eventId: event.id, projectId: created.id }) },
+    );
+    expect(hiddenApiDetail.status).toBe(404);
+
+    const revised = await reviseProject(participantActor, event.id, created.id, {
+      expectedCurrentRevisionId: created.currentRevision.id,
+      title: "Contract v2",
+      tagline: "Revised cut",
+      description: "Revised project description",
+      repositoryUrl: "https://github.com/example/contract-v2",
+      liveUrl: "https://contract-v2.example.com",
+      demoVideoUrl: "https://video.example.com/contract-v2",
+      techTags: ["Rust", "WebAssembly"],
+      trackId: track.id,
+      thumbnailAssetId: revisedThumbnail.id,
+      imageAssetIds: [imageTwo.id, imageOne.id],
+      customAnswers: { [publicQuestionId]: "Revised public answer", [privateQuestionId]: "Revised private answer" },
+    });
+    expect(revised.currentRevision).toMatchObject({
+      title: "Contract v2",
+      repositoryUrl: "https://github.com/example/contract-v2",
+      liveUrl: "https://contract-v2.example.com",
+      demoVideoUrl: "https://video.example.com/contract-v2",
+      techTags: ["Rust", "WebAssembly"],
+      trackId: track.id,
+      thumbnailAssetId: revisedThumbnail.id,
+      customAnswers: { [publicQuestionId]: "Revised public answer", [privateQuestionId]: "Revised private answer" },
+    });
+    const revisedImages = await db.select({ assetId: schema.projectRevisionImages.assetId })
+      .from(schema.projectRevisionImages)
+      .where(eq(schema.projectRevisionImages.revisionId, revised.currentRevision.id))
+      .orderBy(asc(schema.projectRevisionImages.position));
+    expect(revisedImages.map((image) => image.assetId)).toEqual([imageTwo.id, imageOne.id]);
+    expect(await getPublicGalleryProject(created.id)).toBeNull();
+
+    await submitProject(participantActor, event.id, created.id);
+    const detail = await getPublicGalleryProject(created.id);
+    expect(detail).toMatchObject({
+      title: "Contract v2",
+      repositoryUrl: "https://github.com/example/contract-v2",
+      liveUrl: "https://contract-v2.example.com",
+      demoVideoUrl: "https://video.example.com/contract-v2",
+      techTags: ["Rust", "WebAssembly"],
+      trackId: track.id,
+      trackName: "Climate",
+      thumbnailAssetId: revisedThumbnail.id,
+      publicAnswers: [{ id: publicQuestionId, prompt: "What did you build?", answer: "Revised public answer" }],
+    });
+    expect(detail?.images.map((image) => image.assetId)).toEqual([imageTwo.id, imageOne.id]);
+    expect(JSON.stringify(detail)).not.toContain("Revised private answer");
+
+    const publicApiDetail = await projectGalleryRoute.GET(
+      new Request(`http://localhost/api/v1/events/${event.id}/gallery/${created.id}`),
+      { params: Promise.resolve({ eventId: event.id, projectId: created.id }) },
+    );
+    expect(publicApiDetail.status).toBe(200);
+    const publicApiProject = (await publicApiDetail.json()).project;
+    expect(publicApiProject).toMatchObject({
+      repositoryUrl: "https://github.com/example/contract-v2",
+      liveUrl: "https://contract-v2.example.com",
+      demoVideoUrl: "https://video.example.com/contract-v2",
+      techTags: ["Rust", "WebAssembly"],
+      trackId: track.id,
+      thumbnailAssetId: revisedThumbnail.id,
+      publicAnswers: [{ id: publicQuestionId, prompt: "What did you build?", answer: "Revised public answer" }],
+    });
+    expect(publicApiProject.images.map((image: { assetId: string }) => image.assetId)).toEqual([imageTwo.id, imageOne.id]);
+    expect(JSON.stringify(publicApiProject)).not.toContain("Revised private answer");
   });
 });
