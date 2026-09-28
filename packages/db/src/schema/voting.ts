@@ -45,12 +45,14 @@ export const votes = pgTable("votes", {
   eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
   voterId: uuid("voter_id").references(() => users.id, { onDelete: "restrict" }),
   credentialId: uuid("credential_id").references(() => votingCredentials.id, { onDelete: "restrict" }),
+  voterTokenHash: text("voter_token_hash"),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  check("votes_one_voter_identity_check", sql`(${t.voterId} is not null and ${t.credentialId} is null) or (${t.voterId} is null and ${t.credentialId} is not null)`),
+  check("votes_one_voter_identity_check", sql`(case when ${t.voterId} is not null then 1 else 0 end + case when ${t.credentialId} is not null then 1 else 0 end + case when ${t.voterTokenHash} is not null then 1 else 0 end) = 1`),
   uniqueIndex("votes_event_voter_unique").on(t.eventId, t.voterId).where(sql`${t.voterId} is not null`),
   uniqueIndex("votes_event_credential_unique").on(t.eventId, t.credentialId).where(sql`${t.credentialId} is not null`),
+  uniqueIndex("votes_event_voter_token_unique").on(t.eventId, t.voterTokenHash).where(sql`${t.voterTokenHash} is not null`),
   index("votes_event_project_idx").on(t.eventId, t.projectId),
 ]);
 
@@ -79,11 +81,14 @@ export const votingRateLimits = pgTable("voting_rate_limits", {
 
 export const votingCredentialRateLimits = pgTable("voting_credential_rate_limits", {
   eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
-  credentialId: uuid("credential_id").notNull().references(() => votingCredentials.id, { onDelete: "cascade" }),
+  credentialId: uuid("credential_id").references(() => votingCredentials.id, { onDelete: "cascade" }),
+  voterTokenHash: text("voter_token_hash"),
   action: text("action").notNull(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
   count: integer("count").notNull().default(1),
 }, (t) => [
-  uniqueIndex("voting_credential_rate_limits_bucket_unique").on(t.eventId, t.credentialId, t.action, t.windowStart),
+  check("voting_credential_rate_limits_identity_check", sql`(${t.credentialId} is not null and ${t.voterTokenHash} is null) or (${t.credentialId} is null and ${t.voterTokenHash} is not null)`),
+  uniqueIndex("voting_credential_rate_limits_bucket_unique").on(t.eventId, t.credentialId, t.action, t.windowStart).where(sql`${t.credentialId} is not null`),
+  uniqueIndex("voting_token_rate_limits_bucket_unique").on(t.eventId, t.voterTokenHash, t.action, t.windowStart).where(sql`${t.voterTokenHash} is not null`),
   check("voting_credential_rate_limits_count_positive", sql`${t.count} > 0`),
 ]);

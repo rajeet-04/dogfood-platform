@@ -75,24 +75,39 @@ describe("authenticated public voting", () => {
     expect(await getVotingConfig(event.id)).toMatchObject({ accessMode: "AUTHENTICATED" });
   });
 
-  it("supports an open link with a hashed, persistent browser credential and one vote", async () => {
-    const { event, organizer, project } = await votingEvent();
+  it("keeps open-link issuance stateless and hashes the browser token on one vote", async () => {
+    const { event, organizer, participant, project } = await votingEvent();
     await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
     const issued = await ensureOpenLinkCredential(event.id);
+    const issuedAgain = await ensureOpenLinkCredential(event.id, issued.token);
+    expect(issuedAgain.token).toBe(issued.token);
+    expect(await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id))).toHaveLength(0);
     const ballot = await getVotingBallot(null, event.id, issued.token);
     expect(ballot.accessMode).toBe("OPEN_LINK");
     expect(ballot.hasVoted).toBe(false);
+    await expect(castVote(participant, event.id, project.id, issued.token)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await castVote(null, event.id, project.id, issued.token);
     await expect(castVote(null, event.id, project.id, issued.token)).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await getVotingBallot(null, event.id, issued.token)).toMatchObject({ hasVoted: true });
-    const credentials = await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id));
-    expect(credentials).toHaveLength(1);
-    expect(credentials[0].tokenHash).not.toBe(issued.token);
-    expect(credentials[0].tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    const votesWithToken = await db.select().from(schema.votes).where(eq(schema.votes.eventId, event.id));
+    expect(votesWithToken[0].voterTokenHash).not.toBe(issued.token);
+    expect(votesWithToken[0].voterTokenHash).toMatch(/^[a-f0-9]{64}$/);
+    const buckets = await db.select().from(schema.votingCredentialRateLimits).where(eq(schema.votingCredentialRateLimits.eventId, event.id));
+    expect(buckets).toHaveLength(1);
+    expect(buckets[0].credentialId).toBeNull();
+    expect(buckets[0].voterTokenHash).toBe(votesWithToken[0].voterTokenHash);
+  });
+
+  it("does not mint an open-link token before the voting window opens", async () => {
+    const { event, organizer } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() + 60 * 60_000), closesAt: new Date(Date.now() + 2 * 60 * 60_000) });
+    await expect(ensureOpenLinkCredential(event.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id))).toHaveLength(0);
+    expect(await db.select().from(schema.votingCredentialRateLimits).where(eq(schema.votingCredentialRateLimits.eventId, event.id))).toHaveLength(0);
   });
 
   it("issues email-labeled bearer invitations, consumes one vote, and rejects revoked codes", async () => {
-    const { event, organizer, project } = await votingEvent();
+    const { event, organizer, participant, project } = await votingEvent();
     await updateVotingConfig(organizer, event.id, { accessMode: "EMAIL_GATED", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
     const first = await createVotingInvitation(organizer, event.id, " Voter@Example.com ");
     expect(first.invitation.email).toBe("voter@example.com");
@@ -100,6 +115,7 @@ describe("authenticated public voting", () => {
     const rotated = await createVotingInvitation(organizer, event.id, "voter@example.com");
     await expect(getVotingBallot(null, event.id, first.token)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
     expect(await getVotingBallot(null, event.id, rotated.token)).toMatchObject({ hasVoted: false });
+    await expect(castVote(participant, event.id, project.id, rotated.token)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await castVote(null, event.id, project.id, rotated.token);
     await expect(castVote(null, event.id, project.id, rotated.token)).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(createVotingInvitation(organizer, event.id, "voter@example.com")).rejects.toMatchObject({ code: "CONFLICT" });
