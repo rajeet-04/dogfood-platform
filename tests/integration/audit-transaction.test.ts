@@ -8,7 +8,11 @@ import {
   grantEventMembership,
   transitionEvent,
 } from "@dogfood/events";
-import { assignJudge } from "@dogfood/judging";
+import {
+  assignJudge,
+  createJudgeRecusal,
+  deleteJudgeRecusal,
+} from "@dogfood/judging";
 import type { Actor } from "@dogfood/shared";
 import { createProject, submitProject } from "@dogfood/submissions";
 import { createTeam, createTeamInvite, joinTeam } from "@dogfood/teams";
@@ -212,5 +216,55 @@ describe("transactional audit trail", () => {
     const otherRows = await queryAudit(organizer, other.id);
     expect(own.length).toBeGreaterThan(0);
     expect(otherRows).toHaveLength(0);
+  });
+
+  it("audits organizer and judge recusals without recording their reason", async () => {
+    const { event, organizer, judge, projectAId } = await scenario();
+    const secretReason = "Confidential conflict details: private-collab-4821";
+
+    const organizerRecusal = await createJudgeRecusal(organizer, event.id, {
+      judgeId: judge.userId,
+      projectId: projectAId,
+      reason: secretReason,
+    });
+    await deleteJudgeRecusal(organizer, event.id, organizerRecusal.id);
+    await createJudgeRecusal(judge, event.id, {
+      judgeId: judge.userId,
+      projectId: projectAId,
+      reason: secretReason,
+    });
+
+    const recusalAudits = (await auditRows(event.id)).filter(
+      (row) => row.resourceType === "judge_recusal",
+    );
+    expect(recusalAudits.map(({ action }) => action)).toEqual([
+      "judge.recusal.create",
+      "judge.recusal.delete",
+      "judge.recusal.create",
+    ]);
+    expect(recusalAudits.map(({ actorId }) => actorId)).toEqual([
+      organizer.userId,
+      organizer.userId,
+      judge.userId,
+    ]);
+    expect(JSON.stringify(recusalAudits)).not.toContain(secretReason);
+  });
+
+  it("denies audit reads for an event where the caller has no membership", async () => {
+    const { organizer } = await scenario();
+    const otherOrganizer = await registerUser({
+      email: "other-org@audit.test",
+      password: "pass",
+      displayName: "Other Org",
+    });
+    const otherEvent = await createEvent(actorFor(otherOrganizer.id), {
+      slug: "other-audit-event",
+      name: "Other Audit Event",
+      timezone: "UTC",
+    });
+
+    await expect(queryAudit(organizer, otherEvent.id)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 });
