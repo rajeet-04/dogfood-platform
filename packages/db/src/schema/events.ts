@@ -82,6 +82,31 @@ export const eventTracks = pgTable(
   ],
 );
 
+export const eventPrizes = pgTable(
+  "event_prizes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    trackId: uuid("track_id").references(() => eventTracks.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    description: text("description"),
+    amount: text("amount"),
+    currency: text("currency"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("event_prizes_event_order_idx").on(t.eventId, t.sortOrder),
+    index("event_prizes_track_idx").on(t.trackId),
+  ],
+);
+
 export const eventMemberships = pgTable(
   "event_memberships",
   {

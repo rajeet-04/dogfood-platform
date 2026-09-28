@@ -3,7 +3,7 @@ export type { EventRole, EventState } from "./enums";
 
 export { users } from "./users";
 export { sessions } from "./sessions";
-export { events, eventMemberships, eventRole, eventState, eventTracks } from "./events";
+export { events, eventMemberships, eventRole, eventState, eventTracks, eventPrizes } from "./events";
 export type { CustomQuestion } from "./events";
 export { assets } from "./assets";
 export { fixtureImportAnomalies } from "./fixtureImports";
