@@ -295,10 +295,11 @@ async function consumeWriteLimit(actor: Actor, eventId: string, action: "vote" |
     set: { count: sql`${schema.votingRateLimits.count} + 1` },
   }).returning({ count: schema.votingRateLimits.count });
   if (bucket.count <= WRITE_LIMIT_PER_MINUTE) return;
-  await db.transaction((tx) => appendAuditEvent(tx, {
+  await appendRateLimitAuditOnce({
     eventId, actorId: actor.userId, action: action + ".rate_limited", resourceType: action,
+    identity: `actor:${actor.userId}`, windowStart,
     metadata: { limit: WRITE_LIMIT_PER_MINUTE, windowStart: windowStart.toISOString() },
-  }));
+  });
   throw new DogfoodError("RATE_LIMITED", "Too many community actions; try again in a minute");
 }
 
@@ -317,7 +318,12 @@ async function consumeCredentialVoteLimit(eventId: string, identity: { credentia
       set: { count: sql`${schema.votingCredentialRateLimits.count} + 1` },
     }).returning({ count: schema.votingCredentialRateLimits.count });
   if (bucket.count <= WRITE_LIMIT_PER_MINUTE) return;
-  await db.transaction((tx) => appendAuditEvent(tx, { eventId, actorId: null, action: "vote.rate_limited", resourceType: "vote", metadata: { limit: WRITE_LIMIT_PER_MINUTE, windowStart: windowStart.toISOString() } }));
+  await appendRateLimitAuditOnce({
+    eventId, actorId: null, action: "vote.rate_limited", resourceType: "vote",
+    identity: identity.credentialId ? `credential:${identity.credentialId}` : `token:${identity.voterTokenHash}`,
+    windowStart,
+    metadata: { limit: WRITE_LIMIT_PER_MINUTE, windowStart: windowStart.toISOString() },
+  });
   throw new DogfoodError("RATE_LIMITED", "Too many community actions; try again in a minute");
 }
 
@@ -341,12 +347,44 @@ async function consumeAbuseRateLimit(eventId: string, networkHash?: string): Pro
       set: { count: sql`${schema.votingAbuseRateLimits.count} + 1` },
     }).returning({ count: schema.votingAbuseRateLimits.count });
     if (bucket.count <= limit) continue;
-    await db.transaction((tx) => appendAuditEvent(tx, {
+    await appendRateLimitAuditOnce({
       eventId, actorId: null, action: scope === "NETWORK" ? "vote.network_rate_limited" : "vote.event_rate_limited",
-      resourceType: "vote", metadata: { scope, limit, windowStart: windowStart.toISOString() },
-    }));
+      resourceType: "vote", identity: `${scope}:${keyHash}`, windowStart,
+      metadata: { scope, limit, windowStart: windowStart.toISOString() },
+    });
     throw new DogfoodError("RATE_LIMITED", "This event has reached its voting limit for the hour");
   }
+}
+
+async function appendRateLimitAuditOnce(input: {
+  eventId: string;
+  actorId: string | null;
+  action: string;
+  resourceType: string;
+  identity: string;
+  windowStart: Date;
+  metadata: Record<string, unknown>;
+}): Promise<void> {
+  const dedupeKey = createHash("sha256")
+    .update(JSON.stringify([input.eventId, input.action, input.resourceType, input.identity, input.windowStart.toISOString()]))
+    .digest("hex");
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`voting-rate-limit-audit:${dedupeKey}`}, 0))`);
+    const [existing] = await tx.select({ id: schema.auditEvents.id }).from(schema.auditEvents).where(and(
+      eq(schema.auditEvents.eventId, input.eventId),
+      eq(schema.auditEvents.action, input.action),
+      eq(schema.auditEvents.resourceType, input.resourceType),
+      sql`${schema.auditEvents.metadata}->>'rateLimitKeyHash' = ${dedupeKey}`,
+    )).limit(1);
+    if (existing) return;
+    await appendAuditEvent(tx, {
+      eventId: input.eventId,
+      actorId: input.actorId,
+      action: input.action,
+      resourceType: input.resourceType,
+      metadata: { ...input.metadata, rateLimitKeyHash: dedupeKey },
+    });
+  });
 }
 
 async function requireVisibleProject(eventId: string, projectId: string): Promise<void> {
