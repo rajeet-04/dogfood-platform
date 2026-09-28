@@ -215,6 +215,10 @@ export async function listEvents(
 ): Promise<EventRow[]> {
   const conditions: SQL[] = [];
 
+  const isMemberOfEvent = sql`exists (
+    select 1 from ${schema.eventMemberships} where ${schema.eventMemberships.eventId} = ${schema.events.id} and ${schema.eventMemberships.userId} = ${actor?.userId ?? "00000000-0000-0000-0000-000000000000"} and ${schema.eventMemberships.isActive} = true
+  )`;
+
   if (actor && actor.isPlatformAdmin) {
     conditions.push(ne(schema.events.state, "ARCHIVED"));
   } else if (actor) {
@@ -222,6 +226,7 @@ export async function listEvents(
       or(
         ne(schema.events.state, "DRAFT"),
         eq(schema.events.createdBy, actor.userId),
+        isMemberOfEvent,
       )!,
       or(
         ne(schema.events.state, "ARCHIVED"),
