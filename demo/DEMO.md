@@ -33,8 +33,8 @@ stays under the ignored `demo/artifacts/test-results/` directory.
 | 0:00–0:40 | Organizer creates the event and opens registration. | “The organizer starts an event from the product UI. The event receives its own public page and organizer dashboard.” |
 | 0:40–1:25 | Participant registers, joins, and creates a team. | “A participant joins through the event page, then creates a team while registration is open.” |
 | 1:25–2:10 | Organizer opens submissions; participant creates and submits Harborlight. | “The organizer opens submissions. The participant saves a project revision and submits it for judging.” |
-| 2:10–3:05 | Organizer adds a judge, advances into judging, creates a rubric, and assigns the project. | “The event moves through its state machine. The organizer gives a judge access, defines a weighted criterion, and assigns the submitted project.” |
-| 3:05–3:45 | Judge scores and submits the evaluation. | “The judge uses a separate signed-in session. Their score is private while judging is in progress.” |
+| 2:10–3:05 | Organizer adds an assigned judge and a second, unassigned judge, advances into judging, creates a rubric, and assigns the project. | “The organizer gives two judges event membership, defines a weighted criterion, and assigns the submitted project to one judge.” |
+| 3:05–3:45 | Assigned judge's raw API request succeeds; unassigned judge's raw API request is denied; assigned judge submits the evaluation. | “Assignment isolation is checked directly against the JSON API: the assigned judge can read the evaluation, while another event judge receives HTTP 403.” |
 | 3:45–5:00 | Organizer locks evaluations, generates the ranking, publishes results, and advances to Published. | “The organizer closes judging, freezes evaluations, builds the ranking snapshot, and publishes the result so participants can see the outcome.” |
 
 ## Seeded state
@@ -47,10 +47,8 @@ organizer, participant, and judge accounts in the UI.
 ## Acceptance evidence
 
 The browser journey asserts each state change, participant submission, judge
-evaluation, locked coverage, ranking entry, and final Published state. It keeps
-its own test and video output separate from the regular acceptance suite.
-
-The recording does not include a direct raw-API request proving an unassigned
-judge is denied access to another project's data; this flow has only one
-project and shows the assigned judge scoring that project. Keep that API
-isolation check as a separate acceptance item.
+evaluation, locked coverage, ranking entry, and final Published state. While
+the evaluation exists, it makes authenticated raw API GET requests from both
+judge sessions and asserts HTTP 200 for the assigned judge and HTTP 403 for the
+unassigned event judge. It keeps its own test and video output separate from
+the regular acceptance suite.
