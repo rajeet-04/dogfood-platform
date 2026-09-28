@@ -191,7 +191,7 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
   await expect(page.getByText("Active")).toBeVisible();
 
   // Assign the judge to the seeded project through the UI
-  await page.getByLabel("Judge").selectOption({ index: 0 });
+  await page.locator('select[name="judgeId"]').selectOption({ index: 0 });
   await page.getByLabel("Project").selectOption({ index: 0 });
   await page.getByRole("button", { name: "Assign judge" }).click();
   await expect(page.getByTestId("coverage-total")).toHaveText("1");
