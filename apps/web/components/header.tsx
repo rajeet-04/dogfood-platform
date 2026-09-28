@@ -34,13 +34,19 @@ export async function Header() {
   }
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-lg font-bold tracking-tight">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+        <Link
+          href="/"
+          className="text-lg font-bold tracking-tight text-slate-900 hover:text-indigo-700"
+        >
           DOGFOOD
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/events" className="text-slate-600 hover:text-slate-900">
+          <Link
+            href="/events"
+            className="text-slate-600 transition hover:text-slate-900"
+          >
             Events
           </Link>
           {actor ? (
@@ -51,10 +57,10 @@ export async function Header() {
               />
               {switchable.length > 1 ? (
                 <details className="relative">
-                  <summary className="cursor-pointer list-none text-slate-600 hover:text-slate-900">
+                  <summary className="cursor-pointer list-none text-slate-600 transition hover:text-slate-900">
                     Accounts ({switchable.length})
                   </summary>
-                  <div className="absolute right-0 z-10 mt-2 w-72 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+                  <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
                     <ul className="space-y-3">
                       {switchable.map((account) => (
                         <AccountRow
@@ -75,13 +81,16 @@ export async function Header() {
                   </div>
                 </details>
               ) : null}
-              <Link href="/profile" className="text-slate-600 hover:text-slate-900">
+              <Link
+                href="/profile"
+                className="text-slate-600 transition hover:text-slate-900"
+              >
                 Profile
               </Link>
               <form action={logoutAction}>
                 <button
                   type="submit"
-                  className="text-slate-600 hover:text-slate-900"
+                  className="text-slate-600 transition hover:text-slate-900"
                 >
                   Sign out
                 </button>
@@ -89,12 +98,15 @@ export async function Header() {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-slate-600 hover:text-slate-900">
+              <Link
+                href="/login"
+                className="text-slate-600 transition hover:text-slate-900"
+              >
                 Log in
               </Link>
               <Link
                 href="/register"
-                className="rounded-md bg-slate-900 px-3 py-1.5 font-medium text-white"
+                className="rounded-md bg-slate-900 px-3 py-1.5 font-medium text-white transition hover:bg-slate-700"
               >
                 Register
               </Link>

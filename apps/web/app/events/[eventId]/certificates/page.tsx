@@ -5,6 +5,7 @@ import { CERTIFICATE_TIER_LABEL } from "@dogfood/certificates";
 import { DogfoodError } from "@dogfood/validation";
 
 import { NotAllowed } from "../../../../components/not-allowed";
+import { Badge } from "../../../../components/badge";
 import { requireActor } from "../../../../server/session";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +42,9 @@ export default async function EventCertificatesPage({
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Certificates</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Certificates</h1>
           <p className="mt-1 text-sm text-slate-500">
             {certificates.length} certificate
             {certificates.length === 1 ? "" : "s"} issued.
@@ -58,11 +59,11 @@ export default async function EventCertificatesPage({
       </div>
 
       {certificates.length === 0 ? (
-        <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
           No certificates issued yet.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-slate-500">
@@ -86,12 +87,12 @@ export default async function EventCertificatesPage({
                       : ""}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                    <Badge tone="violet">
                       {CERTIFICATE_TIER_LABEL[
                         certificate.tier as keyof typeof CERTIFICATE_TIER_LABEL
                       ] ?? certificate.tier}
                       {certificate.rank ? ` · #${certificate.rank}` : ""}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-slate-500">
                     {formatDate(certificate.issuedAt)}

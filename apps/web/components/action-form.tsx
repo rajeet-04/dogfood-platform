@@ -45,9 +45,19 @@ export function ActionForm({
       <button
         type="submit"
         disabled={pending || submitDisabled}
-        className="mt-3 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        className="mt-3 inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-slate-900"
       >
-        {pending ? pendingLabel : submitLabel}
+        {pending ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white"
+            />
+            {pendingLabel}
+          </>
+        ) : (
+          submitLabel
+        )}
       </button>
     </form>
   );
