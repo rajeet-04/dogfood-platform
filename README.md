@@ -131,6 +131,23 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
 - `GET /api/health` — liveness probe; returns `{ "status": "ok" }`.
 - `GET /api/ready` — readiness probe; verifies the database is reachable and
   migrations are applied; returns 503 `{ "status": "unavailable" }` otherwise.
+- `GET /embed/gallery` — standalone, iframe-friendly public project gallery.
+  It supports the same `q`, `event`, `track`, and `tag` filters as
+  `/api/v1/gallery` and only renders the anonymous API's submitted public work.
+  Example embed (replace the origin with your deployment):
+
+  ```html
+  <iframe
+    src="https://dogfood.example/embed/gallery?tag=TypeScript"
+    title="DOGFOOD project gallery"
+    width="100%"
+    height="720"
+    loading="lazy"
+    referrerpolicy="no-referrer"
+    style="border: 0"
+  ></iframe>
+  ```
+
 - `GET /api/v1/events/:eventId/exports/:name.csv` — organizer-only CSV exports
   (`participants`, `teams`, `projects`, `judge-assignments`, `evaluations`,
   `results`) served as `text/csv; charset=utf-8`. Results export returns 404 until
@@ -149,7 +166,7 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   from the current database state on request, not persisted as immutable issue or
   revocation records; save a signed payload separately if you need a long-lived
   proof artifact. An unset key returns 503.
-- [`openapi.yaml`](./openapi.yaml) documents 56 HTTP methods in this checkout.
+- [`openapi.yaml`](./openapi.yaml) documents 57 HTTP methods in this checkout.
   UI/server-action workflows are not all available through the REST API, so
   full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are
