@@ -40,7 +40,7 @@ packages/
   auth/            Password hashing (Argon2id) and opaque session tokens
   permissions/     Event-scoped action policy engine (can / requirePermission)
   events/          Events, lifecycle state machine, memberships
-  voting/          Authenticated community ballots, comments, rate limits
+  voting/          Account and bearer-token ballots, comments, rate limits
   teams/           Team lifecycle and membership
   submissions/     Projects with immutable revisions, deadlines
   judging/         Rubrics, judge assignments, evaluations, revision history
@@ -69,11 +69,20 @@ returns denied-typed errors and never another event's payload. Judges reach a
 project only through an explicit `JudgeAssignment`. No route or component
 inlines role checks for protected business actions.
 
-Community voting is bounded in `packages/voting`: it exposes a public-project
-ballot to signed-in accounts, accepts one immutable vote per account and event
-during the configured judging window, rate-limits vote/comment writes, and
-withholds aggregate tallies until the window closes. The database currently
-allows only `AUTHENTICATED` access mode.
+Community voting is bounded in `packages/voting` and defaults to
+authenticated-account access. Organizers can also choose `OPEN_LINK` or
+`EMAIL_GATED`. Votes are unique per account, invitation credential, or open-link
+token. Signed-in project team members are rejected in every mode. Open-link GETs
+validate event state and the active voting window, then return/reuse a 32-byte
+token in an event-path-scoped HttpOnly cookie; issuance is stateless and stores
+no database row. Votes and rate-limit buckets store only the token hash. This
+avoids persistent writes from ballot reads, but open-link is intentionally
+public: callers can omit/reset the cookie or submit fresh valid-length tokens,
+so token-based limits do not prevent Sybil stuffing and no IP/global throttle is
+implemented. Email-gated codes are 32-byte single-use bearer tokens stored as
+hashes; organizers share them manually, the email is an unverified label, and
+no mail is sent. Results remain restricted during active judging and until the
+configured close, subject to event state.
 
 ## State machines
 
@@ -89,7 +98,7 @@ with `ASSIGNED` on the judge assignment.
 Every critical mutation follows:
 
 ```text
-authenticate → authorize → validate → state/deadline check
+identify actor/credential → authorize → validate → state/deadline check
 → BEGIN → mutation → audit insert → COMMIT
 ```
 
@@ -102,6 +111,10 @@ Weighted scoring, normalization, and ranking are separate pure functions
 pipelined by `packages/ranking/src/service.ts`. Details and math live in
 `JUDGING.md`. Every generated snapshot persists scoring, normalization, and
 ranking versions plus configuration; re-reading a snapshot never recomputes it.
+The ranking package also contains a tested Bradley–Terry-style pairwise
+estimator and an organizer API endpoint. The product lacks comparison
+collection, persisted judge comparison sessions, and judge-facing pairwise UI;
+this is a partial bonus implementation, not an end-to-end pairwise judging mode.
 
 ## Organizer confidentiality
 
@@ -119,6 +132,10 @@ responses share the stable envelope in `apps/web/server/errors/map-error.ts`:
 { "error": { "code": "EVALUATION_LOCKED", "message": "...", "requestId": "..." } }
 ```
 
+`openapi.yaml` documents 52 HTTP methods. Several organizer/participant
+workflows still use server actions without equivalent REST operations, so the
+OpenAPI contract is useful but UI/API parity remains partial.
+
 ## Security assumptions and handled threats
 
 - Server/database time is authoritative for deadlines; browser clocks never are.
@@ -129,6 +146,13 @@ responses share the stable envelope in `apps/web/server/errors/map-error.ts`:
   stored. Acceptance also requires an account with the normalized invited
   email, but the application does not verify email ownership. Invitations are
   shared manually and expire after seven days.
+- Authenticated voting uses one account identity per event and rejects a
+  signed-in project team member's vote in all modes. Open-link mode accepts any
+  fresh 43-character base64url token as an anonymous identity; only its hash is
+  stored with a vote/rate bucket. Resetting/omitting the cookie or supplying
+  another token obtains another vote identity; there is no IP/global throttle.
+  Email-gated vote codes are manual bearer credentials; their email labels are
+  not verified. Neither anonymous mode provides Sybil resistance.
 - Addressed threats: role escalation, IDOR, cross-event access, judge score
   leakage, deadline bypass, invalid rubric/score submission, audit bypass,
   ranking configuration tampering, session compromise.

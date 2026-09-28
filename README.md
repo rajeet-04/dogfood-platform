@@ -77,12 +77,22 @@ this machine; see the script header for paths).
 Organizers can create judge invitations with a one-time URL token, manually
 share it, and restrict acceptance to an account with the normalized invited
 email. Links expire after seven days; no email is sent, and account email
-ownership is not verified. Organizers configure the community-voting open and
-close timestamps in event settings; leaving either timestamp empty disables
-voting. Voting is authenticated-account only, with one immutable vote per
-account per event during the configured window. Comments and vote writes are
-rate-limited; tallies remain hidden until voting closes. Open-link and
-email-gated voting are unsupported.
+ownership is not verified. Organizers configure community-voting access and
+open/close timestamps in event settings; leaving either timestamp empty
+disables voting. Authenticated-account voting is the default. Optional open-link
+voting uses an event-scoped HttpOnly cookie; email-gated voting uses single-use
+bearer links that organizers create and share manually. No email is sent and
+the address attached to an invitation is not verified. Signed-in members of a
+project's team cannot vote for it in any mode. Votes are unique per account,
+invitation, or open-link token, and writes are rate-limited per identity.
+
+**Anonymous-voting limit:** open-link mode is intentionally public. A client can
+omit/reset the cookie or supply a fresh valid-length token and obtain another
+anonymous identity; there is no IP/global throttle. Per-token limits and
+uniqueness do not stop Sybil ballot stuffing. Email invitation links are bearer
+credentials and can be forwarded. Use authenticated accounts for events that
+need stronger voter accountability. Tallies are restricted during active
+judging and before the configured close time, subject to event-state policy.
 
 ## Repository layout
 
@@ -129,6 +139,12 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
 ## Known limits
 
 - Normalization offers `z-score` and `none` strategies only (per-judge batch).
+- Pairwise judging has a tested Bradley–Terry-style estimator and an organizer
+  endpoint, but no comparison collection flow, persisted judge sessions, or
+  judge UI. Treat it as partial capability.
+- [`openapi.yaml`](./openapi.yaml) documents 52 HTTP methods in this checkout.
+  UI/server-action workflows are not all available through the REST API, so
+  full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are
   no standalone versioned REST endpoints for track management.
 - Compose fixture accounts are synthetic, local-only test identities; they
@@ -139,3 +155,10 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   deadline enforcement, and the checker does not establish full tier completion
   or competition eligibility; see `PLAN.md` for the current verification and
   remaining caveats.
+- A scoped offline verification used the built web image and a fresh internal
+  Podman PostgreSQL instance with networking disabled: migrations completed,
+  `/api/ready` returned 200, and the seed contained all 40 official fixture
+  projects including `Glass Signal`, with no hidden-state projects. This is
+  evidence for that setup; it does not resolve source eligibility or final
+  submission readiness. A reviewed five-minute demo video and final
+  team/contact/submission confirmations remain outstanding.

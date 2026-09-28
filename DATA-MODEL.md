@@ -98,18 +98,37 @@ PostgreSQL 17 + Drizzle ORM. All configuration below is generated from
 ### community voting
 
 - **voting_configs** — `event_id` pk/fk→events (cascade), `access_mode`
-  (default `AUTHENTICATED` and constrained to that value), nullable `opens_at`
-  and `closes_at`, `updated_by` fk→users, `updated_at`.
-- **votes** — `id` pk, `event_id` fk→events (cascade), `voter_id` fk→users
-  (restrict), `project_id` fk→projects (cascade), `created_at`. Unique
-  `(event_id, voter_id)` enforces one vote per account per event; indexed by
-  `(event_id, project_id)`.
+  (default `AUTHENTICATED`, constrained to `AUTHENTICATED`, `OPEN_LINK`, or
+  `EMAIL_GATED`), nullable `opens_at` and `closes_at`, `updated_by` fk→users,
+  `updated_at`.
+- **voting_credentials** — `id` pk, `event_id` fk→events (cascade),
+  `access_mode` (`OPEN_LINK` or `EMAIL_GATED`), unique `token_hash`, optional
+  normalized `email` label, `created_by`, `created_at`, `expires_at`,
+  `revoked_at`. This table stores issued email invitations; its active
+  event/email index prevents duplicate active invitation labels. Email
+  ownership is not verified. Open-link browser identities are stateless and do
+  not create a credential row on ballot GET.
+- **votes** — `id` pk, `event_id` fk→events (cascade), nullable `voter_id`
+  fk→users (restrict), nullable `credential_id` fk→voting_credentials
+  (restrict), nullable `voter_token_hash`, `project_id` fk→projects (cascade),
+  `created_at`. A check requires exactly one voter identity. Partial unique
+  indexes on `(event_id, voter_id)`, `(event_id, credential_id)`, and
+  `(event_id, voter_token_hash)` enforce one vote per account, email invitation,
+  or open-link token. Open-link values are SHA-256 hashes; no raw token is
+  stored.
 - **project_comments** — `id` pk, `event_id` fk→events (cascade), `project_id`
   fk→projects (cascade), `author_id` fk→users (restrict), `body`, `created_at`.
   Indexed by `(project_id, created_at)` and `(event_id, author_id, created_at)`.
 - **voting_rate_limits** — event/account/action/window bucket with `count`.
   Unique `(event_id, actor_id, action, window_start)` supports atomic vote and
   comment counters; `count > 0` is enforced. Event/account deletion cascades.
+- **voting_credential_rate_limits** — `event_id`, nullable `credential_id`,
+  nullable `voter_token_hash`, `action`, minute `window_start`, and `count`.
+  A check requires exactly one anonymous identity; partial unique indexes form
+  per-invitation or per-token buckets. Open-link GETs no longer persist a row,
+  but each fresh token used to vote gets a fresh bucket. There is no IP/global
+  limit, and anonymous tokens can be replaced or fabricated, so this does not
+  prevent Sybil ballot stuffing.
 
 ### audit
 
