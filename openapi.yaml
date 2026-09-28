@@ -264,6 +264,194 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/teams/join:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: joinTeam
+      tags: [Teams and projects]
+      summary: Join a team using an invitation code
+      description: Requires an authenticated account and a valid invitation code for a team in this event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [inviteCode], properties: { inviteCode: { type: string, minLength: 4, maxLength: 32 } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/teams/{teamId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: teamId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getTeam
+      tags: [Teams and projects]
+      summary: Read a team in the event
+      description: Requires an authenticated account with access to the team. A team outside the event is returned as not found.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/teams/{teamId}/invitations:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: teamId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: createTeamInvitation
+      tags: [Teams and projects]
+      summary: Create an invitation for a team
+      description: Requires team invitation permission. Returns the raw invitation code once; the team must belong to the event.
+      responses:
+        '201':
+          description: Invitation code created
+          content:
+            application/json:
+              schema: { type: object, required: [inviteCode], properties: { inviteCode: { type: string } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/teams/{teamId}/leave:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: teamId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: leaveTeam
+      tags: [Teams and projects]
+      summary: Leave a team
+      description: Requires an authenticated team member. A team outside the event is returned as not found.
+      responses:
+        '200':
+          description: Leave request accepted
+          content:
+            application/json:
+              schema: { type: object, required: [accepted], properties: { accepted: { const: true } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/tracks:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listEventTracks
+      tags: [Events]
+      summary: List tracks for an event
+      description: Requires an authenticated account with event access.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: addEventTrack
+      tags: [Events]
+      summary: Add a track to an event
+      description: Requires event configuration permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 100 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/tracks/{trackId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: trackId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateEventTrack
+      tags: [Events]
+      summary: Rename an event track
+      description: Requires event configuration permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 100 } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/tracks/{trackId}/order:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: trackId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: moveEventTrack
+      tags: [Events]
+      summary: Move a track up or down in the event order
+      description: Requires event configuration permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [direction], properties: { direction: { type: string, enum: [UP, DOWN] } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/custom-questions:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listCustomQuestions
+      tags: [Events]
+      summary: List event custom questions
+      description: Requires an authenticated account with event access.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: addCustomQuestion
+      tags: [Events]
+      summary: Add a custom submission question
+      description: Requires event configuration permission. Visibility defaults to PUBLIC and required defaults to false.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string, minLength: 1, maxLength: 300 }
+                required: { type: boolean, default: false }
+                visibility: { type: string, enum: [PUBLIC, ORGANIZER_ONLY] }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/custom-questions/{questionId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: questionId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateCustomQuestion
+      tags: [Events]
+      summary: Update a custom submission question
+      description: Requires event configuration permission; all question fields are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt, required, visibility]
+              properties:
+                prompt: { type: string, minLength: 1, maxLength: 300 }
+                required: { type: boolean }
+                visibility: { type: string, enum: [PUBLIC, ORGANIZER_ONLY] }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/custom-questions/{questionId}/order:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: questionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: moveCustomQuestion
+      tags: [Events]
+      summary: Move a custom question up or down in the event order
+      description: Requires event configuration permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [direction], properties: { direction: { type: string, enum: [UP, DOWN] } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/projects:
     parameters:
       - { $ref: '#/components/parameters/eventId' }
@@ -615,28 +803,56 @@ paths:
   /api/v1/events/{eventId}/pairwise-ranking:
     parameters:
       - { $ref: '#/components/parameters/eventId' }
-    post:
-      operationId: calculatePairwiseRanking
+    get:
+      operationId: getPairwiseRankingSnapshot
       tags: [Judging]
-      summary: Calculate a pairwise project ranking
-      description: Authenticated organizer operation; computes without persisting a score snapshot. Supply comparisons explicitly or omit them to use saved event-wide judge choices filtered to the requested project IDs.
+      summary: Read a persisted pairwise ranking snapshot
+      description: Requires an authenticated event organizer. Unpublished snapshots are organizer-only.
+      parameters:
+        - { in: query, name: snapshotId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: generatePairwiseRankingSnapshot
+      tags: [Judging]
+      summary: Generate and persist a pairwise ranking snapshot
+      description: Requires an authenticated event organizer. Uses the judges' latest saved pairwise choices; projectIds optionally limits the snapshot. The generated snapshot is immutable.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required: [projectIds]
               properties:
-                projectIds: { type: array, minItems: 2, maxItems: 500, items: { type: string, minLength: 1, maxLength: 128 } }
-                comparisons:
-                  type: array
-                  minItems: 1
-                  maxItems: 20000
-                  items: { type: object, required: [winnerProjectId, loserProjectId], properties: { winnerProjectId: { type: string, minLength: 1, maxLength: 128 }, loserProjectId: { type: string, minLength: 1, maxLength: 128 } } }
+                projectIds: { type: array, minItems: 2, maxItems: 500, items: { type: string, format: uuid } }
                 maxIterations: { type: integer, minimum: 1, maximum: 100000 }
                 tolerance: { type: number, exclusiveMinimum: 0, maximum: 0.01 }
                 priorWins: { type: number, exclusiveMinimum: 0, maximum: 10 }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/pairwise-ranking/{snapshotId}/publish:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: snapshotId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: publishPairwiseRankingSnapshot
+      tags: [Judging]
+      summary: Publish a pairwise ranking snapshot as event results
+      description: Requires an authenticated event organizer with results-publish permission.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/pairwise-results:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getPublishedPairwiseResults
+      tags: [Judging]
+      summary: Read the latest published pairwise ranking
+      description: Public endpoint. Returns the latest published pairwise snapshot or not found when none has been published.
+      security: []
       responses:
         '200': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
