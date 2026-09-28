@@ -253,6 +253,9 @@ importers:
       '@dogfood/normalization':
         specifier: workspace:*
         version: link:../../packages/normalization
+      '@dogfood/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@dogfood/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
@@ -317,6 +320,9 @@ importers:
       '@dogfood/events':
         specifier: workspace:*
         version: link:../events
+      '@dogfood/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@dogfood/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -399,6 +405,9 @@ importers:
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
+      '@dogfood/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@dogfood/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -457,6 +466,18 @@ importers:
         specifier: workspace:*
         version: link:../validation
 
+  packages/notifications:
+    dependencies:
+      '@dogfood/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dogfood/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
+
   packages/permissions:
     dependencies:
       '@dogfood/db':
@@ -480,6 +501,9 @@ importers:
       '@dogfood/normalization':
         specifier: workspace:*
         version: link:../normalization
+      '@dogfood/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@dogfood/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -509,6 +533,9 @@ importers:
       '@dogfood/db':
         specifier: workspace:*
         version: link:../db
+      '@dogfood/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@dogfood/permissions':
         specifier: workspace:*
         version: link:../permissions

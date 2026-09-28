@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, db, eq, inArray, schema } from "@dogfood/db";
 import {
   lockEvaluation,
+  reopenEvaluation,
   saveEvaluationDraft,
   startEvaluation,
   submitEvaluation,
@@ -66,6 +67,19 @@ export async function saveEvaluationDraftAction(
       scores,
       overallComment,
     });
+    revalidatePath(`/events/${eventId}/judge`);
+  });
+}
+
+export async function reopenEvaluationAction(
+  eventId: string,
+  assignmentId: string,
+  _prev: FormState | undefined,
+  _formData: FormData,
+): Promise<FormState | undefined> {
+  const actor = await requireActor();
+  return runAction(async () => {
+    await reopenEvaluation(actor, eventId, assignmentId);
     revalidatePath(`/events/${eventId}/judge`);
   });
 }

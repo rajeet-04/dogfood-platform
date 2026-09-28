@@ -13,6 +13,7 @@
     "@dogfood/audit": "workspace:*",
     "@dogfood/db": "workspace:*",
     "@dogfood/events": "workspace:*",
+    "@dogfood/notifications": "workspace:*",
     "@dogfood/permissions": "workspace:*",
     "@dogfood/shared": "workspace:*",
     "@dogfood/validation": "workspace:*"

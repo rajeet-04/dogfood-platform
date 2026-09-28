@@ -113,12 +113,13 @@ describe("exports over authorized read models", () => {
     });
 
     await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
-    await transitionEvent(organizer.actor, event.id, "REGISTRATION");
-    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
-
+    // Rosters lock when submissions open, so the team forms during registration.
     const team = await createTeam(participant.actor, event.id, {
       name: "Bravo, Team",
     });
+    await transitionEvent(organizer.actor, event.id, "REGISTRATION");
+    await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
+
     const project = await createProject(participant.actor, event.id, {
       teamId: team.id,
       title: "Neat, App",

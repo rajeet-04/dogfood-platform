@@ -86,15 +86,16 @@ async function eventInJudging() {
     "JUDGE",
   );
 
-  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
-  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
-
+  // Rosters lock when submissions open, so both teams form during registration.
   const teamA = await createTeam(actorFor(participantA.id), event.id, {
     name: "Team A",
   });
   const teamB = await createTeam(actorFor(participantB.id), event.id, {
     name: "Team B",
   });
+
+  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
+  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
 
   const projectA = await createProject(actorFor(participantA.id), event.id, {
     teamId: teamA.id,

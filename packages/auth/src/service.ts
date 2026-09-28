@@ -75,5 +75,13 @@ export async function getUserById(userId: string): Promise<UserSummary> {
   return toSummary(user);
 }
 
-export { createSession, resolveSession, revokeSession } from "./session";
+export {
+  createSession,
+  resolveSession,
+  resolveSessionAccount,
+  revokeSession,
+  revokeSessionByToken,
+  deleteExpiredSessions,
+  type SessionAccount,
+} from "./session";
 export * from "./password";

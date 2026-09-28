@@ -11,6 +11,11 @@ import {
   grantEventMembership,
   removeEventMembership,
 } from "@dogfood/events";
+import {
+  actorDisplayName,
+  notify,
+  notifyEventMembersByRole,
+} from "@dogfood/notifications";
 import { ACTION, requirePermission, type Action } from "@dogfood/permissions";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
@@ -22,6 +27,14 @@ type ApplicationRow = typeof schema.judgeApplications.$inferSelect;
 
 export type JudgeApplicationInput = {
   rationale?: string | null;
+  attachment?: JudgeApplicationAttachment | null;
+};
+
+export type JudgeApplicationAttachment = {
+  name: string;
+  path: string;
+  size: number;
+  contentType: string;
 };
 
 export type JudgeApplicationListItem = {
@@ -34,6 +47,9 @@ export type JudgeApplicationListItem = {
   status: ApplicationRow["status"];
   createdAt: Date;
   decidedAt: Date | null;
+  attachmentName: string | null;
+  attachmentSize: number | null;
+  attachmentContentType: string | null;
 };
 
 export async function getMyJudgeApplication(
@@ -146,6 +162,10 @@ export async function applyAsJudge(
         .update(schema.judgeApplications)
         .set({
           rationale: input.rationale ?? null,
+          attachmentName: input.attachment?.name ?? null,
+          attachmentPath: input.attachment?.path ?? null,
+          attachmentSize: input.attachment?.size ?? null,
+          attachmentContentType: input.attachment?.contentType ?? null,
           status: "pending",
           decidedAt: null,
           decidedBy: null,
@@ -160,6 +180,19 @@ export async function applyAsJudge(
         resourceId: existing.id,
         metadata: { previousStatus: existing.status },
       });
+      const actorName = await actorDisplayName(tx, actor.userId);
+      await notifyEventMembersByRole(
+        tx,
+        eventId,
+        ["ORGANIZER"],
+        {
+          type: "judge_application_received",
+          title: `${actorName} re-applied to judge ${event.name}`,
+          body: input.rationale ?? null,
+          href: `/events/${eventId}/organizer#judge-applications`,
+        },
+        { excludeUserIds: [actor.userId] },
+      );
       return updated;
     });
     return reapplied;
@@ -172,6 +205,10 @@ export async function applyAsJudge(
         eventId,
         userId: actor.userId,
         rationale: input.rationale ?? null,
+        attachmentName: input.attachment?.name ?? null,
+        attachmentPath: input.attachment?.path ?? null,
+        attachmentSize: input.attachment?.size ?? null,
+        attachmentContentType: input.attachment?.contentType ?? null,
         status: "pending",
       })
       .returning();
@@ -183,6 +220,19 @@ export async function applyAsJudge(
       resourceId: created.id,
       metadata: { hasRationale: Boolean(input.rationale) },
     });
+    const actorName = await actorDisplayName(tx, actor.userId);
+    await notifyEventMembersByRole(
+      tx,
+      eventId,
+      ["ORGANIZER"],
+      {
+        type: "judge_application_received",
+        title: `${actorName} applied to judge ${event.name}`,
+        body: input.rationale ?? null,
+        href: `/events/${eventId}/organizer#judge-applications`,
+      },
+      { excludeUserIds: [actor.userId] },
+    );
     return created;
   });
 }
@@ -241,6 +291,9 @@ export async function listJudgeApplications(
     status: assertJudgeApplicationStatus(judge_applications.status),
     createdAt: judge_applications.createdAt,
     decidedAt: judge_applications.decidedAt,
+    attachmentName: judge_applications.attachmentName,
+    attachmentSize: judge_applications.attachmentSize,
+    attachmentContentType: judge_applications.attachmentContentType,
   }));
 }
 
@@ -304,6 +357,14 @@ export async function approveJudgeApplication(
       resourceId: application.id,
       metadata: { grantedUserId: application.userId, membershipId: membership.id },
     });
+    await notify(tx, {
+      userId: application.userId,
+      eventId,
+      type: "judge_application_approved",
+      title: `Your judge application for ${event.name} was approved`,
+      body: `${await actorDisplayName(tx, actor.userId)} added you as a judge. You can start reviewing assigned projects.`,
+      href: `/events/${eventId}/judge`,
+    });
     return row;
   });
   return updated;
@@ -344,6 +405,14 @@ export async function rejectJudgeApplication(
       resourceType: "judge_application",
       resourceId: application.id,
       metadata: {},
+    });
+    await notify(tx, {
+      userId: application.userId,
+      eventId,
+      type: "judge_application_rejected",
+      title: `Your judge application for ${event.name} was not accepted`,
+      body: `${await actorDisplayName(tx, actor.userId)} reviewed your application. You can re-apply while registration is open.`,
+      href: `/events/${eventId}`,
     });
     return row;
   });

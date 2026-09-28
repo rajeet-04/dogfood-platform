@@ -19,7 +19,14 @@ function actorFor(userId: string): Actor {
   return { userId, isPlatformAdmin: false };
 }
 
-async function scenario() {
+async function scenario(
+  beforeSubmissionsOpen?: (ctx: {
+    event: { id: string };
+    participantA: Actor;
+    participantB: Actor;
+    teamAId: string;
+  }) => Promise<void>,
+) {
   const organizer = await registerUser({
     email: "org@audit.test",
     password: "pass",
@@ -66,12 +73,22 @@ async function scenario() {
     judge.id,
     "JUDGE",
   );
-  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
-  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
-
+  // Rosters lock when submissions open, so the team forms during registration.
   const teamA = await createTeam(actorFor(participantA.id), event.id, {
     name: "Team A",
   });
+
+  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
+
+  await beforeSubmissionsOpen?.({
+    event,
+    participantA: actorFor(participantA.id),
+    participantB: actorFor(participantB.id),
+    teamAId: teamA.id,
+  });
+
+  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
+
   const projectA = await createProject(actorFor(participantA.id), event.id, {
     teamId: teamA.id,
     title: "Project A",
@@ -138,19 +155,15 @@ describe("transactional audit trail", () => {
   });
 
   it("persists audit events from event transition, team create/join, project submit, and judge assign", async () => {
-    const {
-      event,
-      organizer,
-      participantA,
-      participantB,
-      judge,
-      teamAId,
-      projectAId,
-    } = await scenario();
-
-    const { rawToken } = await createTeamInvite(participantA, teamAId, {});
-    const joined = await joinTeam(participantB, event.id, rawToken);
-    expect(joined.id).toBe(teamAId);
+    // Rosters lock when submissions open, so the invite is redeemed during
+    // registration through the scenario hook.
+    const { event, organizer, judge, projectAId } = await scenario(
+      async ({ event, participantA, participantB, teamAId }) => {
+        const { rawToken } = await createTeamInvite(participantA, teamAId, {});
+        const joined = await joinTeam(participantB, event.id, rawToken);
+        expect(joined.id).toBe(teamAId);
+      },
+    );
 
     const assignment = await assignJudge(organizer, event.id, {
       judgeId: judge.userId,

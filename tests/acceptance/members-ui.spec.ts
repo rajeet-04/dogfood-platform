@@ -62,9 +62,17 @@ test("participant joins via UI and organizer manages members", async ({
   ).toBeDisabled();
 
   await organizerPage.getByLabel("Email").fill(judge.email);
-  await organizerPage
-    .getByLabel("Role for new member")
-    .selectOption("JUDGE");
+  // Participants self-join, so the add form only offers judge and organizer
+  // while the change-role form still offers participant.
+  const newMemberRole = organizerPage.getByLabel("Role for new member");
+  await expect(newMemberRole.locator("option")).toHaveText([
+    "Judge",
+    "Organizer",
+  ]);
+  const changeRole = participantRow.getByLabel("Role for Pat UI");
+  await expect(changeRole.locator("option[value=PARTICIPANT]")).toHaveCount(1);
+
+  await newMemberRole.selectOption("JUDGE");
   await organizerPage.getByRole("button", { name: "Add member" }).click();
 
   const judgeRow = organizerPage.locator(

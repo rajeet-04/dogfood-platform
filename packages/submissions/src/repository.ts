@@ -6,6 +6,7 @@ export type ProjectRevisionRow = typeof schema.projectRevisions.$inferSelect;
 export async function getEventById(eventId: string): Promise<
   | {
       id: string;
+      name: string;
       state: EventState;
       submissionOpensAt: Date | null;
       submissionClosesAt: Date | null;
@@ -15,6 +16,7 @@ export async function getEventById(eventId: string): Promise<
   const rows = await db
     .select({
       id: schema.events.id,
+      name: schema.events.name,
       state: schema.events.state,
       submissionOpensAt: schema.events.submissionOpensAt,
       submissionClosesAt: schema.events.submissionClosesAt,

@@ -15,6 +15,8 @@ export {
   desc,
   asc,
   ilike,
+  isNotNull,
+  isNull,
 } from "drizzle-orm";
 export type { SQL } from "drizzle-orm";
 export { migrate } from "drizzle-orm/postgres-js/migrator";

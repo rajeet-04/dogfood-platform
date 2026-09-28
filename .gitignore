@@ -11,6 +11,7 @@ test-results/
 !.env.example
 data/
 tmp/
+.uploads/
 .drizzle/
 *.tsbuildinfo
 .DS_Store

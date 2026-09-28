@@ -12,7 +12,9 @@ export type {
 
 export {
   NORMALIZATION_VERSION,
+  RANKING_ALLOWED_STATES,
   SCORING_VERSION,
+  canRunRanking,
   generateRankingSnapshot,
   getRankingSnapshot,
   publishRankingSnapshot,

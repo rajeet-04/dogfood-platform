@@ -2,6 +2,7 @@ export {
   createTeam,
   createTeamInvite,
   getTeam,
+  isTeamRosterLocked,
   joinTeam,
   leaveTeam,
 } from "./service";

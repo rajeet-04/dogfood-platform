@@ -14,6 +14,7 @@ import {
   createRubric,
   getEvaluation,
   lockEvaluation,
+  reopenEvaluation,
   saveEvaluationDraft,
   startEvaluation,
   submitEvaluation,
@@ -83,12 +84,14 @@ async function scenario() {
     "JUDGE",
   );
 
-  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
-  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
-
+  // Rosters lock when submissions open, so the team forms during registration.
   const team = await createTeam(actorFor(participant.id), event.id, {
     name: "Team Main",
   });
+
+  await transitionEvent(actorFor(organizer.id), event.id, "REGISTRATION");
+  await transitionEvent(actorFor(organizer.id), event.id, "SUBMISSIONS_OPEN");
+
   const project = await createProject(actorFor(participant.id), event.id, {
     teamId: team.id,
     title: "Project Main",
@@ -359,6 +362,66 @@ describe("evaluation workflow", () => {
         ),
       );
     expect(audits).toHaveLength(1);
+  });
+
+  it("reopens a submitted evaluation without discarding its scores", async () => {
+    const { event, judgeA, assignmentAId } = await scenario();
+
+    await startEvaluation(judgeA, event.id, assignmentAId);
+    const criteria = (await getEvaluation(judgeA, event.id, assignmentAId))
+      .criteria;
+    await submitEvaluation(judgeA, event.id, assignmentAId, {
+      scores: scoresFor(criteria),
+      overallComment: "final thoughts",
+    });
+
+    const reopened = await reopenEvaluation(judgeA, event.id, assignmentAId);
+    expect(reopened.state).toBe("IN_PROGRESS");
+    expect(reopened.status).toBe("IN_PROGRESS");
+    expect(reopened.submittedAt).toBeNull();
+    // The judge's existing scores and comment survive the reopen.
+    expect(reopened.overallComment).toBe("final thoughts");
+    expect(
+      reopened.criteria.every((c) => c.score !== null),
+    ).toBe(true);
+  });
+
+  it("freezes evaluations once results are ready", async () => {
+    const { event, organizer, judgeA, assignmentAId } = await scenario();
+
+    await startEvaluation(judgeA, event.id, assignmentAId);
+    const criteria = (await getEvaluation(judgeA, event.id, assignmentAId))
+      .criteria;
+    await submitEvaluation(judgeA, event.id, assignmentAId, {
+      scores: scoresFor(criteria),
+    });
+
+    // Judging stays open while the event is in JUDGING.
+    const reopened = await saveEvaluationDraft(judgeA, event.id, assignmentAId, {
+      overallComment: "still open",
+    });
+    expect(reopened.state).toBe("IN_PROGRESS");
+
+    await transitionEvent(organizer, event.id, "RESULTS_READY");
+
+    await expect(
+      startEvaluation(judgeA, event.id, assignmentAId),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      saveEvaluationDraft(judgeA, event.id, assignmentAId, {
+        overallComment: "too late",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      submitEvaluation(judgeA, event.id, assignmentAId, {
+        scores: scoresFor(criteria),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // The frozen evaluation keeps the last draft.
+    const current = await getEvaluation(judgeA, event.id, assignmentAId);
+    expect(current.state).toBe("IN_PROGRESS");
+    expect(current.overallComment).toBe("still open");
   });
 
   it("lets only the organizer lock and only after the judge submitted", async () => {

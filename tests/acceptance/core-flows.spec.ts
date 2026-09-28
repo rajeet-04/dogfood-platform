@@ -15,6 +15,7 @@ import {
   seedEvent,
   seedJudgeEvaluation,
   seedParticipantProject,
+  seedParticipantTeam,
   seedRubric,
   seedUser,
   uniqueEmail,
@@ -27,10 +28,9 @@ test("participant journey: team → project → revision → submit", async ({ p
 
   const organizer = await seedUser(uniqueEmail("org"), "Olga");
   const event = await seedEvent(organizer.actor, "Hack Summer", "hack-summer");
-  await advanceEvent(organizer.actor, event.id, [
-    "REGISTRATION",
-    "SUBMISSIONS_OPEN",
-  ]);
+  // Rosters lock when submissions open, so the team forms during registration
+  // and the project is created afterwards.
+  await advanceEvent(organizer.actor, event.id, ["REGISTRATION"]);
 
   const participantEmail = uniqueEmail("pat");
   await registerViaUi(page, participantEmail, "Pat");
@@ -49,6 +49,8 @@ test("participant journey: team → project → revision → submit", async ({ p
   await page.getByLabel("Team name").fill("Team Pat");
   await page.getByRole("button", { name: "Create team" }).click();
   await expect(page.getByText("Team Pat")).toBeVisible();
+
+  await advanceEvent(organizer.actor, event.id, ["SUBMISSIONS_OPEN"]);
 
   // Create project
   await page.getByLabel("Title").fill("Pat's Hack Project");
@@ -77,10 +79,7 @@ test("judge journey: queue → evaluate → submit → verify lock", async ({ pa
 
   const organizer = await seedUser(uniqueEmail("org"), "Olga");
   const event = await seedEvent(organizer.actor, "Hack Season", "hack-season");
-  await advanceEvent(organizer.actor, event.id, [
-    "REGISTRATION",
-    "SUBMISSIONS_OPEN",
-  ]);
+  await advanceEvent(organizer.actor, event.id, ["REGISTRATION"]);
 
   const rubricId = await seedRubric(organizer.actor, event.id, [
     { name: "Impact", weight: 60, minScore: 0, maxScore: 10 },
@@ -88,11 +87,21 @@ test("judge journey: queue → evaluate → submit → verify lock", async ({ pa
   ]);
 
   const participant = await seedUser(uniqueEmail("part"), "Theo");
+  // Rosters lock when submissions open, so the team is seeded during
+  // registration and the project is submitted afterwards.
+  const { teamId } = await seedParticipantTeam(
+    organizer.actor,
+    event.id,
+    participant,
+    "Cool App Team",
+  );
+  await advanceEvent(organizer.actor, event.id, ["SUBMISSIONS_OPEN"]);
   const { projectId } = await seedParticipantProject(
     organizer.actor,
     event.id,
     participant,
     "Cool App",
+    teamId,
   );
 
   await advanceEvent(organizer.actor, event.id, [
@@ -126,6 +135,14 @@ test("judge journey: queue → evaluate → submit → verify lock", async ({ pa
   await page.getByRole("button", { name: "Submit evaluation" }).click();
   await expect(page.getByTestId("assignment-status")).toHaveText("Submitted");
 
+  // A submitted evaluation can be reopened until results are generated.
+  await expect(page.getByTestId("submitted-banner")).toBeVisible();
+  await page.getByRole("button", { name: "Re-evaluate" }).click();
+  await expect(page.getByTestId("assignment-status")).toHaveText("In progress");
+  await page.locator("input[data-criterion-id]").nth(0).fill("9");
+  await page.getByRole("button", { name: "Submit evaluation" }).click();
+  await expect(page.getByTestId("assignment-status")).toHaveText("Submitted");
+
   // Organizer locks the evaluation; the judge sees read-only state
   await lockEvaluation(organizer.actor, event.id, assignment.id);
   await page.reload();
@@ -154,12 +171,22 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
   // Advance the event through the UI
   await page.getByRole("button", { name: "Advance to Registration" }).click();
   await expect(page.getByTestId("event-state")).toHaveText("Registration");
+
+  // Rosters lock when submissions open, so the team is seeded while
+  // registration is still open.
+  const participant = await seedUser(uniqueEmail("part"), "Theo");
+  const { teamId } = await seedParticipantTeam(
+    organizer,
+    event.id,
+    participant,
+    "Neo App Team",
+  );
+
   await page.getByRole("button", { name: "Advance to Submissions open" }).click();
   await expect(page.getByTestId("event-state")).toHaveText("Submissions open");
 
   // Seed a participant project and a judge while the window is open
-  const participant = await seedUser(uniqueEmail("part"), "Theo");
-  await seedParticipantProject(organizer, event.id, participant, "Neo App");
+  await seedParticipantProject(organizer, event.id, participant, "Neo App", teamId);
   const judge = await seedUser(uniqueEmail("judge"), "Jana");
   await grantEventMembership(organizer, event.id, judge.userId, "JUDGE");
 
@@ -176,14 +203,14 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
   await page.getByLabel("Criterion name").fill("Impact");
   await page.getByLabel("Weight").fill("60");
   await page.getByLabel("Min").fill("0");
-  await page.getByLabel("Max").fill("10");
+  await page.getByLabel("Max", { exact: true }).fill("10");
   await page.getByRole("button", { name: "Add criterion" }).click();
   await expect(page.getByText(/Impact — weight 60/)).toBeVisible();
 
   await page.getByLabel("Criterion name").fill("Polish");
   await page.getByLabel("Weight").fill("40");
   await page.getByLabel("Min").fill("0");
-  await page.getByLabel("Max").fill("10");
+  await page.getByLabel("Max", { exact: true }).fill("10");
   await page.getByRole("button", { name: "Add criterion" }).click();
   await expect(page.getByText(/Polish — weight 40/)).toBeVisible();
 
@@ -226,7 +253,22 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
   await page.getByRole("button", { name: "Generate ranking snapshot" }).click();
   await expect(page.getByText("Ranking snapshot")).toBeVisible();
 
+  // An unpublished snapshot is already visible to organizers, with scores
+  await expect(page.getByTestId("results-table")).toBeVisible();
+  const unpublishedRow = page.getByTestId("results-row").first();
+  await expect(unpublishedRow.getByText("Neo App").first()).toBeVisible();
+  await expect(unpublishedRow.getByTestId("result-score")).not.toBeEmpty();
+  await expect(unpublishedRow.getByText(/Impact:/)).toBeVisible();
+  await expect(unpublishedRow.getByText(/Polish:/)).toBeVisible();
+
   await page.getByRole("button", { name: "Publish results" }).click();
   await expect(page.getByTestId("event-state")).toHaveText("Results ready");
   await expect(page.getByText("Published", { exact: true })).toBeVisible();
+
+  // Scores stay visible once the event is published
+  await page.getByRole("button", { name: "Advance to Published" }).click();
+  await expect(page.getByTestId("event-state")).toHaveText("Published");
+  await expect(page.getByTestId("results-table")).toBeVisible();
+  await expect(page.getByTestId("results-row")).toHaveCount(1);
+  await expect(page.getByTestId("result-score")).not.toBeEmpty();
 });

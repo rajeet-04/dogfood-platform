@@ -1,5 +1,6 @@
 import { and, inArray, db, eq, schema, type EventState } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
+import { actorDisplayName, notifyEventMembersByRole } from "@dogfood/notifications";
 import { normalizeJudgeBatch } from "@dogfood/normalization";
 import { calculateWeightedScore } from "@dogfood/scoring";
 import type { Actor } from "@dogfood/shared";
@@ -17,6 +18,21 @@ import {
 
 export const SCORING_VERSION = "1.0";
 export const NORMALIZATION_VERSION = "1.0";
+
+/**
+ * Ranking snapshots can be generated and published from JUDGING onwards.
+ * Allowing the later states means an event that was advanced past judging
+ * without releasing results can still be ranked and published.
+ */
+export const RANKING_ALLOWED_STATES: EventState[] = [
+  "JUDGING",
+  "RESULTS_READY",
+  "PUBLISHED",
+];
+
+export function canRunRanking(eventState: EventState): boolean {
+  return RANKING_ALLOWED_STATES.includes(eventState);
+}
 
 export type RankingGenerationConfig = {
   normalizationStrategy: "z-score" | "none";
@@ -121,10 +137,10 @@ export async function generateRankingSnapshot(
 
   await requireOrganizer(actor, eventId, event.state as EventState);
 
-  if (event.state !== "JUDGING") {
+  if (!canRunRanking(event.state as EventState)) {
     throw new DogfoodError(
       "VALIDATION_FAILED",
-      "[VALIDATION_FAILED] Rankings can only be generated during judging",
+      "[VALIDATION_FAILED] Rankings can only be generated once judging has started",
     );
   }
 
@@ -401,14 +417,18 @@ export async function publishRankingSnapshot(
 
   await requireOrganizer(actor, eventId, event.state as EventState);
 
-  if (event.state !== "JUDGING") {
+  if (!canRunRanking(event.state as EventState)) {
     throw new DogfoodError(
       "VALIDATION_FAILED",
-      "[VALIDATION_FAILED] Results can only be published during judging",
+      "[VALIDATION_FAILED] Results can only be published once judging has started",
     );
   }
 
   const publishedAt = new Date();
+  // Publishing never rewinds an event that already moved past RESULTS_READY.
+  const nextState: EventState =
+    event.state === "JUDGING" ? "RESULTS_READY" : (event.state as EventState);
+
   await db.transaction(async (tx) => {
     await tx
       .update(schema.rankingSnapshots)
@@ -417,7 +437,7 @@ export async function publishRankingSnapshot(
     await tx
       .update(schema.events)
       .set({
-        state: "RESULTS_READY",
+        state: nextState,
         publishedRankingSnapshotId: row.id,
         updatedAt: publishedAt,
       })
@@ -429,12 +449,24 @@ export async function publishRankingSnapshot(
       resourceType: "ranking_snapshot",
       resourceId: row.id,
     });
+    await notifyEventMembersByRole(
+      tx,
+      eventId,
+      ["PARTICIPANT", "JUDGE", "ORGANIZER"],
+      {
+        type: "results_published",
+        title: `Results for ${event.name} are published`,
+        body: `${await actorDisplayName(tx, actor.userId)} published the final leaderboard.`,
+        href: `/events/${eventId}`,
+      },
+      { excludeUserIds: [actor.userId] },
+    );
   });
 
   return {
     snapshotId: row.id,
     eventId,
     publishedAt,
-    eventState: "RESULTS_READY",
+    eventState: nextState,
   };
 }

@@ -13,6 +13,10 @@ type EventRow = typeof schema.events.$inferSelect;
 export type JudgeAssignmentDetail = {
   item: JudgeQueueItem;
   evaluation: Awaited<ReturnType<typeof getEvaluation>> | null;
+  event: {
+    id: string;
+    state: EventRow["state"];
+  };
 };
 
 export type JudgeHome = {
@@ -69,5 +73,12 @@ export async function getJudgeAssignmentDetail(
   } catch {
     evaluation = null;
   }
-  return { item, evaluation };
+  const eventRows = await db
+    .select({ id: schema.events.id, state: schema.events.state })
+    .from(schema.events)
+    .where(eq(schema.events.id, eventId))
+    .limit(1);
+  const event = eventRows[0];
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  return { item, evaluation, event };
 }

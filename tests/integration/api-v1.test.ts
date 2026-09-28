@@ -111,9 +111,10 @@ describe("api/v1", () => {
     ]);
 
     await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
+    // Rosters lock when submissions open, so the team forms during registration.
+    const team = await createTeam(participant.actor, event.id, { name: "Alpha Team" });
     await transitionEvent(organizer.actor, event.id, "REGISTRATION");
     await transitionEvent(organizer.actor, event.id, "SUBMISSIONS_OPEN");
-    const team = await createTeam(participant.actor, event.id, { name: "Alpha Team" });
     const project = await createProject(participant.actor, event.id, {
       teamId: team.id,
       title: "Cool App",
@@ -211,14 +212,17 @@ describe("api/v1", () => {
 
     await grantEventMembership(organizer.actor, eventId, participant.userId, "PARTICIPANT");
     await transitionEvent(organizer.actor, eventId, "REGISTRATION");
-    await transitionEvent(organizer.actor, eventId, "SUBMISSIONS_OPEN");
 
+    // Rosters lock when submissions open, so the team is created while
+    // registration is still open and the project afterwards.
     const teamResponse = await invoke(
       teamsRoute.POST,
       request("POST", `/api/v1/events/${eventId}/teams`, participant.cookie, { name: "Bravo Team" }),
       { eventId },
     );
     expect(teamResponse.res.status).toBe(201);
+
+    await transitionEvent(organizer.actor, eventId, "SUBMISSIONS_OPEN");
 
     const projectResponse = await invoke(
       projectsRoute.POST,
