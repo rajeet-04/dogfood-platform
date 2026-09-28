@@ -7,6 +7,8 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
+COPY packages/applications/package.json packages/applications/
+COPY packages/certificates/package.json packages/certificates/
 COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 COPY packages/permissions/package.json packages/permissions/
@@ -19,8 +21,10 @@ COPY packages/normalization/package.json packages/normalization/
 COPY packages/ranking/package.json packages/ranking/
 COPY packages/audit/package.json packages/audit/
 COPY packages/exports/package.json packages/exports/
+COPY packages/notifications/package.json packages/notifications/
 COPY packages/validation/package.json packages/validation/
 COPY packages/shared/package.json packages/shared/
+COPY packages/voting/package.json packages/voting/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS build
@@ -30,7 +34,9 @@ COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
 COPY --from=deps /app/packages /app/packages
 COPY --from=deps /app/apps/web /app/apps/web
 COPY . .
-RUN pnpm --filter @dogfood/web build
+# Route collection initializes the DB client but does not connect during build.
+RUN mkdir -p /app/apps/web/public \
+    && DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood pnpm --filter @dogfood/web build
 
 FROM base AS runner
 WORKDIR /app
