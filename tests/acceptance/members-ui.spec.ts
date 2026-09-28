@@ -58,7 +58,7 @@ test("participant joins via UI and organizer manages members", async ({
   );
   await expect(organizerRow.getByRole("button", { name: "Remove" })).toHaveCount(0);
   await expect(
-    organizerRow.getByRole("button", { name: "Update role" }),
+    organizerRow.getByRole("button", { name: "Update" }),
   ).toBeDisabled();
 
   await organizerPage.getByLabel("Email").fill(judge.email);
@@ -72,13 +72,13 @@ test("participant joins via UI and organizer manages members", async ({
     { hasText: judge.email },
   );
   await expect(judgeRow).toBeVisible({ timeout: 15_000 });
-  await expect(judgeRow).toContainText("Current role: JUDGE");
+  await expect(judgeRow.getByTestId("member-role")).toHaveText("Judge");
 
   await participantRow
     .getByLabel("Role for Pat UI")
     .selectOption("JUDGE");
-  await participantRow.getByRole("button", { name: "Update role" }).click();
-  await expect(participantRow).toContainText("Current role: JUDGE");
+  await participantRow.getByRole("button", { name: "Update" }).click();
+  await expect(participantRow.getByTestId("member-role")).toHaveText("Judge");
 
   await participantRow.getByRole("button", { name: "Remove" }).click();
   await expect(participantRow).toHaveCount(0);

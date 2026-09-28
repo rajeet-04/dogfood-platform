@@ -9,6 +9,23 @@ import { getActor } from "../../../server/session";
 
 export const dynamic = "force-dynamic";
 
+function formatDateTime(value: Date | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-medium text-slate-700">{value}</dd>
+    </div>
+  );
+}
+
 export default async function EventLandingPage({
   params,
 }: {
@@ -50,48 +67,116 @@ export default async function EventLandingPage({
     links.push({ label: "Organizer dashboard", href: `/events/${eventId}/organizer` });
   }
 
+  const stateLabel = EVENT_STATE_LABEL[event.state] ?? event.state;
+  const canJoin = actor && event.state === "REGISTRATION" && links.length === 0;
+
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-6">
-        <p className="text-sm text-slate-500">{event.slug}</p>
-        <h1 className="text-3xl font-bold">{event.name}</h1>
-        {event.description ? (
-          <p className="mt-2 text-slate-600">{event.description}</p>
-        ) : null}
-        <span className="mt-3 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-          {EVENT_STATE_LABEL[event.state] ?? event.state}
-        </span>
-      </div>
-      {links.length ? (
-        <ul className="grid gap-3">
-          {links.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="block rounded-lg border border-slate-200 bg-white px-5 py-4 font-medium hover:border-slate-300"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6">
-          <p className="text-slate-500">
-            {actor
-              ? "You are not part of this event yet."
-              : "Sign in to join this event."}
-          </p>
-          {actor && event.state === "REGISTRATION" ? (
-            <div className="mt-4">
+    <main>
+      <header className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-4 py-16 text-white sm:py-20">
+        <div className="mx-auto max-w-5xl">
+          <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">
+            {stateLabel}
+          </span>
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
+            {event.name}
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm text-indigo-100">/{event.slug}</p>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="min-w-0">
+          {event.description ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6">
+              <h2 className="mb-3 text-lg font-semibold">About this event</h2>
+              <p className="whitespace-pre-wrap text-slate-600">
+                {event.description}
+              </p>
+            </div>
+          ) : null}
+
+          {links.length ? (
+            <section className="mt-6">
+              <h2 className="mb-3 text-lg font-semibold">Your dashboard</h2>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {links.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4 font-medium hover:border-indigo-300 hover:shadow-sm"
+                    >
+                      <span>{link.label}</span>
+                      <span className="text-slate-400 transition-transform group-hover:translate-x-0.5">
+                        →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {!links.length && !canJoin ? (
+            <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
+              <p className="text-slate-500">
+                {actor
+                  ? `Registration for this event is ${event.state === "REGISTRATION" ? "open" : "not open right now"}.`
+                  : "Sign in to join this event."}
+              </p>
+              {!actor && event.state === "REGISTRATION" ? (
+                <Link
+                  href="/login"
+                  className="mt-4 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500"
+                >
+                  Sign in to join
+                </Link>
+              ) : null}
+            </section>
+          ) : null}
+        </section>
+
+        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Event details
+          </h2>
+          <dl className="space-y-3">
+            <DetailRow label="Status" value={stateLabel} />
+            <DetailRow
+              label="Applications open"
+              value={formatDateTime(event.registrationOpensAt)}
+            />
+            <DetailRow
+              label="Applications close"
+              value={formatDateTime(event.registrationClosesAt)}
+            />
+            <DetailRow
+              label="Submissions close"
+              value={formatDateTime(event.submissionClosesAt)}
+            />
+            <DetailRow label="Timezone" value={event.timezone} />
+          </dl>
+
+          <div className="mt-6">
+            {links.length ? (
+              <span className="inline-block rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700">
+                You are part of this event
+              </span>
+            ) : canJoin ? (
               <ActionForm
                 action={joinEventAction.bind(null, eventId)}
                 submitLabel="Join as participant"
+                className="[&_button]:mt-0"
               />
-            </div>
-          ) : null}
-        </div>
-      )}
+            ) : (
+              <p className="rounded-lg bg-slate-50 px-4 py-2.5 text-sm text-slate-500">
+                {actor
+                  ? "Registration closed"
+                  : "Sign in to apply for this event"}
+              </p>
+            )}
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }
