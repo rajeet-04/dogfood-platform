@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -21,6 +21,50 @@ export type StoredUpload = {
   size: number;
   contentType: string;
 };
+
+export type StoredProjectImage = StoredUpload & { sha256: string };
+
+function imageContentType(bytes: Buffer): "image/png" | "image/jpeg" | null {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  return null;
+}
+
+/** Store an image under its owning event after checking the bytes, not the filename or MIME claim. */
+export async function saveProjectImage(file: File, eventId: string): Promise<StoredProjectImage> {
+  if (file.size === 0) throw new Error("EMPTY_UPLOAD");
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("UPLOAD_TOO_LARGE");
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (bytes.length > MAX_UPLOAD_BYTES) throw new Error("UPLOAD_TOO_LARGE");
+  const contentType = imageContentType(bytes);
+  if (!contentType) throw new Error("UPLOAD_TYPE_NOT_ALLOWED");
+
+  const scope = path.posix.join("events", eventId, "images");
+  const name = `${randomUUID()}.${contentType === "image/png" ? "png" : "jpg"}`;
+  const relativePath = path.posix.join(scope, name);
+  const absolute = resolveUploadPath(relativePath);
+  await mkdir(path.dirname(absolute), { recursive: true });
+  try {
+    await writeFile(absolute, bytes, { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      await deleteUpload(relativePath);
+    }
+    throw error;
+  }
+  return {
+    name: file.name,
+    path: relativePath,
+    size: bytes.length,
+    contentType,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
+}
 
 export function isSupportedUpload(contentType: string): boolean {
   return ALLOWED_CONTENT_TYPES.has(contentType);
