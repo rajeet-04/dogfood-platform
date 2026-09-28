@@ -211,6 +211,9 @@ importers:
       '@dogfood/validation':
         specifier: workspace:*
         version: link:packages/validation
+      '@dogfood/voting':
+        specifier: workspace:*
+        version: link:packages/voting
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -277,6 +280,9 @@ importers:
       '@dogfood/validation':
         specifier: workspace:*
         version: link:../../packages/validation
+      '@dogfood/voting':
+        specifier: workspace:*
+        version: link:../../packages/voting
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -578,6 +584,24 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/voting:
+    dependencies:
+      '@dogfood/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@dogfood/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dogfood/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@dogfood/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@dogfood/validation':
+        specifier: workspace:*
+        version: link:../validation
 
 packages:
 

@@ -25,6 +25,7 @@ import { joinEventAction } from "../../../server/actions/members";
 import { formatScore, getEventResults } from "../../../server/read-models/results";
 import { getPublicRubric } from "../../../server/read-models/rubric";
 import { getActor } from "../../../server/session";
+import { getVotingConfig } from "@dogfood/voting";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,14 @@ export default async function EventLandingPage({
   const event = rows[0];
   if (!event) notFound();
   const eventId = event.id;
+  const now = new Date();
+  const votingConfig = event.state === "JUDGING" ? await getVotingConfig(eventId) : null;
+  const communityVotingOpen = Boolean(
+    votingConfig?.opensAt &&
+    votingConfig.closesAt &&
+    votingConfig.opensAt <= now &&
+    now < votingConfig.closesAt,
+  );
 
   let roles: string[] = [];
   if (actor) {
@@ -100,7 +109,6 @@ export default async function EventLandingPage({
 
   const stateLabel = EVENT_STATE_LABEL[event.state] ?? event.state;
 
-  const now = new Date();
   const withinWindow =
     event.state === "REGISTRATION" &&
     (!event.registrationOpensAt || event.registrationOpensAt <= now) &&
@@ -192,6 +200,29 @@ export default async function EventLandingPage({
 
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8">
         <div className="min-w-0 space-y-5">
+          {communityVotingOpen ? (
+            <section
+              data-testid="community-voting-callout"
+              className="flex flex-col gap-4 rounded-xl border border-accent-border bg-accent-soft/50 p-5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <h2 className="text-subheading font-semibold text-fg">
+                  Choose a community favorite
+                </h2>
+                <p className="mt-1 max-w-prose text-small text-fg-muted">
+                  Sign in to cast one vote. Community tallies stay hidden until voting closes.
+                </p>
+              </div>
+              <Link
+                href={"/events/" + eventId + "/vote"}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-4 text-small font-semibold text-accent-fg shadow-xs transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--df-ring)]"
+              >
+                Community vote
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+            </section>
+          ) : null}
+
           {event.description || event.websiteUrl || briefExtras.length > 0 ? (
             <section
               className="rounded-xl border border-line bg-surface p-5"

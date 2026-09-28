@@ -53,6 +53,7 @@ async function queryAudit(
       and(
         eq(schema.eventMemberships.userId, actor.userId),
         eq(schema.eventMemberships.eventId, eventId),
+        eq(schema.eventMemberships.isActive, true),
       ),
     );
   requirePermission(actor, ACTION.READ_AUDIT, {
