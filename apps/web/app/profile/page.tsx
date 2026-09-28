@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Award, Mail, ShieldCheck, Users } from "lucide-react";
 
+import { Avatar } from "../../components/ui/avatar";
 import { Badge } from "../../components/badge";
 import { Collapsible } from "../../components/collapsible";
 import {
@@ -9,6 +11,10 @@ import {
 } from "../../lib/event-flow";
 import { requireActor } from "../../server/session";
 import { getProfile } from "../../server/read-models/profile";
+import { ButtonLink } from "../../components/ui/button";
+import { Card, CardBody, CardHeader } from "../../components/ui/card";
+import { EmptyStatePanel } from "../../components/ui/empty-state";
+import { Page, PageHeader } from "../../components/ui/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -19,95 +25,128 @@ function roleLabel(role: string): string {
 export default async function ProfilePage() {
   const actor = await requireActor();
   const profile = await getProfile(actor);
+  const memberships = profile.memberships;
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-12">
-      <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+    <Page width="narrow">
+      <PageHeader
+        title="Profile"
+        description="Your account, the events you belong to, and the certificates you have earned."
+        actions={
+          <ButtonLink href="/events" variant="outline" size="sm">
+            Browse events
+          </ButtonLink>
+        }
+      />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="text-lg font-semibold">Account</h2>
-        <dl className="mt-4 space-y-3 text-sm">
-          <div className="flex gap-2">
-            <dt className="w-28 shrink-0 text-slate-500">Display name</dt>
-            <dd className="font-medium">{profile.displayName}</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="w-28 shrink-0 text-slate-500">Email</dt>
-            <dd className="font-medium">{profile.email}</dd>
+      <Card className="mt-6">
+        <CardBody className="flex flex-wrap items-center gap-4">
+          <Avatar name={profile.displayName} size="xl" />
+          <div className="min-w-0 flex-1">
+            <p className="text-subheading font-semibold text-fg">
+              {profile.displayName}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-small text-fg-subtle">
+              <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="break-all">{profile.email}</span>
+            </p>
           </div>
           {profile.isPlatformAdmin ? (
-            <div className="flex gap-2">
-              <dt className="w-28 shrink-0 text-slate-500">Access</dt>
-              <dd>
-                <Badge tone="indigo">Platform admin</Badge>
-              </dd>
-            </div>
+            <Badge tone="accent" icon={<ShieldCheck className="size-3" />}>
+              Platform admin
+            </Badge>
           ) : null}
-        </dl>
-      </section>
+        </CardBody>
+      </Card>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Events</h2>
-          {profile.memberships.length > 0 ? (
-            <Badge tone="slate">{profile.memberships.length} joined</Badge>
-          ) : null}
-        </div>
-        {profile.memberships.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            You are not a member of any event yet.
-          </p>
+      <Card className="mt-4">
+        <CardHeader
+          title="Events"
+          description="Every event you are a member of, and the role you hold there."
+          action={
+            memberships.length > 0 ? (
+              <Badge tone="neutral">{memberships.length} joined</Badge>
+            ) : null
+          }
+        />
+        {memberships.length === 0 ? (
+          <CardBody>
+            <EmptyStatePanel
+              compact
+              icon="calendar"
+              title="You are not a member of any event yet."
+              description="Join an open event to create a team, submit a project, or help judge."
+              action={
+                <ButtonLink href="/events" variant="secondary" size="sm">
+                  Browse events
+                </ButtonLink>
+              }
+            />
+          </CardBody>
         ) : (
-          <ul className="mt-4 space-y-3">
-            {profile.memberships.map((membership) => (
+          <ul className="divide-y divide-line-subtle">
+            {memberships.map((membership) => (
               <li
                 key={membership.eventId}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
+                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
               >
                 <div className="min-w-0">
                   <Link
                     href={`/events/${membership.eventId}`}
-                    className="font-medium hover:underline"
+                    className="inline-block py-1 text-small font-medium text-fg underline-offset-4 hover:text-accent hover:underline"
                   >
                     {membership.eventName}
                   </Link>
-                  <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-fg-subtle">
                     <Badge
-                      tone={EVENT_STATE_TONE[membership.eventState] ?? "slate"}
+                      tone={EVENT_STATE_TONE[membership.eventState] ?? "neutral"}
                     >
                       {EVENT_STATE_LABEL[membership.eventState] ??
                         membership.eventState}
                     </Badge>
-                    {membership.teamName ? `Team: ${membership.teamName}` : null}
-                    {membership.isTeamLeader ? "Leader" : null}
+                    {membership.teamName ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="size-3" aria-hidden="true" />
+                        Team: {membership.teamName}
+                      </span>
+                    ) : null}
+                    {membership.isTeamLeader ? (
+                      <Badge tone="info">Leader</Badge>
+                    ) : null}
                   </p>
                 </div>
-                <Badge tone={EVENT_ROLE_TONE[membership.role] ?? "slate"}>
+                <Badge tone={EVENT_ROLE_TONE[membership.role] ?? "neutral"}>
                   {roleLabel(membership.role)}
                 </Badge>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       <Collapsible
+        className="mt-4"
         title="Certificates"
         meta={
-          <Badge tone={profile.certificates.length > 0 ? "emerald" : "slate"}>
+          <Badge
+            tone={profile.certificates.length > 0 ? "success" : "neutral"}
+            icon={<Award className="size-3" />}
+          >
             {profile.certificates.length} earned
           </Badge>
         }
       >
         {profile.certificates.length === 0 ? (
-          <p className="text-sm text-slate-500">No certificates yet.</p>
+          <p className="text-small text-fg-subtle">
+            No certificates yet. Place in a published ranking to earn one.
+          </p>
         ) : (
           <ul className="space-y-2">
             {profile.certificates.map((certificate) => (
               <li key={certificate.id}>
                 <Link
                   href={`/certificates/${certificate.id}`}
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="inline-block py-1 text-small font-medium text-accent underline-offset-4 hover:underline"
                 >
                   {certificate.eventName}
                 </Link>
@@ -116,6 +155,6 @@ export default async function ProfilePage() {
           </ul>
         )}
       </Collapsible>
-    </main>
+    </Page>
   );
 }

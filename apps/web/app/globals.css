@@ -1,1 +1,568 @@
 @import "tailwindcss";
+
+/* ------------------------------------------------------------------------- *
+ * DOGFOOD DESIGN SYSTEM
+ *
+ * A single, restrained token layer. Components never hardcode a colour or a
+ * radius: they reference the semantic variables below so light and dark stay
+ * in lockstep and the whole product reads as one system.
+ *
+ * Layers, bottom to top:
+ *   1. primitives  - brand ramp + neutral ramp
+ *   2. semantic    - surface / text / border / status roles
+ *   3. typography  - named type levels
+ *   4. shape       - radius, shadow, ring, motion
+ * ------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* == 1. PRIMITIVES ======================================================== */
+
+@theme {
+  /* Brand: a deep indigo with a violet lean. Used for primary actions, the
+     active navigation item and focus rings. Nothing else. */
+  --color-brand-50: oklch(0.97 0.014 285);
+  --color-brand-100: oklch(0.943 0.028 285);
+  --color-brand-200: oklch(0.894 0.05 284);
+  --color-brand-300: oklch(0.821 0.078 283);
+  --color-brand-400: oklch(0.722 0.117 282);
+  --color-brand-500: oklch(0.629 0.152 280);
+  --color-brand-600: oklch(0.548 0.163 279);
+  --color-brand-700: oklch(0.472 0.148 278);
+  --color-brand-800: oklch(0.404 0.123 277);
+  --color-brand-900: oklch(0.35 0.101 277);
+  --color-brand-950: oklch(0.245 0.077 277);
+
+  /* Neutrals: a very slightly cool grey. Carries almost all the UI. */
+  --color-ink-0: oklch(1 0 0);
+  --color-ink-25: oklch(0.992 0.002 264);
+  --color-ink-50: oklch(0.978 0.003 264);
+  --color-ink-100: oklch(0.958 0.004 264);
+  --color-ink-150: oklch(0.938 0.005 264);
+  --color-ink-200: oklch(0.912 0.006 264);
+  --color-ink-300: oklch(0.856 0.007 264);
+  --color-ink-400: oklch(0.702 0.011 264);
+  --color-ink-500: oklch(0.573 0.013 264);
+  --color-ink-600: oklch(0.478 0.014 264);
+  --color-ink-700: oklch(0.398 0.013 264);
+  --color-ink-800: oklch(0.311 0.012 264);
+  --color-ink-900: oklch(0.226 0.011 264);
+  --color-ink-950: oklch(0.166 0.01 264);
+  --color-ink-1000: oklch(0.113 0.009 264);
+
+  /* Status ramps. Desaturated enough to sit beside the neutrals. */
+  --color-success-50: oklch(0.972 0.017 155);
+  --color-success-100: oklch(0.936 0.036 155);
+  --color-success-500: oklch(0.627 0.146 155);
+  --color-success-600: oklch(0.556 0.135 155);
+  --color-success-700: oklch(0.478 0.117 155);
+  --color-success-900: oklch(0.302 0.077 155);
+
+  --color-warning-50: oklch(0.977 0.024 85);
+  --color-warning-100: oklch(0.945 0.05 85);
+  --color-warning-500: oklch(0.732 0.145 71);
+  --color-warning-600: oklch(0.652 0.144 66);
+  --color-warning-700: oklch(0.545 0.128 62);
+  --color-warning-900: oklch(0.336 0.079 59);
+
+  --color-danger-50: oklch(0.971 0.014 20);
+  --color-danger-100: oklch(0.936 0.031 20);
+  --color-danger-500: oklch(0.606 0.19 25);
+  --color-danger-600: oklch(0.553 0.184 26);
+  --color-danger-700: oklch(0.479 0.159 26);
+  --color-danger-900: oklch(0.316 0.107 24);
+
+  --color-info-50: oklch(0.972 0.014 245);
+  --color-info-100: oklch(0.937 0.03 245);
+  --color-info-500: oklch(0.623 0.155 250);
+  --color-info-600: oklch(0.564 0.152 253);
+  --color-info-700: oklch(0.488 0.13 255);
+  --color-info-900: oklch(0.302 0.09 256);
+}
+
+/* == 2. SEMANTIC ROLES =================================================== */
+
+:root {
+  color-scheme: light;
+
+  --df-canvas: var(--color-ink-50);
+  --df-surface: var(--color-ink-0);
+  --df-surface-raised: var(--color-ink-0);
+  --df-surface-sunken: var(--color-ink-50);
+  --df-surface-hover: var(--color-ink-50);
+  --df-surface-active: var(--color-ink-100);
+  --df-surface-inverse: var(--color-ink-900);
+
+  --df-fg: var(--color-ink-900);
+  --df-fg-muted: var(--color-ink-600);
+  --df-fg-subtle: var(--color-ink-500);
+  --df-fg-faint: var(--color-ink-400);
+  --df-fg-onAccent: var(--color-ink-0);
+  --df-fg-inverse: var(--color-ink-50);
+
+  --df-border: var(--color-ink-200);
+  --df-border-subtle: var(--color-ink-150);
+  --df-border-strong: var(--color-ink-300);
+
+  --df-accent: var(--color-brand-600);
+  --df-accent-hover: var(--color-brand-700);
+  --df-accent-active: var(--color-brand-800);
+  --df-accent-fg: var(--color-ink-0);
+  --df-accent-soft: var(--color-brand-50);
+  --df-accent-soft-fg: var(--color-brand-700);
+  --df-accent-border: var(--color-brand-200);
+
+  --df-ring: var(--color-brand-500);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Layered darks: canvas sits below surface, sunken sits below both. Never
+     pure black - pure black kills depth cues between nested surfaces. */
+  --df-canvas: oklch(0.174 0.009 268);
+  --df-surface: oklch(0.216 0.011 268);
+  --df-surface-raised: oklch(0.253 0.012 268);
+  --df-surface-sunken: oklch(0.145 0.008 268);
+  --df-surface-hover: oklch(0.263 0.012 268);
+  --df-surface-active: oklch(0.302 0.013 268);
+  --df-surface-inverse: var(--color-ink-100);
+
+  --df-fg: oklch(0.972 0.003 264);
+  --df-fg-muted: oklch(0.732 0.012 264);
+  --df-fg-subtle: oklch(0.638 0.013 264);
+  --df-fg-faint: oklch(0.532 0.013 264);
+  --df-fg-onAccent: oklch(0.99 0 0);
+  --df-fg-inverse: var(--color-ink-900);
+
+  --df-border: oklch(0.318 0.013 268);
+  --df-border-subtle: oklch(0.278 0.012 268);
+  --df-border-strong: oklch(0.408 0.014 268);
+
+  --df-accent: var(--color-brand-500);
+  --df-accent-hover: var(--color-brand-400);
+  --df-accent-active: var(--color-brand-300);
+  --df-accent-fg: oklch(0.99 0 0);
+  --df-accent-soft: oklch(0.3 0.055 280);
+  --df-accent-soft-fg: var(--color-brand-200);
+  --df-accent-border: oklch(0.4 0.08 280);
+
+  --df-ring: var(--color-brand-400);
+}
+
+@theme inline {
+  --color-canvas: var(--df-canvas);
+  --color-surface: var(--df-surface);
+  --color-surface-raised: var(--df-surface-raised);
+  --color-surface-sunken: var(--df-surface-sunken);
+  --color-surface-hover: var(--df-surface-hover);
+  --color-surface-active: var(--df-surface-active);
+  --color-surface-inverse: var(--df-surface-inverse);
+
+  --color-fg: var(--df-fg);
+  --color-fg-muted: var(--df-fg-muted);
+  --color-fg-subtle: var(--df-fg-subtle);
+  --color-fg-faint: var(--df-fg-faint);
+  --color-fg-onAccent: var(--df-fg-onAccent);
+  --color-fg-inverse: var(--df-fg-inverse);
+
+  --color-line: var(--df-border);
+  --color-line-subtle: var(--df-border-subtle);
+  --color-line-strong: var(--df-border-strong);
+
+  --color-accent: var(--df-accent);
+  --color-accent-hover: var(--df-accent-hover);
+  --color-accent-active: var(--df-accent-active);
+  --color-accent-fg: var(--df-accent-fg);
+  --color-accent-soft: var(--df-accent-soft);
+  --color-accent-soft-fg: var(--df-accent-soft-fg);
+  --color-accent-border: var(--df-accent-border);
+
+  /* Status soft/fg pairs: a tinted background with a readable foreground,
+     contrast-checked in both themes. */
+  --color-success-soft: var(--color-success-50);
+  --color-success-fg: var(--color-success-700);
+  --color-success-border: var(--color-success-100);
+  --color-success-solid: var(--color-success-600);
+
+  --color-warning-soft: var(--color-warning-50);
+  --color-warning-fg: var(--color-warning-700);
+  --color-warning-border: var(--color-warning-100);
+  --color-warning-solid: var(--color-warning-600);
+
+  --color-danger-soft: var(--color-danger-50);
+  --color-danger-fg: var(--color-danger-700);
+  --color-danger-border: var(--color-danger-100);
+  --color-danger-solid: var(--color-danger-600);
+
+  --color-info-soft: var(--color-info-50);
+  --color-info-fg: var(--color-info-700);
+  --color-info-border: var(--color-info-100);
+  --color-info-solid: var(--color-info-600);
+
+  --color-neutral-soft: var(--color-ink-100);
+  --color-neutral-fg: var(--color-ink-700);
+  --color-neutral-border: var(--color-ink-200);
+
+  --color-accent-2-soft: oklch(0.972 0.014 300);
+  --color-accent-2-fg: var(--color-brand-800);
+  --color-accent-2-border: oklch(0.916 0.03 300);
+}
+
+.dark {
+  --color-success-soft: oklch(0.29 0.05 155);
+  --color-success-fg: var(--color-success-100);
+  --color-success-border: oklch(0.38 0.07 155);
+  --color-success-solid: var(--color-success-500);
+
+  --color-warning-soft: oklch(0.31 0.058 71);
+  --color-warning-fg: var(--color-warning-100);
+  --color-warning-border: oklch(0.4 0.07 66);
+  --color-warning-solid: var(--color-warning-500);
+
+  --color-danger-soft: oklch(0.3 0.068 25);
+  --color-danger-fg: var(--color-danger-100);
+  --color-danger-border: oklch(0.4 0.1 25);
+  --color-danger-solid: var(--color-danger-500);
+
+  --color-info-soft: oklch(0.29 0.058 250);
+  --color-info-fg: var(--color-info-100);
+  --color-info-border: oklch(0.38 0.075 252);
+  --color-info-solid: var(--color-info-500);
+
+  --color-neutral-soft: var(--color-ink-800);
+  --color-neutral-fg: var(--color-ink-300);
+  --color-neutral-border: var(--color-ink-700);
+
+  --color-accent-2-soft: oklch(0.3 0.06 300);
+  --color-accent-2-fg: var(--color-brand-100);
+  --color-accent-2-border: oklch(0.4 0.07 300);
+}
+
+/* == 3. TYPOGRAPHY ======================================================== */
+
+@theme {
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    var(--font-mono-stack), ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  /* Named levels. Deliberately tight tracking on large sizes, relaxed leading
+     on body copy. Nothing above 30px - admin screens are not marketing pages. */
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.25rem;
+  --text-display--letter-spacing: -0.022em;
+
+  --text-title: 1.5rem;
+  --text-title--line-height: 2rem;
+  --text-title--letter-spacing: -0.018em;
+
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.625rem;
+  --text-heading--letter-spacing: -0.012em;
+
+  --text-subheading: 0.9375rem;
+  --text-subheading--line-height: 1.375rem;
+  --text-subheading--letter-spacing: -0.006em;
+
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.5rem;
+
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.3125rem;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-micro--letter-spacing: 0.06em;
+}
+
+/* == 4. SHAPE, RING, MOTION ============================================== */
+
+@theme {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* Shadows carry elevation only, never decoration. */
+  --shadow-xs: 0 1px 2px 0 rgb(16 18 28 / 0.04);
+  --shadow-sm:
+    0 1px 2px -1px rgb(16 18 28 / 0.06), 0 1px 3px 0 rgb(16 18 28 / 0.05);
+  --shadow-md:
+    0 2px 4px -2px rgb(16 18 28 / 0.06), 0 4px 10px -3px rgb(16 18 28 / 0.07);
+  --shadow-lg:
+    0 4px 8px -4px rgb(16 18 28 / 0.08), 0 12px 26px -8px rgb(16 18 28 / 0.12);
+  --shadow-pop:
+    0 1px 2px 0 rgb(16 18 28 / 0.05), 0 8px 24px -6px rgb(16 18 28 / 0.14);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* == BASE ================================================================= */
+
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--df-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    background-color: var(--df-canvas);
+    color: var(--df-fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* One focus treatment for the whole product. */
+  :focus-visible {
+    outline: 2px solid var(--df-ring);
+    outline-offset: 2px;
+  }
+
+  /* Native controls inherit our sizing so nothing drifts. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Kill the inner focus ring on everything that already gets :focus-visible. */
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus,
+  [tabindex]:focus {
+    outline: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+    color: var(--df-fg);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--df-accent) 22%, transparent);
+    color: var(--df-fg);
+  }
+
+  /* Numeric data lines up column-to-column. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :disabled {
+    cursor: not-allowed;
+  }
+
+  /* Consistent, unobtrusive scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--df-border-strong) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--df-border-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--df-fg-faint);
+    background-clip: content-box;
+  }
+}
+
+/* == COMPONENT UTILITIES ================================================== */
+
+@layer components {
+  /* Keyboard users land here first. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+
+  .skip-link:focus {
+    left: 12px;
+    top: 12px;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    background-color: var(--df-accent);
+    color: var(--df-accent-fg);
+    font-size: var(--text-small);
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Hides the native details marker while keeping <details> keyboard-native. */
+  .disclosure > summary {
+    list-style: none;
+  }
+
+  /* Award/certificate hero band. Both stops come from the semantic accent
+     tokens, so it stays legible when the theme flips. */
+  .bg-award-band {
+    background-image: linear-gradient(
+      135deg,
+      var(--df-accent-active) 0%,
+      var(--df-accent) 48%,
+      color-mix(in oklab, var(--df-accent) 55%, var(--color-brand-400)) 100%
+    );
+  }
+
+  .disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/* == MOTION ============================================================== */
+
+@layer utilities {
+  .animate-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, var(--df-fg) 6%, transparent) 45%,
+      transparent 90%
+    );
+    background-size: 200% 100%;
+    animation: df-shimmer 1.6s var(--ease-in-out-soft) infinite;
+  }
+
+  .animate-enter {
+    animation: df-enter 180ms var(--ease-out-soft) both;
+  }
+
+  .animate-pop {
+    animation: df-pop 140ms var(--ease-out-soft) both;
+  }
+
+  .animate-slide-in {
+    animation: df-slide-in 220ms var(--ease-out-soft) both;
+  }
+
+  .animate-fade {
+    animation: df-fade 160ms var(--ease-out-soft) both;
+  }
+
+  /* Route-level crossfade: one subtle hint of movement between pages. */
+  .animate-page {
+    animation: df-page 220ms var(--ease-out-soft) both;
+  }
+}
+
+@keyframes df-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes df-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes df-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes df-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes df-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes df-page {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion: kill movement, keep state changes legible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

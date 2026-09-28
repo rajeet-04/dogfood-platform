@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+
+import { cn } from "../lib/cn";
 
 /**
  * Progressive-disclosure block built on the native `<details>` element: the
@@ -14,8 +17,8 @@ export function Collapsible({
   meta,
   defaultOpen = false,
   variant = "card",
-  className = "",
-  bodyClassName = "",
+  className,
+  bodyClassName,
   testId,
   children,
 }: {
@@ -33,51 +36,41 @@ export function Collapsible({
     <details
       open={defaultOpen}
       data-testid={testId}
-      className={`group ${plain ? "" : "rounded-2xl border border-slate-200 bg-white"} ${className}`}
+      className={cn(
+        "group",
+        !plain && "rounded-xl border border-line bg-surface",
+        className,
+      )}
     >
       <summary
-        className={`flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 [&::-webkit-details-marker]:hidden ${
-          plain
-            ? "rounded-lg py-2 hover:bg-slate-50"
-            : "rounded-2xl px-6 py-4 hover:bg-slate-50/70"
-        }`}
+        className={cn(
+          "flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-surface-hover [&::-webkit-details-marker]:hidden",
+          plain && "rounded-md px-2 py-2",
+        )}
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <ChevronIcon />
-          <span className="text-lg font-semibold text-slate-900">{title}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className="size-4 shrink-0 text-fg-faint transition-transform duration-150 group-open:rotate-90"
+          />
+          <span className="text-subheading font-semibold text-fg">{title}</span>
         </span>
         {meta ? (
-          <span className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs text-slate-500">
+          <span className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-caption text-fg-subtle">
             {meta}
           </span>
         ) : null}
       </summary>
       <div
-        className={`${
+        className={cn(
           plain
-            ? "px-2 pb-2 pt-1"
-            : "border-t border-slate-100 px-6 py-5"
-        } ${bodyClassName}`}
+            ? "px-2 pt-1 pb-2"
+            : "border-t border-line-subtle px-5 py-4",
+          bodyClassName,
+        )}
       >
         {children}
       </div>
     </details>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <span
-      aria-hidden="true"
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-transform duration-150 group-open:rotate-90 group-open:bg-indigo-100 group-open:text-indigo-600"
-    >
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
-        <path
-          fillRule="evenodd"
-          d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
-          clipRule="evenodd"
-        />
-      </svg>
-    </span>
   );
 }
