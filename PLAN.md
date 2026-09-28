@@ -19,7 +19,7 @@
 
 The current checkout has passed the recorded full Vitest suite, affected-package typechecks, the live official checker, and local Podman/browser verification. The latest voting-access hardening also has a focused integration/typecheck/build/offline checkpoint:
 
-- `bun run vitest run` — 48 files, 304 tests passed.
+- `bunx vitest run` — 49 files, 313 tests passed on the fresh verification run.
 - Changed package typechecks for `packages/audit`, `packages/db`, `packages/events`, `packages/judging`, `packages/voting`, and `apps/web` — passed.
 - Full Playwright acceptance — 13 passed, including 2 community-voting browser flows; 1 opt-in visual case was skipped. The separate `VISUAL_QA=1` responsive sweep passed with no visual problems or console errors.
 - Podman production image and Compose startup — healthy; local fixture seeding and migrations applied; health and readiness endpoints returned HTTP 200.
