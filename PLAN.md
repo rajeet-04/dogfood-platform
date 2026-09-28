@@ -10,12 +10,23 @@
 ## Status key
 
 - **Implemented in checkout** means code or artifacts are present. It does not mean the feature passed the current official checker or was written in the allowed event window.
-- **Verified locally** refers only to the prior report's unit, integration, Playwright, and portable-Postgres evidence at its cited commit.
+- **Verified locally** means a command and result are recorded in the current verification checkpoint below. Older evidence is identified by its source revision and is not current-HEAD evidence.
 - **Officially accepted** requires the published `run.py` report and evidence for advertised features the seven checks do not cover.
+- A checked task box records implementation present in this checkout only. It does not establish event eligibility, full local verification, or official acceptance; those statuses are stated separately.
+
+## Current local verification checkpoint — 2026-09-28
+
+The gallery/assets/custom-question/fixture slice was verified against a disposable local PostgreSQL 17 container (`dogfood_test`). These commands exited 0:
+
+- `bun run --cwd packages/db typecheck && bun run --cwd packages/events typecheck && bun run --cwd packages/submissions typecheck && bun run --cwd apps/web typecheck`
+- `DATABASE_URL=postgresql://dogfood:dogfood@127.0.0.1:5432/dogfood_test bun x vitest run tests/integration/fixture-seed.test.ts tests/integration/submissions.test.ts tests/integration/project-assets.test.ts tests/integration/public-gallery.test.ts` — 4 files, 14 tests passed.
+- `DATABASE_URL=postgresql://dogfood:dogfood@localhost:5432/dogfood_test bun run --cwd apps/web build` — production build passed.
+
+This checkpoint covers those focused paths and the web build; it does not establish whole-repository test completion, T1 completion, event eligibility, or official acceptance. The official `run.py` and `spec.md` are absent from this checkout. The current `.dogfood.toml` also differs from the official shape described in the runbook: it lacks `[portal]`, `[auth]`, and `[routes]` and instead has `[claims]` and `[notes]`. The checker therefore has not been run.
 
 ## Implemented in the current checkout
 
-The following implementation areas exist in source. The last recorded local verification is in [`acceptance-report.txt`](acceptance-report.txt), dated 2026-09-26 and attached to commit `ec8eeb3`; current HEAD is newer and has not been freshly verified in this task.
+The following implementation areas exist in source. Earlier local verification is in [`acceptance-report.txt`](acceptance-report.txt), dated 2026-09-26 and attached to commit `ec8eeb3`; the focused feature slice has the separate current verification evidence above.
 
 - Authentication, local sessions, event membership/roles, and event lifecycle services.
 - Team creation and invite-link join; project creation, revision history, submission, and server-side deadline checks.
@@ -23,6 +34,8 @@ The following implementation areas exist in source. The last recorded local veri
 - Pure weighted scoring and per-judge normalization, including zero-variance handling and missing/incomplete score batches.
 - Deterministic ranking and persisted ranking snapshots, publication, audit events, and role-checked CSV exports.
 - Participant, judge, and organizer UI flows with local Playwright evidence in the recorded report.
+- Anonymous gallery with shared search/filter behavior; event-scoped local image uploads, ordered revision gallery images, and thumbnails; event tracks; free-text custom submission questions with required-answer enforcement.
+- Local/dev official-fixture seeding with stable IDs and retained duplicate-submission anomaly data. The focused integration test checks repeat seeding and fixture record counts; this is local fixture validation, not official checker acceptance.
 - PostgreSQL/Drizzle schema, migrations, a Docker Compose definition, health/readiness endpoints, MIT license, and root `README.md`, `ARCHITECTURE.md`, `DATA-MODEL.md`, and `JUDGING.md`.
 - Certificate issuance is present as a partial T4 capability; it does not by itself provide signed, publicly verifiable judge participation records.
 - The planning pack now records the official tier ladder, scoring weights, bonuses, prize allocation, rules, required submission artifacts, fixture/checker contract, conflicts, and this implementation/remaining-work split.
@@ -39,10 +52,12 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 
 ### P1 — Complete and prove all T1 Core requirements
 
-- [ ] Add a public gallery surface/route with search and filtering. The current app tree has no dedicated gallery route, so the official public-gallery checks cannot yet be claimed from the implementation inventory.
-- [ ] Load the official fixture projects into the public gallery and ensure a known fixture title is returned to an unauthenticated visitor.
-- [ ] Add or verify organizer configuration for tracks, track association, prizes, and custom submission questions; the current README lists track UI/API as out of scope for the T1/T2 build.
-- [ ] Complete the submission field/assets contract: thumbnail, ordered image gallery, demo-video URL, repository URL, live link, tech tags, track, and custom answers. Preserve edits as revisions and keep private/draft content out of public reads.
+- [x] Implement an anonymous gallery with shared filters and public/private-answer redaction; focused public-gallery integration tests pass locally.
+- [x] Seed official fixture records in local/dev mode with stable IDs and preserve the duplicate project and its source scores; the fixture-seed integration test passes locally. The official checker is not available in this checkout.
+- [x] Implement event tracks and free-text custom questions with required-answer enforcement; submission integration coverage passes locally.
+- [x] Implement local event-scoped image assets, ordered gallery images, and thumbnails; focused asset/gallery integration tests pass locally.
+- [ ] Finish and verify the complete submission-field contract (including demo-video URL, repository URL, live link, tech tags, and custom answers) as one end-to-end participant workflow. Keep private/draft content out of public reads.
+- [ ] Add or verify organizer configuration for prizes; its presence is not established by the current feature-slice verification.
 - [ ] Reconcile all five role types (visitor, participant, judge, organizer, admin) against the site matrix and document any deliberate policy difference.
 
 ### P2 — Complete and prove all T2 Judging requirements
@@ -55,10 +70,10 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 
 ### P3 — Integrate the official acceptance contract
 
-- [ ] Replace the current custom `.dogfood.toml` shape with the official `[portal]`, `[tiers]`, `[auth]`, and `[routes]` shape, including actual paths for gallery, submit, own judge scores, peer-score probe, and CSV export.
-- [ ] Download and seed the published `fixtures.json` (40 projects, 30 judges, 8 tracks), including flat-scoring, incomplete-review, duplicate-submission, and missing-score cases; print working organizer, judge A, judge B, and participant headers on boot.
-- [ ] Run `python3 run.py .dogfood.toml` against a running portal and commit its unedited output as `acceptance-report.txt`, even if it contains failures.
-- [ ] Replace the stale note in the current acceptance report saying the official suite is not published; it is available from <https://dogfoodhack.com/spec/>.
+- [ ] Obtain the official `run.py` and `spec.md`; neither is present in this checkout. Do not claim checker acceptance before they are available.
+- [ ] Reconcile `.dogfood.toml` with the official `[portal]`, `[tiers]`, `[auth]`, and `[routes]` shape, including actual paths for gallery, submit, own judge scores, peer-score probe, and CSV export. Current `[claims]`/`[notes]` configuration does not match that shape.
+- [ ] Once the runner is available and the config matches, run `python3 run.py .dogfood.toml` against a running portal and preserve its unedited output as `acceptance-report.txt`, including failures.
+- [ ] Refresh the stale `acceptance-report.txt`; its Sep 26 evidence predates the official checker and the current feature slice.
 - [ ] Verify a clean `docker compose up` and a network-disconnected run with the official fixture seed. The current report says neither Docker nor offline mode was literally exercised.
 - [ ] Do not equate seven passing checks with full advertised tier completion; preserve extra tests/docs/demo evidence for requirements the checker does not inspect.
 
