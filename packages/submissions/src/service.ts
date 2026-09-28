@@ -20,7 +20,6 @@ import {
   getRevisionById,
   getTeamById,
   getTeamMember,
-  setProjectSubmissionState,
   type ProjectRow,
   type ProjectRevisionRow,
 } from "./repository";
@@ -511,7 +510,18 @@ export async function withdrawProject(
 
   assertSubmissionWindow(new Date(), event);
 
-  await setProjectSubmissionState(project.id, "DRAFT", null);
+  await db.transaction(async (tx) => {
+    await tx.update(schema.projects)
+      .set({ state: "DRAFT", submittedAt: null })
+      .where(eq(schema.projects.id, project.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "project.withdraw",
+      resourceType: "project",
+      resourceId: project.id,
+    });
+  });
   const updated = await getProjectById(project.id);
   if (!updated) throw new DogfoodError("NOT_FOUND", "Project not found");
   return toProjectDetail(updated);
