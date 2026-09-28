@@ -201,6 +201,53 @@ async function loadRevisionById(
   return rows[0];
 }
 
+async function projectIsInJudgeTrackScope(
+  judgeId: string,
+  eventId: string,
+  project: ProjectRow,
+): Promise<boolean> {
+  const scopes = await db
+    .select({ trackId: schema.judgeTrackScopes.trackId })
+    .from(schema.judgeTrackScopes)
+    .where(
+      and(
+        eq(schema.judgeTrackScopes.eventId, eventId),
+        eq(schema.judgeTrackScopes.judgeId, judgeId),
+      ),
+    );
+
+  // No scope rows means the judge may review projects across the whole event.
+  if (scopes.length === 0) return true;
+
+  const revision = await loadRevisionById(project.currentRevisionId);
+  return Boolean(
+    revision?.trackId && scopes.some((scope) => scope.trackId === revision.trackId),
+  );
+}
+
+async function requireProjectWithinJudgeTrackScope(
+  judgeId: string,
+  eventId: string,
+  project: ProjectRow,
+): Promise<void> {
+  if (!(await projectIsInJudgeTrackScope(judgeId, eventId, project))) {
+    throw new DogfoodError(
+      "TRACK_SCOPE_VIOLATION",
+      "Judge is not scoped to this project's track",
+    );
+  }
+}
+
+async function requireActorTrackScope(
+  actor: Actor,
+  eventId: string,
+  project: ProjectRow,
+  roles: EventRole[],
+): Promise<void> {
+  if (actor.isPlatformAdmin || !roles.includes("JUDGE")) return;
+  await requireProjectWithinJudgeTrackScope(actor.userId, eventId, project);
+}
+
 async function isAssigned(
   userId: string,
   eventId: string,
@@ -388,6 +435,8 @@ export async function assignJudge(
     );
   }
 
+  await requireProjectWithinJudgeTrackScope(input.judgeId, eventId, project);
+
   if (await isUserOnProjectTeam(input.judgeId, project.id)) {
     throw new DogfoodError(
       "CONFLICT",
@@ -500,6 +549,13 @@ export async function getJudgeQueue(
   for (const assignment of assignments) {
     const project = await loadProjectById(assignment.projectId);
     if (!project) continue;
+    if (
+      !actor.isPlatformAdmin &&
+      roles.includes("JUDGE") &&
+      !(await projectIsInJudgeTrackScope(actor.userId, eventId, project))
+    ) {
+      continue;
+    }
     items.push({
       assignmentId: assignment.id,
       status: assignment.status,
@@ -539,6 +595,7 @@ export async function getJudgeQueueItem(
 
   const project = await loadProjectById(assignment.projectId);
   if (!project) throw new DogfoodError("NOT_FOUND", "Project not found");
+  await requireActorTrackScope(actor, eventId, project, roles);
 
   return {
     assignmentId: assignment.id,
@@ -569,6 +626,8 @@ export async function getAssignedProject(
     eventState: event.state as EventState,
     isAssigned: await isAssigned(actor.userId, eventId, project.id),
   });
+
+  await requireActorTrackScope(actor, eventId, project, roles);
 
   return toAssignedProjectDetail(project);
 }
@@ -677,6 +736,11 @@ async function requireAssignmentPermission(
     eventState: event.state as EventState,
     isAssigned: assignment.judgeId === actor.userId,
   });
+  const project = await loadProjectById(assignment.projectId);
+  if (!project || project.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Project not found");
+  }
+  await requireActorTrackScope(actor, eventId, project, roles);
 }
 
 export async function startEvaluation(
@@ -1125,6 +1189,14 @@ export async function getEvaluation(
       ownsEvaluation: assignment.judgeId === actor.userId,
       judgingLocked: false,
     });
+  }
+
+  const project = await loadProjectById(assignment.projectId);
+  if (!project || project.eventId !== eventId) {
+    throw new DogfoodError("NOT_FOUND", "Project not found");
+  }
+  if (!isOrganizer) {
+    await requireActorTrackScope(actor, eventId, project, roles);
   }
 
   const evaluation = await loadEvaluationByAssignment(assignmentId);
