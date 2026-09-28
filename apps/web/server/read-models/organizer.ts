@@ -65,6 +65,7 @@ export type OrganizerDocument = {
     title: string;
     teamName: string;
     state: string;
+    trackId: string | null;
   }>;
   assignments: Array<{
     id: string;
@@ -313,6 +314,7 @@ export async function getOrganizerDocument(
         title: revision?.title ?? "(no revision)",
         teamName: team?.name ?? "(no team)",
         state: project.state,
+        trackId: revision?.trackId ?? null,
       };
     }),
     assignments: assignmentRows.map((assignment) => {

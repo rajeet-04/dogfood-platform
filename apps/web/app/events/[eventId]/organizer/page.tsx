@@ -5,6 +5,7 @@ import { CERTIFICATE_TIER_LABEL } from "@dogfood/certificates";
 import { JUDGE_APPLICATION_STATUS_LABEL } from "@dogfood/applications";
 
 import { ActionForm } from "../../../../components/action-form";
+import { JudgeAssignmentPlanner } from "../../../../components/organizer/judge-assignment-planner";
 import {
   Badge,
   type BadgeTone,
@@ -1107,6 +1108,12 @@ export default async function OrganizerPage({
             }
           />
           <CardBody>
+            <JudgeAssignmentPlanner
+              eventId={eventId}
+              judges={doc.judges}
+              projects={doc.projects}
+              tracks={doc.tracks}
+            />
             {doc.judges.length === 0 ? (
               <Alert tone="warning">
                 No judges in this event yet. Approve a judge application or add a
