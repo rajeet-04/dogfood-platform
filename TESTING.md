@@ -35,6 +35,12 @@ browser.
 ```bash
 # watch a single journey live (headful), then press Enter to close it:
 pnpm exec playwright test tests/acceptance/core-flows.spec.ts --headed
+
+# responsive sweep across 1440/1280/1024/768/390 (opt-in, writes screenshots
+# to test-results/visual/ and fails on overflow, tiny tap targets, duplicate
+# landmarks, missing h1s or console errors):
+VISUAL_QA=1 pnpm test:acceptance visual-qa
+VISUAL_DARK=1 VISUAL_QA=1 pnpm test:acceptance visual-qa
 ```
 
 ## 3. Manual demo (click-through, ~5 minutes)

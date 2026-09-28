@@ -1,25 +1,27 @@
+import { CalendarClock, Plus } from "lucide-react";
 import Link from "next/link";
+import type { Metadata } from "next";
+
 import { EVENT_STATES } from "@dogfood/db";
 import { listEvents } from "@dogfood/events";
 
 import { Badge } from "../../components/badge";
+import { Button, ButtonLink } from "../../components/ui/button";
+import { EmptyStatePanel } from "../../components/ui/empty-state";
+import { Input, Select } from "../../components/ui/input";
+import { Page, PageHeader } from "../../components/ui/page-header";
 import { EVENT_STATE_LABEL, EVENT_STATE_TONE } from "../../lib/event-flow";
 import { getActor } from "../../server/session";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = { title: "Events" };
+
 const FILTERABLE_STATES: readonly string[] = EVENT_STATES.filter(
   (state) => state !== "DRAFT" && state !== "ARCHIVED",
 );
 
-type EventCard = {
-  slug: string;
-  name: string;
-  description: string | null;
-  state: string;
-  registrationClosesAt: Date | null;
-  submissionClosesAt: Date | null;
-};
+type CatalogueEvent = Awaited<ReturnType<typeof listEvents>>[number];
 
 function formatDeadline(value: Date | null | undefined): string | null {
   if (!value) return null;
@@ -28,7 +30,9 @@ function formatDeadline(value: Date | null | undefined): string | null {
   });
 }
 
-function nextDeadline(event: EventCard): { label: string; value: string } | null {
+function nextDeadline(
+  event: CatalogueEvent,
+): { label: string; value: string } | null {
   const submission = formatDeadline(event.submissionClosesAt);
   if (submission) return { label: "Submissions close", value: submission };
   const registration = formatDeadline(event.registrationClosesAt);
@@ -51,48 +55,49 @@ export default async function EventsPage({
   const actor = await getActor();
   const events = await listEvents(actor, {
     q: q || null,
-    state: (state as typeof EVENT_STATES[number]) || null,
+    state: (state as (typeof EVENT_STATES)[number]) || null,
     limit: 200,
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-12">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Events</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {events.length} event{events.length === 1 ? "" : "s"} available
-            {hasFilters ? " for the current filters" : ""}.
-          </p>
-        </div>
-        {actor ? (
-          <Link
-            href="/events/new"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-          >
-            New event
-          </Link>
-        ) : null}
-      </div>
+    <Page>
+      <PageHeader
+        title="Events"
+        description={
+          actor
+            ? "Events you own appear alongside every public event. Drafts and archived events are only visible to their organizers."
+            : "Browse every public event. Drafts and archived events stay private to their organizers."
+        }
+        actions={
+          actor ? (
+            <ButtonLink href="/events/new">
+              <Plus aria-hidden="true" className="size-4" />
+              New event
+            </ButtonLink>
+          ) : null
+        }
+        className="mb-6"
+      />
 
       <form
         method="get"
         action="/events"
-        className="mb-8 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
+        role="search"
+        className="mb-6 flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-3 shadow-xs sm:flex-row sm:items-center"
       >
-        <input
+        <Input
           type="search"
           name="q"
           defaultValue={q}
           placeholder="Search events by name, slug, or description"
           aria-label="Search events"
-          className="min-w-56 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+          className="sm:min-w-56 sm:flex-1"
         />
-        <select
+        <Select
           name="state"
           defaultValue={state}
           aria-label="Filter by state"
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+          className="sm:w-48"
         >
           <option value="">All states</option>
           {FILTERABLE_STATES.map((s) => (
@@ -100,56 +105,80 @@ export default async function EventsPage({
               {EVENT_STATE_LABEL[s]}
             </option>
           ))}
-        </select>
-        <button
-          type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-        >
-          Search
-        </button>
-        {hasFilters ? (
-          <Link
-            href="/events"
-            className="text-sm font-medium text-slate-500 hover:text-slate-700"
-          >
-            Clear
-          </Link>
-        ) : null}
+        </Select>
+        <div className="flex items-center gap-2">
+          <Button type="submit">Search</Button>
+          {hasFilters ? (
+            <Link
+              href="/events"
+              className="rounded-xs text-small font-medium text-fg-subtle underline-offset-4 transition-colors hover:text-fg hover:underline"
+            >
+              Clear
+            </Link>
+          ) : null}
+        </div>
       </form>
 
       {events.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-500">
-          {hasFilters ? "No events match your search." : "No events yet."}
-        </p>
+        hasFilters ? (
+          <EmptyStatePanel
+            icon="search"
+            title="No events match your search."
+            description="Try a shorter query, or clear the filters to see everything public."
+            action={
+              <ButtonLink href="/events" variant="outline" size="sm">
+                Show all events
+              </ButtonLink>
+            }
+          />
+        ) : (
+          <EmptyStatePanel
+            icon="calendar"
+            title="No events yet."
+            description={
+              actor
+                ? "Create the first event and you become its organizer."
+                : "Once an organizer publishes an event it will show up here."
+            }
+            action={
+              actor ? (
+                <ButtonLink href="/events/new" size="sm">
+                  <Plus aria-hidden="true" className="size-4" />
+                  New event
+                </ButtonLink>
+              ) : null
+            }
+          />
+        )
       ) : (
         <>
           {hasFilters ? (
-            <p className="mb-4 text-sm text-slate-500">
+            <p className="mb-4 text-small text-fg-subtle">
               Showing {events.length} event{events.length === 1 ? "" : "s"}.
             </p>
           ) : null}
-          <ul className="grid gap-4 sm:grid-cols-2">
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {events.map((event) => {
               const deadline = nextDeadline(event);
               return (
-                <li key={event.id}>
+                <li key={event.id} className="h-full">
                   <Link
                     href={`/events/${event.id}`}
-                    className="block h-full rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                    className="group flex h-full flex-col rounded-xl border border-line bg-surface p-4 shadow-xs transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-sm"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <h2 className="min-w-0 font-semibold text-slate-900">
+                    <div className="flex items-start justify-between gap-2.5">
+                      <h2 className="min-w-0 text-subheading font-semibold text-fg group-hover:text-accent-hover">
                         {event.name}
                       </h2>
                       <Badge tone={EVENT_STATE_TONE[event.state]}>
                         {EVENT_STATE_LABEL[event.state] ?? event.state}
                       </Badge>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+                    <p className="mt-1.5 line-clamp-2 grow text-small text-fg-subtle">
                       {event.description || event.slug}
                     </p>
-                    <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-                      <span aria-hidden="true">◷</span>
+                    <p className="mt-3.5 flex items-center gap-1.5 border-t border-line-subtle pt-2.5 text-caption text-fg-faint">
+                      <CalendarClock aria-hidden="true" className="size-3.5 shrink-0" />
                       {deadline
                         ? `${deadline.label} ${deadline.value}`
                         : "No deadlines set"}
@@ -161,6 +190,6 @@ export default async function EventsPage({
           </ul>
         </>
       )}
-    </main>
+    </Page>
   );
 }

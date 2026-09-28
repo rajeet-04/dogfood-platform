@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { Bell } from "lucide-react";
 
 import type { NotificationListItem } from "@dogfood/notifications";
 import { markNotificationsReadAction } from "../server/actions/notifications";
 import type { FormState } from "../lib/form-state";
+import { cn } from "../lib/cn";
+import { SubmitButton } from "./ui/button";
 
 function MarkAllReadButton() {
   const [_state, form, pending] = useActionState<
@@ -14,13 +17,15 @@ function MarkAllReadButton() {
   >(markNotificationsReadAction, undefined);
   return (
     <form action={form}>
-      <button
-        type="submit"
-        disabled={pending}
-        className="text-xs text-blue-600 hover:underline disabled:opacity-60"
+      <SubmitButton
+        size="sm"
+        variant="ghost"
+        loading={pending}
+        loadingLabel="Marking…"
+        className="-mr-1.5"
       >
         Mark all read
-      </button>
+      </SubmitButton>
     </form>
   );
 }
@@ -38,25 +43,37 @@ function NotificationRow({ item }: { item: NotificationListItem }) {
   const body = (
     <>
       <p
-        className={`text-sm ${item.readAt ? "text-slate-600" : "font-medium text-slate-900"}`}
+        className={cn(
+          "text-small",
+          item.readAt ? "text-fg-muted" : "font-medium text-fg",
+        )}
       >
         {item.title}
+        {item.readAt ? null : (
+          <span
+            aria-hidden="true"
+            className="ml-1.5 inline-block size-1.5 rounded-full bg-accent align-middle"
+          />
+        )}
+        <span className="sr-only">
+          {item.readAt ? "" : ", unread"}
+        </span>
       </p>
       {item.body ? (
-        <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{item.body}</p>
+        <p className="mt-0.5 line-clamp-2 text-caption text-fg-subtle">{item.body}</p>
       ) : null}
-      <p className="mt-1 text-xs text-slate-400">{formatWhen(item.createdAt)}</p>
+      <p className="mt-1 text-caption text-fg-faint">{formatWhen(item.createdAt)}</p>
     </>
   );
 
   return (
-    <li className="border-b border-slate-100 last:border-0">
+    <li className="border-b border-line-subtle last:border-0">
       {item.href ? (
-        <Link href={item.href} className="block px-3 py-2 hover:bg-slate-50">
+        <Link href={item.href} className="block px-3.5 py-2.5 transition-colors hover:bg-surface-hover">
           {body}
         </Link>
       ) : (
-        <div className="px-3 py-2">{body}</div>
+        <div className="px-3.5 py-2.5">{body}</div>
       )}
     </li>
   );
@@ -70,29 +87,32 @@ export function NotificationBell({
   unreadCount: number;
 }) {
   return (
-    <details className="relative" data-testid="notification-bell">
+    <details className="disclosure relative" data-testid="notification-bell">
       <summary
-        className="flex cursor-pointer list-none items-center gap-1 text-slate-600 hover:text-slate-900"
+        className="relative flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
         aria-label={`Notifications (${unreadCount} unread)`}
       >
-        <span aria-hidden="true">🔔</span>
+        <Bell aria-hidden="true" className="size-4" />
         <span className="sr-only">Notifications</span>
         {unreadCount > 0 ? (
           <span
             data-testid="notification-unread-count"
-            className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white"
+            className="absolute top-1 right-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger-solid px-1 text-micro font-semibold text-white tabular"
           >
             {unreadCount}
           </span>
         ) : null}
       </summary>
-      <div className="absolute right-0 z-10 mt-2 w-80 rounded-md border border-slate-200 bg-white shadow-lg">
-        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-          <p className="text-sm font-semibold text-slate-900">Notifications</p>
+      <div className="animate-pop absolute right-0 z-40 mt-1.5 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-line bg-surface shadow-pop">
+        <div className="flex items-center justify-between gap-2 border-b border-line-subtle bg-surface-sunken/60 px-3.5 py-2.5">
+          <p className="text-subheading font-semibold text-fg">Notifications</p>
           {unreadCount > 0 ? <MarkAllReadButton /> : null}
         </div>
         {items.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-slate-500" data-testid="notification-empty">
+          <p
+            className="px-3.5 py-6 text-center text-small text-fg-subtle"
+            data-testid="notification-empty"
+          >
             You are all caught up.
           </p>
         ) : (

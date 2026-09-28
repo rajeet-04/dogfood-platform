@@ -1,8 +1,15 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Award } from "lucide-react";
 import { getCertificate } from "@dogfood/certificates";
 import { CERTIFICATE_TIER_LABEL } from "@dogfood/certificates";
 import { DogfoodError } from "@dogfood/validation";
+
+import { ButtonLink } from "../../../components/ui/button";
+import { isUuidId } from "../../../lib/ids";
+import {
+  Breadcrumbs,
+  Page,
+} from "../../../components/ui/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +27,7 @@ export default async function CertificatePage({
   params: Promise<{ certificateId: string }>;
 }) {
   const { certificateId } = await params;
+  if (!isUuidId(certificateId)) notFound();
 
   let certificate;
   try {
@@ -35,41 +43,51 @@ export default async function CertificatePage({
     ] ?? certificate.tier;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <Page width="narrow" className="flex flex-col items-center">
+      <Breadcrumbs
+        className="w-full self-stretch"
+        items={[
+          { label: "Events", href: "/events" },
+          { label: certificate.eventName, href: `/events/${certificate.eventId}` },
+          { label: "Certificate" },
+        ]}
+      />
+
       <div
         data-testid="certificate-card"
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        className="mt-6 w-full overflow-hidden rounded-2xl border border-line bg-surface shadow-sm"
       >
-        <div className="border-b border-slate-100 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-10 py-8 text-center text-white">
-          <p className="text-xs font-semibold tracking-widest text-indigo-100 uppercase">
+        <div className="bg-award-band flex flex-col items-center gap-2 px-6 py-10 text-center sm:px-10">
+          <Award className="size-7 text-accent-fg/85" aria-hidden="true" />
+          <p className="text-micro font-semibold tracking-[0.18em] text-accent-fg/85 uppercase">
             Certificate of achievement
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+          <p className="text-subheading font-semibold text-balance text-accent-fg">
             {certificate.eventName}
-          </h1>
+          </p>
         </div>
 
-        <div className="px-10 py-10 text-center">
-          <p className="text-sm text-slate-500">This certifies that</p>
-          <p
+        <div className="px-6 py-10 text-center sm:px-10 sm:py-12">
+          <p className="text-small text-fg-subtle">This certifies that</p>
+          <h1
             data-testid="certificate-recipient"
-            className="mt-3 text-3xl font-semibold tracking-tight text-slate-900"
+            className="mt-3 text-title font-semibold text-balance text-fg"
           >
             {certificate.displayName}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
+          </h1>
+          <p className="mt-3 text-small text-fg-muted">
             {tierLabel}
             {certificate.rank ? ` — placed #${certificate.rank}` : ""} in the
             hackathon
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-fg">
               {" "}
               “{certificate.eventName}”
             </span>
           </p>
           {certificate.projectTitle ? (
-            <p className="mt-4 text-sm text-slate-600">
+            <p className="mt-4 text-small text-fg-muted">
               with the project{" "}
-              <span className="font-medium text-slate-800">
+              <span className="font-medium text-fg">
                 “{certificate.projectTitle}”
               </span>
               {certificate.teamName ? ` from ${certificate.teamName}` : ""}
@@ -77,20 +95,23 @@ export default async function CertificatePage({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 px-10 py-6 text-xs text-slate-400">
-          <span>Serial {certificate.id.slice(0, 8).toUpperCase()}</span>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 border-t border-line-subtle bg-surface-sunken/60 px-6 py-4 text-caption text-fg-subtle">
+          <span className="tabular">
+            Serial {certificate.id.slice(0, 8).toUpperCase()}
+          </span>
           <span>Issued {formatDate(certificate.issuedAt)}</span>
         </div>
       </div>
 
-      <div className="mt-6 text-center">
-        <Link
+      <div className="mt-6">
+        <ButtonLink
           href={`/events/${certificate.eventId}`}
-          className="text-sm font-medium text-blue-600 hover:underline"
+          variant="outline"
+          size="sm"
         >
           Open event
-        </Link>
+        </ButtonLink>
       </div>
-    </main>
+    </Page>
   );
 }

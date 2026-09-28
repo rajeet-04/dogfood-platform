@@ -1,26 +1,59 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { LogIn, UserRound } from "lucide-react";
 
 import { resolveSessionAccount } from "@dogfood/auth";
 
 import { getActor, getSavedAccounts } from "../server/session";
 import { getNotificationInbox } from "../server/read-models/notifications";
-import {
-  logoutAction,
-  signOutAccountAction,
-  signOutAllAction,
-  switchAccountAction,
-} from "../server/actions/auth";
-import { AccountRow, SignOutAllButton } from "./account-menu";
-import { NotificationBell } from "./notification-bell";
+import { logoutAction } from "../server/actions/auth";
 import { SESSION_COOKIE } from "../lib/session-cookie";
+import { AccountSwitcher } from "./account-menu";
+import { MobileNav } from "./mobile-nav";
+import { NavLinks, type NavItem } from "./nav-links";
+import { NotificationBell } from "./notification-bell";
+import { ThemeToggle } from "./ui/theme";
+import { ButtonLink, SubmitButton } from "./ui/button";
+
+const PUBLIC_NAV: NavItem[] = [{ href: "/events", label: "Events" }];
+// "Profile" lives in the right-hand cluster rather than the primary nav, so it
+// is only repeated in the small-screen drawer.
+const MEMBER_DRAWER_NAV: NavItem[] = [
+  { href: "/events", label: "Events" },
+  { href: "/profile", label: "Profile" },
+];
+
+function Wordmark() {
+  return (
+    <Link
+      href="/"
+      className="group flex shrink-0 items-center gap-2 rounded-md"
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-7 place-items-center rounded-md bg-accent text-micro font-bold text-accent-fg shadow-xs"
+      >
+        DF
+      </span>
+      <span className="text-subheading font-semibold tracking-tight text-fg">
+        DOGFOOD
+      </span>
+    </Link>
+  );
+}
 
 export async function Header() {
   const actor = await getActor();
   const accounts = await getSavedAccounts();
   const inbox = await getNotificationInbox();
   const currentToken = (await cookies()).get(SESSION_COOKIE)?.value;
-  const switchable = [];
+
+  const switchable: Array<{
+    token: string;
+    email: string;
+    displayName: string;
+    isCurrent: boolean;
+  }> = [];
   for (const account of accounts) {
     const resolved = await resolveSessionAccount(account.token);
     if (resolved) {
@@ -33,22 +66,26 @@ export async function Header() {
     }
   }
 
+  const drawerExtras: NavItem[] = actor
+    ? [{ href: "/events/new", label: "New event" }]
+    : [
+        { href: "/login", label: "Log in" },
+        { href: "/register", label: "Register" },
+      ];
+
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        <Link
-          href="/"
-          className="text-lg font-bold tracking-tight text-slate-900 hover:text-indigo-700"
-        >
-          DOGFOOD
-        </Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link
-            href="/events"
-            className="text-slate-600 transition hover:text-slate-900"
-          >
-            Events
-          </Link>
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur-md">
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <MobileNav
+          items={actor ? MEMBER_DRAWER_NAV : PUBLIC_NAV}
+          extraLinks={drawerExtras}
+        />
+
+        <Wordmark />
+
+        <NavLinks items={PUBLIC_NAV} className="ml-2 hidden lg:flex" />
+
+        <div className="ml-auto flex items-center gap-1.5">
           {actor ? (
             <>
               <NotificationBell
@@ -56,63 +93,36 @@ export async function Header() {
                 unreadCount={inbox.unreadCount}
               />
               {switchable.length > 1 ? (
-                <details className="relative">
-                  <summary className="cursor-pointer list-none text-slate-600 transition hover:text-slate-900">
-                    Accounts ({switchable.length})
-                  </summary>
-                  <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-                    <ul className="space-y-3">
-                      {switchable.map((account) => (
-                        <AccountRow
-                          key={account.token}
-                          account={account}
-                          switchAction={switchAccountAction.bind(
-                            null,
-                            account.token,
-                          )}
-                          signOutAction={signOutAccountAction.bind(
-                            null,
-                            account.token,
-                          )}
-                        />
-                      ))}
-                    </ul>
-                    <SignOutAllButton action={signOutAllAction} />
-                  </div>
-                </details>
+                <AccountSwitcher accounts={switchable} />
               ) : null}
+              <ThemeToggle className="hidden sm:inline-flex" />
               <Link
                 href="/profile"
-                className="text-slate-600 transition hover:text-slate-900"
+                aria-label="Profile"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
               >
-                Profile
+                <UserRound aria-hidden="true" className="size-4" />
+                <span className="hidden sm:inline">Profile</span>
               </Link>
               <form action={logoutAction}>
-                <button
-                  type="submit"
-                  className="text-slate-600 transition hover:text-slate-900"
-                >
+                <SubmitButton variant="secondary" size="md">
                   Sign out
-                </button>
+                </SubmitButton>
               </form>
             </>
           ) : (
             <>
-              <Link
-                href="/login"
-                className="text-slate-600 transition hover:text-slate-900"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-md bg-slate-900 px-3 py-1.5 font-medium text-white transition hover:bg-slate-700"
-              >
+              <ThemeToggle className="mr-1 hidden sm:inline-flex" />
+              <ButtonLink href="/login" variant="ghost" size="md" aria-label="Log in">
+                <LogIn aria-hidden="true" className="size-4" />
+                <span className="hidden sm:inline">Log in</span>
+              </ButtonLink>
+              <ButtonLink href="/register" variant="primary" size="md">
                 Register
-              </Link>
+              </ButtonLink>
             </>
           )}
-        </nav>
+        </div>
       </div>
     </header>
   );
