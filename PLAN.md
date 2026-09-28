@@ -17,16 +17,19 @@
 
 ## Current local verification checkpoint — 2026-09-28
 
-The current checkout has passed the recorded full Vitest suite, affected-package typechecks, the live official checker, and local Podman/browser verification. The latest voting-access hardening also has a focused integration/typecheck/build/offline checkpoint:
+The latest combined code checkout passed the full Vitest suite, affected-package typechecks, a fresh production image build, and an isolated Podman runtime/checker smoke. Full browser acceptance below is from an earlier source checkpoint and has not been rerun after the signed judge-record and pairwise comparison additions.
 
-- `bunx vitest run` — 49 files, 313 tests passed on the fresh verification run.
+- `bunx vitest run` — 51 files, 315 tests passed on the combined post-merge run.
+- `podman build -t localhost/dogfood-platform:final-local .` — passed, including Next.js production compilation and TypeScript.
+- Fresh isolated Podman runtime for that image — migration `0020` applied (migration table count 21, max timestamp `1791700000000`), `/api/ready` reported ready/database ok/migrations applied; gallery returned 40 projects including `Glass Signal` with zero non-submitted entries; the unchanged official checker passed 7/7 from a container on the same internal network. Disposable resources were removed.
+- `bunx vitest run tests/integration/api-v1.test.ts` — 5/5 passed for event detail REST update; `apps/web` typecheck passed.
 - Changed package typechecks for `packages/audit`, `packages/db`, `packages/events`, `packages/judging`, `packages/voting`, and `apps/web` — passed.
 - Full Playwright acceptance — 13 passed, including 2 community-voting browser flows; 1 opt-in visual case was skipped. The separate `VISUAL_QA=1` responsive sweep passed with no visual problems or console errors.
 - Podman production image and Compose startup — healthy; local fixture seeding and migrations applied; health and readiness endpoints returned HTTP 200.
 - Official `python3 plans-dogfood/official/run.py .dogfood.toml` — 7/7 checks passed; unedited output is recorded in [`acceptance-report.txt`](acceptance-report.txt).
 - `git diff --check` — passed.
 - After the configurable access-mode and stateless open-link changes, `bun run vitest run tests/integration/voting.test.ts` — 16/16 passed. Typechecks for `@dogfood/voting`, `@dogfood/db`, and `@dogfood/web` passed, as did the production web build.
-- Offline verification on the fresh HEAD: the prebuilt web image started against an isolated internal Podman PostgreSQL instance with networking disabled; migration `0019` applied, `/api/ready` returned HTTP 200, and the unchanged official checker passed 7/7 in the container. Fixture smoke showed all 40 official projects, including `Glass Signal`, and zero non-submitted fixtures. This verifies that image/startup/seed path in that setup, not every command on every offline host.
+- Earlier offline image verification (before migration `0020`): the prebuilt web image started against an isolated internal Podman PostgreSQL instance with networking disabled; migration `0019` applied, `/api/ready` returned HTTP 200, and the unchanged official checker passed 7/7 in the container. Fixture smoke showed all 40 official projects, including `Glass Signal`, and zero non-submitted fixtures. This is evidence for that earlier image/setup, not the current source revision or every command on every offline host.
 
 These results establish local checker success, Compose/browser operation, and the scoped offline container run, not competition eligibility or full tier completion. The official submission probe can pass with a schema-validation HTTP 400 before deadline logic is reached, so this check alone does not prove deadline enforcement (covered separately by application tests). Provenance and eligibility remain unresolved because existing source history predates the event's 2026-09-26 18:00 UTC code window. The organizer raw-score policy discrepancy remains pending: the official site matrix permits organizer score access, while the app restricts direct organizer reads to locked evaluations; the seven checker tests do not settle this policy.
 
@@ -128,3 +131,4 @@ Main prizes: 1st $800, 2nd $500, 3rd $350, 4th $200, 5th $150, Best Judging Engi
 - 2026-09-28: Updated current implementation and verification status for organizer schedule settings, recusal audit, judge invitations, authenticated-account T3 voting/comments, official checker assets/config, judging proof documentation, and the remaining live verification and eligibility gates.
 - 2026-09-28: Recorded organizer voting-window controls and the 13-pass acceptance run, including both voting browser flows; retained the visual opt-in skip and known policy, eligibility, and access-mode limits.
 - 2026-09-28: Recorded configurable voter modes and the stateless-token hardening checkpoint: 16/16 voting integration tests, focused typechecks and production build, offline fresh-PostgreSQL readiness/fixture evidence, pairwise/API partial scope, and the remaining eligibility, identity-abuse, score-policy, video, and submission blockers.
+- 2026-09-28: Refreshed the combined post-merge checkpoint: 51/315 Vitest tests passed; event-details REST, pairwise comparison collection, and signed judge-record contracts are documented. The production web build is still running, and prior checker/browser/container evidence remains tied to an earlier source/image revision.
