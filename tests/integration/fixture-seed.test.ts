@@ -22,7 +22,7 @@ describe("official fixture seed", () => {
 
     const [event] = await db.select().from(schema.events)
       .where(eq(schema.events.id, first.eventId));
-    expect(event.submissionClosesAt?.toISOString()).toBe(fixture.event.submissions_close);
+    expect(event.submissionClosesAt?.getTime()).toBe(Date.parse(fixture.event.submissions_close));
     expect(event.state).toBe("JUDGING");
 
     const projects = await db.select().from(schema.projects)
