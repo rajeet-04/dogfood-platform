@@ -97,6 +97,7 @@ export type EvaluationDetail = {
     weight: number;
     minScore: number;
     maxScore: number;
+    optional: boolean;
     score: number | null;
     comment: string | null;
   }>;
@@ -281,6 +282,7 @@ export async function addCriterion(
       weight: String(input.weight),
       minScore: String(input.minScore),
       maxScore: String(input.maxScore),
+      isOptional: input.optional ?? false,
       sortOrder,
     })
     .returning();
@@ -573,6 +575,7 @@ function toEvaluationDetail(
         weight: toNumber(criterion.weight),
         minScore: toNumber(criterion.minScore),
         maxScore: toNumber(criterion.maxScore),
+        optional: criterion.isOptional,
         score: row ? toNumber(row.score) : null,
         comment: row ? row.comment : null,
       };
@@ -853,6 +856,7 @@ export async function submitEvaluation(
     criterionId: c.id,
     minScore: toNumber(c.minScore),
     maxScore: toNumber(c.maxScore),
+    optional: c.isOptional,
   }));
 
   let storedScores: StoredScore[];
@@ -872,6 +876,13 @@ export async function submitEvaluation(
     }));
     validateSubmittedScores(bounds, mapped);
     storedScores = mapped;
+  }
+
+  if (storedScores.length === 0) {
+    throw new DogfoodError(
+      "VALIDATION_FAILED",
+      "[VALIDATION_FAILED] At least one criterion score is required",
+    );
   }
 
   const finalComment =

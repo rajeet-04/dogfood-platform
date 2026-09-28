@@ -24,6 +24,7 @@ function parseScoreInputs(formData: FormData): {
     if (!key.startsWith("score:")) continue;
     const criterionId = key.slice("score:".length);
     const raw = formData.get(key);
+    if (raw === null || raw === "") continue;
     const value = typeof raw === "string" ? Number(raw) : Number.NaN;
     const comment = formData.get(`comment:${criterionId}`);
     scores.push({

@@ -31,6 +31,7 @@ export type OrganizerDocument = {
       weight: number;
       minScore: number;
       maxScore: number;
+      optional: boolean;
     }>;
   }>;
   projects: Array<{
@@ -226,6 +227,7 @@ export async function getOrganizerDocument(
           weight: Number(c.weight),
           minScore: Number(c.minScore),
           maxScore: Number(c.maxScore),
+          optional: c.isOptional,
         })),
       };
     }),

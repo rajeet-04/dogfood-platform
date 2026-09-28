@@ -1,0 +1,1 @@
+ALTER TABLE "rubric_criteria" ADD COLUMN "is_optional" boolean NOT NULL DEFAULT false;--> statement-breakpoint

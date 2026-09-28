@@ -8,6 +8,7 @@ export type CriterionInput = {
   weight: number;
   minScore: number;
   maxScore: number;
+  optional?: boolean;
   sortOrder?: number | null;
 };
 
@@ -73,6 +74,7 @@ export type CriterionBounds = {
   criterionId: string;
   minScore: number;
   maxScore: number;
+  optional?: boolean;
 };
 
 export type SubmittedCriterionScore = {
@@ -116,7 +118,9 @@ export function validateSubmittedScores(
       );
     }
   }
-  const missing = criteria.filter((c) => !seen.has(c.criterionId));
+  const missing = criteria.filter(
+    (c) => !seen.has(c.criterionId) && !c.optional,
+  );
   if (missing.length > 0) {
     throw new DogfoodError(
       "VALIDATION_FAILED",
