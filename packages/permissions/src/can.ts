@@ -42,6 +42,9 @@ export function can(
     case "audit:read":
       return roles.includes("ORGANIZER");
 
+    case "event:join":
+      return true;
+
     case "team:join":
     case "team:manage":
       return roles.includes("PARTICIPANT");

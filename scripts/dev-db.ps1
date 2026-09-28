@@ -13,29 +13,34 @@ $PgHost = "127.0.0.1"
 $Port = 5432
 $User = "dogfood"
 
-function Pg-Cmd($Name, $ArgList) {
-  & (Join-Path $PgBin $Name) @ArgList 2>&1
-}
-
 switch ($Action) {
   "start" {
     if (-not (Test-Path "$PgData\PG_VERSION")) {
       Write-Error "PostgreSQL data dir not initialized. Run: initdb -D $PgData -U $User -A trust -E UTF8 --no-locale"
     }
-    $ready = pg_isready -h $PgHost -p $Port
+    & pg_isready -h $PgHost -p $Port -U $User | Out-Null
     if ($LASTEXITCODE -eq 0) {
-      Write-Output "already running on $PgHost`:$Port"
+      Write-Output "DOGFOOD Postgres is already running on $PgHost`:$Port."
     }
     else {
-      Pg-Cmd "pg_ctl" @("-D", $PgData, "-l", $Log, "-o", "-p $Port -h $PgHost", "start") | Out-Null
-      Start-Sleep -Seconds 3
-      Pg-Cmd "pg_isready" @("-h", $PgHost, "-p", $Port, "-U", $User)
+      Write-Output "Starting DOGFOOD Postgres on $PgHost`:$Port (this takes a few seconds)..."
+      & pg_ctl -D $PgData -l $Log -o "-p $Port -h $PgHost" -w start
+      Start-Sleep -Seconds 2
+    }
+    $s = & pg_isready -h $PgHost -p $Port -U $User
+    Write-Output "CHECK: $s"
+    if ($LASTEXITCODE -eq 0) {
+      Write-Output "SUCCESS - Postgres is up. You can close this window any time."
+    }
+    else {
+      Write-Error "Postgres did not start. Check $Log for details."
     }
   }
   "stop" {
-    Pg-Cmd "pg_ctl" @("-D", $PgData, "stop")
+    & pg_ctl -D $PgData stop
   }
   "status" {
-    Pg-Cmd "pg_isready" @("-h", $PgHost, "-p", $Port, "-U", $User)
+    $s = & pg_isready -h $PgHost -p $Port -U $User
+    Write-Output "CHECK: $s"
   }
 }

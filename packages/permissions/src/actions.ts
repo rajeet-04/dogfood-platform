@@ -6,6 +6,7 @@ export const ACTION = {
   QUESTION_MANAGE: "question:manage",
   MEMBER_INVITE: "member:invite",
   MEMBER_REMOVE: "member:remove",
+  EVENT_JOIN: "event:join",
   PROJECT_MANAGE: "project:manage",
   PROJECT_READ_PUBLIC: "project:read:public",
   PROJECT_READ_ASSIGNED: "project:read:assigned",
