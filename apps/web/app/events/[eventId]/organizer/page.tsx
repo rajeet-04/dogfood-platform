@@ -6,6 +6,8 @@ import { JUDGE_APPLICATION_STATUS_LABEL } from "@dogfood/applications";
 
 import { ActionForm } from "../../../../components/action-form";
 import { JudgeAssignmentPlanner } from "../../../../components/organizer/judge-assignment-planner";
+import { JudgeInvitations } from "../../../../components/organizer/judge-invitations";
+import { VotingSettings } from "../../../../components/organizer/voting-settings";
 import {
   Badge,
   type BadgeTone,
@@ -304,6 +306,8 @@ export default async function OrganizerPage({
             )}
           </CardBody>
         </Card>
+
+        <VotingSettings eventId={eventId} />
 
         <Collapsible
           title="Event details"
@@ -829,6 +833,8 @@ export default async function OrganizerPage({
             </ul>
           )}
         </Card>
+
+        <JudgeInvitations eventId={eventId} />
 
         <Collapsible
           title="Judge applications"
