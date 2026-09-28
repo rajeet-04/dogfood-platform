@@ -140,6 +140,33 @@ describe("projects and immutable revisions", () => {
     expect(withdrawn.submittedAt).toBeNull();
   });
 
+  it("requires current organizer questions at submit while allowing partial drafts", async () => {
+    const { event, participant, teamId } = await eventInSubmissions();
+    await db.update(schema.events).set({ customQuestions: [
+      { id: "impact", prompt: "What is the impact?", required: true, visibility: "PUBLIC", order: 0 },
+      { id: "notes", prompt: "Notes", required: false, visibility: "ORGANIZER_ONLY", order: 1 },
+    ] }).where(eq(schema.events.id, event.id));
+    const project = await createProject(participant, event.id, {
+      teamId, title: "Answers", description: "A project", customAnswers: {},
+    });
+    await expect(submitProject(participant, event.id, project.id)).rejects.toMatchObject({ code: "SUBMISSION_INCOMPLETE" });
+    const revised = await reviseProject(participant, event.id, project.id, {
+      title: "Answers", description: "A project", customAnswers: { impact: "Useful" },
+    });
+    expect(revised.currentRevision.customAnswers).toEqual({ impact: "Useful" });
+    await expect(submitProject(participant, event.id, project.id)).resolves.toMatchObject({ state: "SUBMITTED" });
+  });
+
+  it("rejects tracks and image assets owned by another event", async () => {
+    const { event, participant, teamId } = await eventInSubmissions();
+    const otherOrg = await registerUser({ email: "foreign-org@example.com", password: "pass", displayName: "Foreign Org" });
+    const otherEvent = await createEvent(actorFor(otherOrg.id), { slug: "foreign-event", name: "Foreign Event", timezone: "UTC" });
+    const [track] = await db.insert(schema.eventTracks).values({ eventId: otherEvent.id, name: "Other Track" }).returning();
+    const [asset] = await db.insert(schema.assets).values({ eventId: otherEvent.id, uploadedBy: otherOrg.id, storageKey: "foreign/image.png", originalName: "image.png", mimeType: "image/png", byteSize: 8, sha256: "a" }).returning();
+    await expect(createProject(participant, event.id, { teamId, title: "Foreign Track", description: "body", trackId: track.id })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(createProject(participant, event.id, { teamId, title: "Foreign Image", description: "body", imageAssetIds: [asset.id] })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
   it("rejects writes once the deadline has passed", async () => {
     const { event, participant, teamId } = await eventInSubmissions();
     const project = await createProject(participant, event.id, {

@@ -10,6 +10,7 @@ export async function getEventById(eventId: string): Promise<
       state: EventState;
       submissionOpensAt: Date | null;
       submissionClosesAt: Date | null;
+      customQuestions: import("@dogfood/db").CustomQuestion[];
     }
   | undefined
 > {
@@ -20,6 +21,7 @@ export async function getEventById(eventId: string): Promise<
       state: schema.events.state,
       submissionOpensAt: schema.events.submissionOpensAt,
       submissionClosesAt: schema.events.submissionClosesAt,
+      customQuestions: schema.events.customQuestions,
     })
     .from(schema.events)
     .where(eq(schema.events.id, eventId))

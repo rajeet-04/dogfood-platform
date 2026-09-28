@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { db, desc, eq, schema, sqlState, type EventState } from "@dogfood/db";
+import { and, db, desc, eq, inArray, schema, sqlState, type EventState, type CustomQuestion } from "@dogfood/db";
 import { ACTION, requirePermission } from "@dogfood/permissions";
 import { actorDisplayName, notifyEventMembersByRole } from "@dogfood/notifications";
 import type { Actor } from "@dogfood/shared";
@@ -10,6 +10,7 @@ import { appendAuditEvent } from "@dogfood/audit";
 import {
   assertProjectUnlocked,
   assertSubmissionWindow,
+  validateCustomAnswers,
   validateSubmissionCompleteness,
 } from "./domain";
 import {
@@ -34,6 +35,10 @@ export type CreateProjectInput = {
   liveUrl?: string | null;
   demoVideoUrl?: string | null;
   techTags?: string[];
+  trackId?: string | null;
+  thumbnailAssetId?: string | null;
+  imageAssetIds?: string[];
+  customAnswers?: Record<string, string>;
 };
 
 export type RevisionInput = {
@@ -44,6 +49,10 @@ export type RevisionInput = {
   liveUrl?: string | null;
   demoVideoUrl?: string | null;
   techTags?: string[];
+  trackId?: string | null;
+  thumbnailAssetId?: string | null;
+  imageAssetIds?: string[];
+  customAnswers?: Record<string, string>;
 };
 
 export type ProjectDetail = {
@@ -64,7 +73,11 @@ function slugify(value: string): string {
   return slug || randomUUID();
 }
 
-function toRevisionContent(input: CreateProjectInput | RevisionInput) {
+function toRevisionContent(
+  input: CreateProjectInput | RevisionInput,
+  questions: CustomQuestion[],
+  previous?: ProjectRevisionRow,
+) {
   return {
     title: input.title,
     tagline: input.tagline ?? null,
@@ -73,7 +86,45 @@ function toRevisionContent(input: CreateProjectInput | RevisionInput) {
     liveUrl: input.liveUrl ?? null,
     demoVideoUrl: input.demoVideoUrl ?? null,
     techTags: input.techTags ?? [],
+    trackId: input.trackId === undefined ? (previous?.trackId ?? null) : input.trackId,
+    thumbnailAssetId: input.thumbnailAssetId === undefined ? (previous?.thumbnailAssetId ?? null) : input.thumbnailAssetId,
+    customAnswers: validateCustomAnswers(questions, input.customAnswers ?? previous?.customAnswers ?? {}, false),
+    questionSnapshot: questions,
   };
+}
+
+async function validateProjectReferences(
+  eventId: string,
+  trackId: string | null,
+  thumbnailAssetId: string | null,
+  imageAssetIds: string[],
+): Promise<void> {
+  const ids = [...new Set([...imageAssetIds, ...(thumbnailAssetId ? [thumbnailAssetId] : [])])];
+  if (imageAssetIds.length > 10 || imageAssetIds.length !== new Set(imageAssetIds).size) {
+    throw new DogfoodError("VALIDATION_FAILED", "Choose at most 10 different gallery images");
+  }
+  if ([...ids, ...(trackId ? [trackId] : [])].some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new DogfoodError("VALIDATION_FAILED", "Invalid track or image ID");
+  }
+  if (trackId) {
+    const tracks = await db.select({ id: schema.eventTracks.id }).from(schema.eventTracks)
+      .where(and(eq(schema.eventTracks.id, trackId), eq(schema.eventTracks.eventId, eventId))).limit(1);
+    if (!tracks[0]) throw new DogfoodError("VALIDATION_FAILED", "Track does not belong to this event");
+  }
+  if (ids.length) {
+    const assets = await db.select({ id: schema.assets.id }).from(schema.assets)
+      .where(and(eq(schema.assets.eventId, eventId), inArray(schema.assets.id, ids)));
+    if (assets.length !== ids.length) throw new DogfoodError("VALIDATION_FAILED", "Image does not belong to this event");
+  }
+}
+
+async function currentImageIds(revisionId: string | null): Promise<string[]> {
+  if (!revisionId) return [];
+  const rows = await db.select({ assetId: schema.projectRevisionImages.assetId })
+    .from(schema.projectRevisionImages)
+    .where(eq(schema.projectRevisionImages.revisionId, revisionId))
+    .orderBy(schema.projectRevisionImages.position);
+  return rows.map((row) => row.assetId);
 }
 
 async function requireParticipantProjectAccess(
@@ -149,7 +200,9 @@ export async function createProject(
 
   assertSubmissionWindow(new Date(), event);
 
-  const content = toRevisionContent(input);
+  const content = toRevisionContent(input, event.customQuestions);
+  const imageAssetIds = input.imageAssetIds ?? [];
+  await validateProjectReferences(eventId, content.trackId, content.thumbnailAssetId, imageAssetIds);
 
   try {
     const projectId = await db.transaction(async (tx) => {
@@ -171,6 +224,12 @@ export async function createProject(
           createdBy: actor.userId,
         })
         .returning();
+
+      if (imageAssetIds.length) {
+        await tx.insert(schema.projectRevisionImages).values(
+          imageAssetIds.map((assetId, position) => ({ revisionId: revision.id, assetId, position })),
+        );
+      }
 
       await tx
         .update(schema.projects)
@@ -216,7 +275,11 @@ export async function reviseProject(
   assertProjectUnlocked(project);
   assertSubmissionWindow(new Date(), event);
 
-  const content = toRevisionContent(input);
+  const previous = await getRevisionById(project.currentRevisionId);
+  if (!previous) throw new DogfoodError("NOT_FOUND", "Project is missing its current revision");
+  const content = toRevisionContent(input, event.customQuestions, previous);
+  const imageAssetIds = input.imageAssetIds ?? await currentImageIds(previous.id);
+  await validateProjectReferences(eventId, content.trackId, content.thumbnailAssetId, imageAssetIds);
 
   await db.transaction(async (tx) => {
     const latest = await tx
@@ -236,6 +299,12 @@ export async function reviseProject(
         createdBy: actor.userId,
       })
       .returning();
+
+    if (imageAssetIds.length) {
+      await tx.insert(schema.projectRevisionImages).values(
+        imageAssetIds.map((assetId, position) => ({ revisionId: revision.id, assetId, position })),
+      );
+    }
 
     await tx
       .update(schema.projects)
@@ -284,6 +353,12 @@ export async function submitProject(
       "Project is missing required fields before submission",
     );
   }
+
+  const currentQuestionIds = new Set(event.customQuestions.map((question) => question.id));
+  const currentAnswers = Object.fromEntries(
+    Object.entries(revision.customAnswers).filter(([id]) => currentQuestionIds.has(id)),
+  );
+  validateCustomAnswers(event.customQuestions, currentAnswers, true);
 
   await db.transaction(async (tx) => {
     await tx
@@ -423,4 +498,4 @@ export async function withdrawProject(
   return toProjectDetail(updated);
 }
 
-export { assertSubmissionWindow, assertProjectUnlocked, validateSubmissionCompleteness } from "./domain";
+export { assertSubmissionWindow, assertProjectUnlocked, validateSubmissionCompleteness, validateCustomAnswers } from "./domain";
