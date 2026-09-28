@@ -4,7 +4,7 @@
 
 Make the repository judgeable, reproducible, documented, and safe to hand to another operator.
 
-## Required root artifacts
+## Required submission artifacts
 
 - `README.md`
 - `ARCHITECTURE.md`
@@ -14,6 +14,7 @@ Make the repository judgeable, reproducible, documented, and safe to hand to ano
 - `acceptance-report.txt`
 - `LICENSE`
 - `.dogfood.toml`
+- five-minute demo video, linked from the README or submission metadata
 
 ## Seed and boot
 
@@ -23,6 +24,8 @@ Make the repository judgeable, reproducible, documented, and safe to hand to ano
 3. load official fixture data idempotently;
 4. start app;
 5. report readiness.
+
+The boot path must work with the network disconnected and print working organizer, judge A, judge B, and participant request headers for the official checker. The official `.dogfood.toml` uses `[portal]`, `[tiers]`, `[auth]`, and `[routes]`; claims and route paths must match the running portal. Use the published fixtures and `run.py`, not substitute demo data.
 
 No cloud account, API key, external database, or auth service.
 
@@ -74,9 +77,10 @@ One-command start, credentials/fixture users, ports, test commands, tier claims,
 - public GitHub repo;
 - OSI license, MIT/Apache-2.0 preferred;
 - `.dogfood.toml` claims only passing tiers;
-- acceptance report committed as a clean, skimmable pass/fail summary (not a raw test-runner dump) — this is a required deliverable graders open directly;
+- `acceptance-report.txt` is the direct output of official `python3 run.py .dogfood.toml`, committed unchanged even if it has failures; explain known gaps separately in `README.md`;
 - 5-minute demo video covers create → submit → judge → publish, and includes one scripted beat showing a denied cross-judge/cross-track raw API request (proof of backend enforcement, not just a hidden UI button);
 - code freeze respected;
+- all project code included in the entry was written during the official 72-hour window; pre-event plans/schema sketches are allowed but pre-existing app code is not;
 - clean git status;
 - final tag/commit recorded.
 

@@ -1,6 +1,6 @@
 # Phase 11: Bonus Challenges
 
-Only start after core tier goals are secure.
+Only start after required T1/T2 acceptance, offline operability, submission docs, and final buffer are secure. Bonus points are tie-breakers only: they do not alter the weighted 1–5 main score. They also help determine the Best Judging Engine prize.
 
 ## Normalization Proof +5
 
@@ -50,6 +50,7 @@ Requires:
 - every UI command represented in OpenAPI;
 - contract tests between documented schema and handlers;
 - no business behavior available only through private Server Actions.
+- This +3 is a tie-break bonus only, not an addition to the weighted score.
 
 ## Selection rule
 

@@ -4,20 +4,25 @@
 **Event site:** https://dogfoodhack.com/  
 **Branch:** `dogfood`  
 **Architecture status:** v1 approved  
-**Primary objective:** Ship a reliable T1 + T2 implementation with a differentiated judging engine inside the 72-hour competition window.
+**Primary objective:** Ship the highest correct and honestly evidenced tier possible, with T1 required and a reliable T1/T2 judging core as the plan's delivery floor.
 
 ## Planning authority order
 
-1. Official `spec.md`, fixtures, and acceptance suite after release
-2. [Master phase map](./phases/00-master-phase-map.md)
-3. Phase documents under [`phases/`](./phases/)
-4. Cross-phase contracts under [`specs/`](./specs/)
-5. [Task-level implementation plan](./02-implementation-plan.md)
-6. [72-hour execution runbook](./03-72-hour-runbook.md)
+1. Official event site for tiers, scoring, prizes, rules, timeline, and adoption terms
+2. Published `spec.md`, `fixtures.json`, and `run.py` for the executable acceptance contract
+3. [Official requirements and scoring crosswalk](./00-official-requirements.md)
+4. [Master phase map](./phases/00-master-phase-map.md)
+5. Phase documents under [`phases/`](./phases/)
+6. Cross-phase contracts under [`specs/`](./specs/)
+7. [Task-level implementation plan](./02-implementation-plan.md)
+8. [72-hour execution runbook](./03-72-hour-runbook.md)
+
+The repository-level [PLAN.md](../PLAN.md) tracks current implementation evidence, competition eligibility, and remaining work. The official web brief is at <https://dogfoodhack.com/> and the published acceptance spec is at <https://dogfoodhack.com/spec/>.
 
 ## Core documents
 
 - [Event brief](./00-event-brief.md)
+- [Official requirements, score weights, bonuses, and prizes](./00-official-requirements.md)
 - [Architecture v1](./01-architecture-v1.md)
 - [Implementation plan](./02-implementation-plan.md)
 - [72-hour execution runbook](./03-72-hour-runbook.md)
@@ -62,7 +67,7 @@
 - Versioned ranking snapshots
 - Docker Compose with only application + PostgreSQL as required services
 - Organizer cannot judge the same event
-- Organizer cannot inspect raw judge scores until judging is locked
+- Organizer raw-score access is a provisional v1 policy; reconcile with the official site's organizer-permitted role matrix in Phase 0
 
 ## Build principle
 
@@ -81,8 +86,10 @@ authenticate
 
 ## Scope strategy
 
-**Primary target:** Correct, polished T1 + T2.
+**Required gate:** T1. **Primary delivery floor:** Correct, polished T1 + T2 with defensible judging and local adoption evidence.
 
-**Stretch only after acceptance is green:** T3/T4 items or advanced pairwise judging.
+The official score is 40% Tier Completion & Correctness, 25% Judging Integrity, 20% Adoptability & Operability, and 15% Code Quality & Innovation. T1 is the eligibility floor; the higher the correctly working tier, the better, but a clean T2 outranks a broken T4. Bonus challenges only break ties; they do not add to the weighted score.
+
+**Stretch only after all required T1/T2 acceptance and submission gates are green:** T3/T4 items or advanced pairwise judging.
 
 The judging path is prioritized over gallery polish because judging integrity and operational adoptability carry more architectural risk and product value.

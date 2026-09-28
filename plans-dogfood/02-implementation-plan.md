@@ -2,13 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> Competition requirements and award scoring are defined in [`00-official-requirements.md`](./00-official-requirements.md). Use the repository-level [`PLAN.md`](../PLAN.md) as the current status tracker; the checkboxes below describe task steps and are not a statement that this checkout is competition-eligible or officially accepted.
+
 **Goal:** Build a self-hosted hackathon submission and judging platform that reliably completes the participant → submission → judge assignment → evaluation → normalization → ranking → publication workflow.
 
 **Architecture:** Implement a modular monolith in Next.js. Keep authorization/state transitions in application/domain modules, persist state in PostgreSQL through Drizzle, and keep scoring/normalization/ranking as pure TypeScript packages with no framework or database dependencies.
 
 **Tech Stack:** Next.js, React, TypeScript, PostgreSQL, Drizzle, Zod, Tailwind CSS, shadcn/ui, Vitest, Playwright, Docker Compose.
 
-**Specs:** `01-architecture-v1.md`, `phases/00-master-phase-map.md`, and the cross-phase contracts under `specs/`.
+**Specs:** `00-official-requirements.md`, `01-architecture-v1.md`, `phases/00-master-phase-map.md`, and the cross-phase contracts under `specs/`.
 
 **Execution rule:** Implement phase-by-phase. The phase document is authoritative for scope and exit criteria; this file supplies task/TDD granularity. Do not skip a phase exit gate.
 
@@ -19,7 +21,7 @@
 - Event authorization is server-authoritative and event-scoped.
 - A user cannot be ORGANIZER and JUDGE in the same event.
 - Judges can access evaluations only through explicit assignments.
-- Organizers cannot inspect individual raw judge scores until judging is locked.
+- Provisional v1 policy: organizers cannot inspect individual raw judge scores until judging is locked. Reconcile this with the official event-site role matrix in Phase 0 before claiming exact conformance.
 - Project and evaluation history is immutable through revisions.
 - Critical business mutation and audit event insertion share one database transaction.
 - Published rankings are persisted as versioned snapshots.

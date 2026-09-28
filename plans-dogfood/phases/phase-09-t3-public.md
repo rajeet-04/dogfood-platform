@@ -26,13 +26,16 @@
 
 ## Required behavior
 
-- OPEN, EMAIL_GATED, AUTHENTICATED modes according to official spec;
+- OPEN, EMAIL_GATED, AUTHENTICATED modes according to the official site;
+- support one-person-one-vote, or provide a defensible alternative such as quadratic voting;
 - randomized ballot ordering;
-- results hidden during active voting except organizer;
+- results hidden from everyone except organizers during active voting;
 - duplicate detection;
 - rate limits;
 - readable abuse audit;
 - comments with authorization/moderation rules.
+
+T3 is not covered by the seven-check acceptance suite. Maintain separate behavior tests and demo evidence for voter eligibility, ballot ordering, result secrecy, comments, and abuse controls.
 
 ## Security tests
 

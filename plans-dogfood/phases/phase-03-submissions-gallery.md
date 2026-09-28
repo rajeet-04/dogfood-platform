@@ -36,6 +36,8 @@ Unique one project per team per event unless official spec says otherwise.
 - track_id
 - created_by/created_at
 
+The published T1 submission contract also includes a thumbnail and ordered image gallery, hosted demo video URL, repository URL, live link, tech tags, track, and organizer-defined custom answers. Keep every mutable submission edit in an immutable revision.
+
 ### project_answer_values
 Prefer normalized table if official fixtures require searchable custom answers:
 - revision_id
@@ -116,6 +118,8 @@ Public:
 - gallery list;
 - search/filter;
 - project detail.
+
+The anonymous gallery must expose submitted fixture projects using public-safe fields; drafts and private submission data must never leak. The official suite checks a known fixture title in the public response.
 
 ## Exit gate
 

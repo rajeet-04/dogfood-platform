@@ -2,76 +2,48 @@
 
 ## Coverage result
 
-The planning set now covers:
-- every currently advertised T1 endpoint family;
-- every currently advertised T2 endpoint family;
-- T3/T4 as gated phases;
-- T1/T2 table inventory and field-level data dictionary;
-- permission/context rules;
-- transaction boundaries;
-- service interfaces;
-- screen/route inventory;
-- test and exit gates;
-- runtime/operability/submission artifacts.
+The planning pack now has an official source-of-truth crosswalk in [`00-official-requirements.md`](../00-official-requirements.md), including all T1–T4 features, the 40/25/20/15 main score, tie-break bonuses, the $2,500 award allocation, eligibility rules, published fixture/checker behavior, required artifacts, timeline, and adoption terms. Phases 1–8 own T1/T2; Phases 9–10 own gated T3/T4; Phase 11 owns optional bonuses. The official seven-check acceptance suite is documented separately from full tier completion.
 
-## Resolved inconsistencies
+## Resolved planning inconsistencies
 
-1. Team membership now carries `event_id` so the database can enforce one team per user per event.
-2. Phase numbering in the 72-hour runbook now matches the authoritative phase documents.
-3. The original task plan now points to the phase/spec documents as authoritative contracts.
-4. REST route/business-logic ownership is explicitly separated: routes are adapters, services own behavior.
-5. T3/T4 are explicitly gated and cannot consume core schedule while T1/T2 is red.
+1. Team membership carries `event_id` so the database can enforce one team per user per event.
+2. Phase numbering in the 72-hour runbook matches the authoritative phase documents.
+3. The task plan points to phase/spec docs as contracts and `PLAN.md` as the status tracker.
+4. Routes are adapters; application services own business behavior.
+5. T3/T4 and bonuses are gated behind T1/T2, offline operation, documentation, and submission readiness.
+6. The event's top-five placements and Best Judging Engine/Write-Up awards are explicitly distinguished from T1–T4 product capability tiers.
+7. The official `.dogfood.toml` format and all seven published checks are recorded.
 
-## Known pre-spec uncertainties
+## Open reconciliation and eligibility items
 
-These are not placeholders; they are explicit reconciliation items for Phase 0.
+### Organizer raw-score visibility
 
-### Organizer access to raw judge scores
+The main site's role matrix marks organizers as permitted to see own/peer scores, other tracks, aggregates, and audit. Architecture v1 currently hides raw scores until judging lock. The published acceptance suite does not test this timing. Keep the conflict visible and resolve it explicitly against the site before claiming exact role-matrix compliance; judge-to-judge and judge-to-track isolation are required.
 
-Approved Architecture v1 delays organizer raw-score access until judging lock. The current public DOGFOOD role matrix shows organizers as permitted to see scores generally. The official `spec.md` and acceptance suite will decide the exact timing. Until then, the stricter confidentiality policy remains planned.
+### Event lifecycle / fixture states
 
-### Event lifecycle exact states
+The official executable spec only insists that the fixture's past `submissions_close` date is honored and that a closed submission is rejected with 4xx. Keep richer planned event states if useful, but ensure fixture import yields the checked closed state without depending on client clocks.
 
-The planned state machine may need adjustment if `spec.md` defines a different lifecycle or derives stages from timestamps rather than explicit states.
+### Current implementation evidence versus competition eligibility
 
-### Custom question storage
+The current local acceptance report cites a Sep 26, 2026 implementation commit, before the published Sep 26, 18:00 UTC coding window. The event prohibits pre-existing project code. Track code provenance as a critical eligibility issue; do not present the existing checkout as eligible solely because local tests pass.
 
-The plan uses normalized `project_answer_values`. If fixtures use a fixed JSON shape and no answer queries are required, JSONB may be simpler. Phase 0 chooses based on fixture/acceptance needs.
+### Email-gated voting, asset limits, and CSV schemas
 
-### Email-gated T3 voting
+The main site names voter-access modes and image submission fields but the acceptance suite does not define email delivery, file-size/MIME limits, image counts, or all export columns. Phase 9/Phase 3 must choose self-hosted/offline behavior and document conservative limits without introducing a hosted dependency.
 
-The product must remain self-hosted/offline. If email-gated voting requires a real outbound mail dependency, implement a self-hostable SMTP path only if the official spec requires it and time permits. Never add a mandatory hosted email provider.
+### T4 API surface
 
-### Asset requirements
+The event site requires every UI action to have a REST API and webhooks; no published acceptance checks verify T4. Keep API parity and OpenAPI contract tests as a distinct Phase 10 exit gate.
 
-Exact MIME types, file limits, thumbnail dimensions, and image count are frozen from `spec.md`.
+## Official acceptance contract
 
-### CSV schemas
+`run.py` checks only: (1) public gallery status 200, (2) known fixture title visible, (3) closed-event participant submission rejected, (4) Judge A can read own scores, (5) Judge B cannot read Judge A's scores, (6) participant cannot read judge scores, and (7) organizer CSV export returns 200/CSV. It does not verify the complete T1–T4 feature set, UI, code provenance, docs, or network-off boot.
 
-Export endpoints are planned; exact headers/order are frozen from official acceptance fixtures.
+## Plan quality checks
 
-### API First scope
-
-T4 API parity may require additional endpoints beyond the current catalog. If the public acceptance suite defines them, add them in Phase 0 before implementation.
-
-## Superpowers plan-quality checks
-
-- Placeholder scan: no intentional TODO/TBD items are used as implementation instructions.
-- Dependency check: T1/T2 phases are sequential with explicit exit gates; pure judging algorithms may be parallelized only after input contracts freeze.
-- Type/ownership check: routes call application services; pure engines do not import DB or HTTP modules.
-- Security check: cross-event IDOR, peer-score leakage, deadline bypass, transaction rollback, and ranking determinism each have explicit tests.
-- Scope check: T3, T4, and bonus work are isolated from the T1/T2 critical path.
-
-## Required Phase 0 output after spec release
-
-Create `specs/100-official-spec-delta.md` and record every changed assumption with:
-- official requirement;
-- planning assumption;
-- final decision;
-- affected phase;
-- endpoint changes;
-- schema changes;
-- test changes;
-- schedule impact.
-
-No project code starts before this reconciliation is complete.
+- Dependency: required T1/T2 phases have explicit exit gates; stretch cannot start while required gates are red.
+- Ownership: routes call services; pure judging engines do not import DB/HTTP modules.
+- Security: cross-event IDOR, peer-score leakage, deadline bypass, transactional audit, and ranking determinism have explicit tests.
+- Evidence: each tier claim needs the official report plus manual/documentation evidence for advertised features the suite does not inspect.
+- Eligibility: only project code authored during the event window may be submitted.

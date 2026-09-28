@@ -1,6 +1,6 @@
 DOGFOOD Acceptance Report
 =========================
-Date:      2026-09-25
+Date:      2026-09-28
 Commit:    ec8eeb3 (final tag v0.1.0; evidence commits c0619fb, 11d037b)
 Platform:  Windows 11, Node v22.15.0, pnpm 12.5.1, PostgreSQL 17 (portable)
 
@@ -15,7 +15,7 @@ playwright   3/3   green   (participant, judge, organizer end-to-end)
 Total vitest: 21 files, 137 tests, all passing. pnpm typecheck: green across
 all 16 workspace packages.
 
-Final demo rehearsal (re-run at tag v0.1.0, 2026-09-25)
+Final demo rehearsal (re-run at tag v0.1.0, 2026-09-28)
 -------------------------------------------------------
 1. Scratch DB dogfood_demo created from empty; 7 migrations applied cleanly.
 2. Booted app; live probes (as a visitor would see them):

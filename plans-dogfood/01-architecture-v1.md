@@ -3,6 +3,8 @@
 **Status:** Approved  
 **Architecture style:** Modular monolith
 
+**Competition conformance note:** The event site's official role matrix grants organizers access to scores, peer scores, other-track data, aggregates, and audit. The organizer raw-score lock rule below is a stricter pre-event project policy and is not verified by the seven-check suite. Phase 0 must resolve this policy against the published event-site matrix before claiming exact conformance.
+
 ## High-level topology
 
 ```text

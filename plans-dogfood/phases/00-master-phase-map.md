@@ -2,19 +2,19 @@
 
 **Planning rule:** a phase is complete only when its database changes, application services, endpoints, UI surfaces, security tests, and exit criteria are all green.
 
-**Source:** current public DOGFOOD brief plus approved Architecture v1. The official `spec.md` published on 2026-09-24 overrides assumptions.
+**Sources:** official DOGFOOD main site for tiers/scoring/prizes/rules; published `spec.md`, fixtures, and `run.py` for machine-checked behavior; [official requirements crosswalk](../00-official-requirements.md); approved Architecture v1 subject to documented conflicts.
 
 ## Phase order
 
 | Phase | Name | Tier | Purpose |
 |---|---|---|---|
 | 0 | Spec Reconciliation & Test Harness | Pre-build | Convert official spec into exact implementation contract |
-| 1 | Runtime, Identity & Sessions | T1 | Boot locally, users authenticate, sessions work |
-| 2 | Event Configuration & Authorization | T1 | Events, roles, tracks, prizes, custom questions |
-| 3 | Teams, Projects, Assets & Gallery | T1 | Full participant submission path |
-| 4 | Judging Setup | T2 | Judges, invitations, rubrics, assignment |
-| 5 | Evaluation & Judging Engine | T2 | Scoring, normalization, judge isolation |
-| 6 | Ranking, Results, Export & Audit | T2 | Reproducible results and organizer operations |
+| 1 | Runtime, Identity & Sessions | T1 | Offline local boot, authentication/sessions, and visitor/participant/judge/organizer/admin roles |
+| 2 | Event Configuration & Authorization | T1 | Event dates, tracks, prizes, role model, and organizer-defined questions |
+| 3 | Teams, Projects, Assets & Gallery | T1 | Invite-link teams; complete editable submission fields/assets; deadline enforcement; searchable/filterable public gallery |
+| 4 | Judging Setup | T2 | Judge invitations; batch/algorithmic assignment; weighted rubric; track boundaries |
+| 5 | Evaluation & Judging Engine | T2 | Assigned-only judging; peer/track isolation; progress; documented normalization |
+| 6 | Ranking, Results, Export & Audit | T2 | Reproducible results, publication, readable audit, CSV export at every stage |
 | 7 | Product Surfaces & UX Integration | T1/T2 | Complete role-specific interfaces |
 | 8 | Operability, Acceptance & Submission | T1/T2 | Offline boot, docs, acceptance report, packaging |
 | 9 | Public Voting & Comments | T3 gated | Community layer only after T2 is green |
@@ -31,7 +31,7 @@
                                 11
 ```
 
-Phases 9-11 are forbidden while required T1/T2 acceptance is red.
+Phases 9-11 are forbidden while required T1/T2 acceptance, offline boot, required docs, or submission artifacts are red. The official seven-check program verifies only a subset of T1/T2; phase exit gates must include the full advertised tier behavior.
 
 ## Cross-phase invariants
 
