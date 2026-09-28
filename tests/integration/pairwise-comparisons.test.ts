@@ -10,6 +10,8 @@ import { createTeam } from "@dogfood/teams";
 import { resetDb } from "../fixtures/db";
 import * as pairwiseRoute from "../../apps/web/app/api/v1/events/[eventId]/pairwise-comparisons/route";
 import * as rankingRoute from "../../apps/web/app/api/v1/events/[eventId]/pairwise-ranking/route";
+import * as pairwiseResultsRoute from "../../apps/web/app/api/v1/events/[eventId]/pairwise-results/route";
+import * as publishPairwiseRoute from "../../apps/web/app/api/v1/events/[eventId]/pairwise-ranking/[snapshotId]/publish/route";
 
 const actorFor = (userId: string): Actor => ({ userId, isPlatformAdmin: false });
 
@@ -78,7 +80,16 @@ describe("assigned judge pairwise comparisons", () => {
     );
     expect(updated.status).toBe(200);
     const organizerSession = await createSession(organizer.userId);
-    const ranking = await rankingRoute.POST(
+    const judgeRankingAttempt = await rankingRoute.POST(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking`, {
+        method: "POST",
+        headers: { cookie: `dogfood_session=${session.rawToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ projectIds: projects.slice(0, 2) }),
+      }),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(judgeRankingAttempt.status).toBe(403);
+    const generated = await rankingRoute.POST(
       new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking`, {
         method: "POST",
         headers: { cookie: `dogfood_session=${organizerSession.rawToken}`, "content-type": "application/json" },
@@ -86,8 +97,92 @@ describe("assigned judge pairwise comparisons", () => {
       }),
       { params: Promise.resolve({ eventId: event.id }) },
     );
-    expect(ranking.status).toBe(200);
-    expect((await ranking.json()).ranking.ranked[0].projectId).toBe(projects[1]);
+    expect(generated.status).toBe(201);
+    const generatedBody = await generated.json();
+    expect(generatedBody.ranking.ranked[0].projectId).toBe(projects[1]);
+    expect(generatedBody.snapshot.input.comparisons).toHaveLength(1);
+    expect(generatedBody.snapshot.input.comparisons[0]).toMatchObject({
+      judgeId: judge.userId,
+      winnerProjectId: projects[1],
+      loserProjectId: projects[0],
+    });
+
+    const hidden = await pairwiseResultsRoute.GET(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-results`),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(hidden.status).toBe(404);
+
+    const published = await publishPairwiseRoute.POST(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking/${generatedBody.snapshot.id}/publish`, {
+        method: "POST",
+        headers: { cookie: `dogfood_session=${organizerSession.rawToken}` },
+      }),
+      { params: Promise.resolve({ eventId: event.id, snapshotId: generatedBody.snapshot.id }) },
+    );
+    expect(published.status).toBe(200);
+    const visible = await pairwiseResultsRoute.GET(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-results`),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(await visible.json()).toMatchObject({
+      results: {
+        snapshotId: generatedBody.snapshot.id,
+        rankings: generatedBody.snapshot.results.ranked,
+      },
+    });
+
+    const changedChoice = await pairwiseRoute.POST(
+      request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-comparisons`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ winnerProjectId: projects[0], loserProjectId: projects[1] }),
+      }),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(changedChoice.status).toBe(200);
+
+    const regenerated = await rankingRoute.POST(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking`, {
+        method: "POST",
+        headers: { cookie: `dogfood_session=${organizerSession.rawToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ projectIds: projects.slice(0, 2) }),
+      }),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(regenerated.status).toBe(201);
+    const regeneratedBody = await regenerated.json();
+    expect(regeneratedBody.snapshot.results).not.toEqual(generatedBody.snapshot.results);
+    expect(regeneratedBody.snapshot.supersedesSnapshotId).toBe(generatedBody.snapshot.id);
+
+    const republished = await publishPairwiseRoute.POST(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking/${regeneratedBody.snapshot.id}/publish`, {
+        method: "POST",
+        headers: { cookie: `dogfood_session=${organizerSession.rawToken}` },
+      }),
+      { params: Promise.resolve({ eventId: event.id, snapshotId: regeneratedBody.snapshot.id }) },
+    );
+    expect(republished.status).toBe(200);
+    const latestVisible = await pairwiseResultsRoute.GET(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-results`),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect((await latestVisible.json()).results.snapshotId).toBe(regeneratedBody.snapshot.id);
+
+    const originalSnapshot = await rankingRoute.GET(
+      new Request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-ranking?snapshotId=${generatedBody.snapshot.id}`, {
+        headers: { cookie: `dogfood_session=${organizerSession.rawToken}` },
+      }),
+      { params: Promise.resolve({ eventId: event.id }) },
+    );
+    expect(await originalSnapshot.json()).toMatchObject({
+      snapshot: {
+        id: generatedBody.snapshot.id,
+        input: generatedBody.snapshot.input,
+        results: generatedBody.snapshot.results,
+        supersedesSnapshotId: null,
+      },
+    });
 
     const rejected = await pairwiseRoute.POST(
       request(`http://dogfood.local/api/v1/events/${event.id}/pairwise-comparisons`, {

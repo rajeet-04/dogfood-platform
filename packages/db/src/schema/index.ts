@@ -32,7 +32,7 @@ export type { NotificationType } from "./notifications";
 export { auditEvents } from "./audit";
 export { certificates } from "./certificates";
 export { rankingSnapshots } from "./rankings";
-export { pairwiseComparisons } from "./pairwise";
+export { pairwiseComparisons, pairwiseRankingSnapshots } from "./pairwise";
 export { projectComments, votingAbuseRateLimits, votingConfigs, votingCredentials, votingCredentialRateLimits, votingRateLimits, votes } from "./voting";
 export { webhookDeliveries, webhookEndpoints } from "./webhooks";
 export type { WebhookDelivery, WebhookEndpoint, WebhookEvent } from "./webhooks";
