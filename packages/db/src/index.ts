@@ -27,5 +27,6 @@ export function sqlState(error: unknown): string | undefined {
 }
 export { EVENT_ROLES, EVENT_STATES } from "./schema/enums";
 export type { EventRole, EventState } from "./schema/enums";
+export type { CustomQuestion } from "./schema/events";
 export type { JudgeApplicationStatus } from "./schema";
 export * as schema from "./schema";

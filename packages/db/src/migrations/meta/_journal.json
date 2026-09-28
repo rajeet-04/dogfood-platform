@@ -1,90 +1,97 @@
 {
-    "version":  "7",
-    "dialect":  "postgresql",
-    "entries":  [
-                    {
-                        "idx":  0,
-                        "version":  "7",
-                        "when":  1790004015845,
-                        "tag":  "0000_aspiring_warhawk",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  1,
-                        "version":  "7",
-                        "when":  1790006169915,
-                        "tag":  "0001_empty_turbo",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  2,
-                        "version":  "7",
-                        "when":  1790061137033,
-                        "tag":  "0002_rich_cobalt_man",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  3,
-                        "version":  "7",
-                        "when":  1790065060114,
-                        "tag":  "0003_furry_venom",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  4,
-                        "version":  "7",
-                        "when":  1790065667891,
-                        "tag":  "0004_legal_magneto",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  5,
-                        "version":  "7",
-                        "when":  1790066579418,
-                        "tag":  "0005_silent_mister_sinister",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  6,
-                        "version":  "7",
-                        "when":  1790268306881,
-                        "tag":  "0006_fat_sandman",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  7,
-                        "version":  "7",
-                        "when":  1791000000000,
-                        "tag":  "0007_locked_project_state",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  8,
-                        "version":  "7",
-                        "when":  1791010000000,
-                        "tag":  "0008_rubric_criteria_optional",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  9,
-                        "version":  "7",
-                        "when":  1791020000000,
-                        "tag":  "0009_certificates",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  10,
-                        "version":  "7",
-                        "when":  1791030000000,
-                        "tag":  "0010_judge_applications",
-                        "breakpoints":  true
-                    },
-                    {
-                        "idx":  11,
-                        "version":  "7",
-                        "when":  1791100000000,
-                        "tag":  "0011_notifications_and_event_details",
-                        "breakpoints":  true
-                    }
-                ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790004015845,
+      "tag": "0000_aspiring_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790006169915,
+      "tag": "0001_empty_turbo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790061137033,
+      "tag": "0002_rich_cobalt_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790065060114,
+      "tag": "0003_furry_venom",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790065667891,
+      "tag": "0004_legal_magneto",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790066579418,
+      "tag": "0005_silent_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790268306881,
+      "tag": "0006_fat_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0007_locked_project_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791010000000,
+      "tag": "0008_rubric_criteria_optional",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791020000000,
+      "tag": "0009_certificates",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791030000000,
+      "tag": "0010_judge_applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791100000000,
+      "tag": "0011_notifications_and_event_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790593553905,
+      "tag": "0012_minor_mauler",
+      "breakpoints": true
+    }
+  ]
 }
