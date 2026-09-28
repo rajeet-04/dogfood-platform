@@ -1,7 +1,7 @@
 # API inventory and UI/API parity audit
 
 **Audited:** 2026-09-28 against the route handlers and Server Actions in this checkout.  
-**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 43 application route modules (40 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 59 implemented HTTP operations.
+**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 45 application route modules (42 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 61 implemented HTTP operations.
 
 ## What has an HTTP API
 
@@ -15,7 +15,7 @@ The official API First criterion requires every UI action to be available as RES
 
 - **Accounts and membership:** register/login/logout/account switching; join an event; add/change/remove event members.
 - **Teams and submissions:** invite/join/leave a team; revise, submit, or withdraw a project; lock one/all projects. The REST project route only creates a draft.
-- **Event setup:** transition event state, edit registration dates; manage tracks; manage custom questions and ordering. Updating organizer-managed event details is now covered by the route noted below.
+- **Event setup:** manage tracks; manage custom questions and ordering; edit submission and judging dates. Event lifecycle transitions and registration-window updates are covered by the routes noted below. Updating organizer-managed event details is also covered.
 - **Judge administration:** apply/withdraw/decide judge applications and deactivate judges; create/modify/activate rubrics and criteria; begin/reopen/lock evaluations and lock all submissions. Assignment CRUD itself has API routes.
 - **Results and account utilities:** publish ranking snapshots; revoke certificates; mark notifications read.
 - **Read-side parity:** organizer, judge, and participant pages still assemble substantial event, rubric, membership, application, and submission data directly from server-side services rather than documented read APIs.
@@ -24,7 +24,7 @@ Some page navigation and form flows are therefore server-rendered or Server Acti
 
 ### Implemented in this audit
 
-`PUT /api/v1/events/{eventId}` now replaces the organizer-managed detail fields (description, website, prize information, timeline, schedule, rules, and maximum team size). The request requires every field so omission cannot silently clear a saved value; nullable fields accept `null` to clear. It requires a session and the existing event configure permission, runs the same service normalization and audit path as the UI action, and returns the updated detail fields. Event transitions, registration windows, tracks, custom questions, and the other gaps above remain open.
+`PUT /api/v1/events/{eventId}` now replaces the organizer-managed detail fields (description, website, prize information, timeline, schedule, rules, and maximum team size). The request requires every field so omission cannot silently clear a saved value; nullable fields accept `null` to clear. It requires a session and the existing event configure permission, runs the same service normalization and audit path as the UI action, and returns the updated detail fields. `POST /api/v1/events/{eventId}/transition` and `PUT /api/v1/events/{eventId}/registration-window` now reuse the lifecycle and settings services; detail reads include registration windows. Both mutations require organizer permissions and retain the service's transition validation, audit, and notification behavior. Track and custom-question management and other gaps above remain open.
 
 Pairwise judging now has authenticated judge `GET`/`POST /api/v1/events/{eventId}/pairwise-comparisons` for assigned, track-scoped projects and persisted latest pair choices. Organizer ranking calculation can use these stored choices when explicit comparisons are omitted. The signed public judge-record route is also in the inventory; it requires a configured Ed25519 key and derives records per request rather than maintaining an issuance/revocation ledger. These additions do not close the other API First gaps.
 

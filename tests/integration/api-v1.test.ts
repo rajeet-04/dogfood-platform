@@ -20,6 +20,8 @@ import { createTeam } from "@dogfood/teams";
 import { resetDb } from "../fixtures/db";
 import * as eventsRoute from "../../apps/web/app/api/v1/events/route";
 import * as eventDetailRoute from "../../apps/web/app/api/v1/events/[eventId]/route";
+import * as eventRegistrationWindowRoute from "../../apps/web/app/api/v1/events/[eventId]/registration-window/route";
+import * as eventTransitionRoute from "../../apps/web/app/api/v1/events/[eventId]/transition/route";
 import * as teamsRoute from "../../apps/web/app/api/v1/events/[eventId]/teams/route";
 import * as projectsRoute from "../../apps/web/app/api/v1/events/[eventId]/projects/route";
 import * as judgeQueueRoute from "../../apps/web/app/api/v1/events/[eventId]/judge-queue/route";
@@ -99,6 +101,130 @@ async function invoke(
 }
 
 describe("api/v1", () => {
+  it("updates the registration window through the organizer REST API", async () => {
+    await resetDb();
+    const organizer = await seedAuthUser(uniqueEmail("org-window"));
+    const participant = await seedAuthUser(uniqueEmail("participant-window"));
+    const event = await createEvent(organizer.actor, {
+      name: "Window API Event",
+      slug: "window-api-event",
+      timezone: "UTC",
+    });
+    await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
+
+    const path = `/api/v1/events/${event.id}/registration-window`;
+    const window = {
+      registrationOpensAt: "2026-09-28T09:00:00.000Z",
+      registrationClosesAt: "2026-09-30T09:00:00.000Z",
+    };
+    const anonymous = await invoke(
+      eventRegistrationWindowRoute.PUT,
+      request("PUT", path, undefined, window),
+      { eventId: event.id },
+    );
+    expect(anonymous.res.status).toBe(401);
+
+    const forbidden = await invoke(
+      eventRegistrationWindowRoute.PUT,
+      request("PUT", path, participant.cookie, window),
+      { eventId: event.id },
+    );
+    expect(forbidden.res.status).toBe(403);
+
+    const updated = await invoke(
+      eventRegistrationWindowRoute.PUT,
+      request("PUT", path, organizer.cookie, window),
+      { eventId: event.id },
+    );
+    expect(updated.res.status).toBe(200);
+    expect(updated.body.event).toMatchObject(window);
+
+    const invalid = await invoke(
+      eventRegistrationWindowRoute.PUT,
+      request("PUT", path, organizer.cookie, {
+        ...window,
+        registrationClosesAt: "2026-09-28T08:00:00.000Z",
+      }),
+      { eventId: event.id },
+    );
+    expect(invalid.res.status).toBe(422);
+
+    const malformed = await invoke(
+      eventRegistrationWindowRoute.PUT,
+      request("PUT", path, organizer.cookie, {
+        registrationOpensAt: "tomorrow",
+        registrationClosesAt: null,
+      }),
+      { eventId: event.id },
+    );
+    expect(malformed.res.status).toBe(422);
+
+    const detail = await invoke(
+      eventDetailRoute.GET,
+      request("GET", `/api/v1/events/${event.id}`),
+      { eventId: event.id },
+    );
+    expect(detail.body.event).toMatchObject(window);
+    const audit = await db.select().from(schema.auditEvents).where(
+      eq(schema.auditEvents.eventId, event.id),
+    );
+    expect(audit.filter((entry) => entry.action === "event.registration_window")).toHaveLength(1);
+  });
+
+  it("transitions event lifecycle through the organizer REST API", async () => {
+    await resetDb();
+    const organizer = await seedAuthUser(uniqueEmail("org-transition"));
+    const participant = await seedAuthUser(uniqueEmail("participant-transition"));
+    const event = await createEvent(organizer.actor, {
+      name: "Transition API Event",
+      slug: "transition-api-event",
+      timezone: "UTC",
+    });
+    await grantEventMembership(organizer.actor, event.id, participant.userId, "PARTICIPANT");
+    const path = `/api/v1/events/${event.id}/transition`;
+
+    const anonymous = await invoke(
+      eventTransitionRoute.POST,
+      request("POST", path, undefined, { toState: "REGISTRATION" }),
+      { eventId: event.id },
+    );
+    expect(anonymous.res.status).toBe(401);
+
+    const forbidden = await invoke(
+      eventTransitionRoute.POST,
+      request("POST", path, participant.cookie, { toState: "REGISTRATION" }),
+      { eventId: event.id },
+    );
+    expect(forbidden.res.status).toBe(403);
+
+    const invalid = await invoke(
+      eventTransitionRoute.POST,
+      request("POST", path, organizer.cookie, { toState: "JUDGING" }),
+      { eventId: event.id },
+    );
+    expect(invalid.res.status).toBe(409);
+    expect(invalid.body.error.code).toBe("EVENT_STATE_INVALID");
+
+    const malformed = await invoke(
+      eventTransitionRoute.POST,
+      request("POST", path, organizer.cookie, { toState: "NOT_A_STATE" }),
+      { eventId: event.id },
+    );
+    expect(malformed.res.status).toBe(422);
+
+    const transitioned = await invoke(
+      eventTransitionRoute.POST,
+      request("POST", path, organizer.cookie, { toState: "REGISTRATION" }),
+      { eventId: event.id },
+    );
+    expect(transitioned.res.status).toBe(200);
+    expect(transitioned.body.event.state).toBe("REGISTRATION");
+    const audit = await db.select().from(schema.auditEvents).where(
+      eq(schema.auditEvents.eventId, event.id),
+    );
+    expect(audit.some((entry) => entry.action === "event.transition")).toBe(true);
+  });
+
   it("returns a stable typed error envelope when an evaluation is locked", async () => {
     await resetDb();
 

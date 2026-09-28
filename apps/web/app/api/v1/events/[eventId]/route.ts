@@ -14,6 +14,8 @@ import { toEventSummary, type EventSummary } from "../route";
 
 type EventDetail = EventSummary & {
   myRoles: string[];
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
 };
 
 const eventDetailsSchema = z.object({
@@ -57,7 +59,12 @@ export async function GET(
       myRoles = memberships.map((m) => m.role);
     }
 
-    const detail: EventDetail = { ...toEventSummary(event), myRoles };
+    const detail: EventDetail = {
+      ...toEventSummary(event),
+      registrationOpensAt: event.registrationOpensAt?.toISOString() ?? null,
+      registrationClosesAt: event.registrationClosesAt?.toISOString() ?? null,
+      myRoles,
+    };
     return json({ event: detail });
   });
 }
