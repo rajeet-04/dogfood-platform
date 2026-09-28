@@ -549,11 +549,11 @@ export default async function OrganizerPage({
                   <ul className="mt-3 space-y-1 text-sm text-slate-600">
                     {rubric.criteria.map((criterion) => (
                       <li key={criterion.id}>
-                        {criterion.name}{" "}
+                        {criterion.name}
                         {criterion.optional ? (
-                          <span className="text-slate-400">(optional)</span>
-                        ) : null}{" "}
-                        — weight {criterion.weight}, range{" "}
+                          <span className="text-slate-400"> (optional)</span>
+                        ) : null}
+                        {" "}— weight {criterion.weight}, range{" "}
                         {criterion.minScore}–{criterion.maxScore}
                       </li>
                     ))}

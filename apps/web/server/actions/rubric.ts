@@ -25,8 +25,8 @@ const criterionSchema = z.object({
   maxScore: z.preprocess((v) => Number(v), z.number().finite()),
   optional: z
     .union([z.literal("on"), z.literal("true")])
-    .optional()
-    .transform((v) => v !== undefined),
+    .nullish()
+    .transform((v) => v !== undefined && v !== null),
 });
 
 const assignmentSchema = z.object({
