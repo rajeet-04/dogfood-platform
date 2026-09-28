@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { and, db, eq, schema } from "@dogfood/db";
+import { and, db, eq, or, schema } from "@dogfood/db";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
 
@@ -82,12 +82,15 @@ async function linkedProject(assetId: string, eventId: string) {
     state: schema.projects.state,
     eventState: schema.events.state,
   })
-    .from(schema.projectRevisionImages)
-    .innerJoin(schema.projectRevisions, eq(schema.projectRevisions.id, schema.projectRevisionImages.revisionId))
+    .from(schema.projectRevisions)
+    .leftJoin(schema.projectRevisionImages, eq(schema.projectRevisionImages.revisionId, schema.projectRevisions.id))
     .innerJoin(schema.projects, eq(schema.projects.id, schema.projectRevisions.projectId))
     .innerJoin(schema.events, eq(schema.events.id, schema.projects.eventId))
     .where(and(
-      eq(schema.projectRevisionImages.assetId, assetId),
+      or(
+        eq(schema.projectRevisionImages.assetId, assetId),
+        eq(schema.projectRevisions.thumbnailAssetId, assetId),
+      ),
       eq(schema.projects.currentRevisionId, schema.projectRevisions.id),
       eq(schema.projects.eventId, eventId),
     ));
@@ -105,15 +108,18 @@ export async function readProjectAsset(assetId: string, actor: Actor | null): Pr
 
   let permitted = isPublic;
   if (actor && !permitted) {
-    if (actor.isPlatformAdmin || actor.userId === asset.uploadedBy ||
-      (await activeRole(actor, asset.eventId)) === "ORGANIZER") {
+    const role = await activeRole(actor, asset.eventId);
+    if (actor.isPlatformAdmin || role === "ORGANIZER") {
       permitted = true;
-    } else if (projects.length > 0) {
-      const [membership] = await db.select({ teamId: schema.teamMembers.teamId })
+    } else if (role === "PARTICIPANT") {
+      const memberships = await db.select({ teamId: schema.teamMembers.teamId })
         .from(schema.teamMembers)
         .where(and(eq(schema.teamMembers.eventId, asset.eventId), eq(schema.teamMembers.userId, actor.userId)))
-        .limit(1);
-      permitted = Boolean(membership && projects.some((project) => project.teamId === membership.teamId));
+      permitted = memberships.some((membership) =>
+        projects.length > 0
+          ? projects.some((project) => project.teamId === membership.teamId)
+          : actor.userId === asset.uploadedBy,
+      );
     }
   }
 
