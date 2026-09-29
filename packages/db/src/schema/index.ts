@@ -31,6 +31,10 @@ export { notifications, NOTIFICATION_TYPES } from "./notifications";
 export type { NotificationType } from "./notifications";
 export { auditEvents } from "./audit";
 export { certificates } from "./certificates";
+export {
+  judgeParticipationRecords,
+  judgeParticipationRecordRevocations,
+} from "./judgeRecords";
 export { rankingSnapshots } from "./rankings";
 export { pairwiseComparisons, pairwiseRankingSnapshots } from "./pairwise";
 export { projectComments, votingAbuseRateLimits, votingConfigs, votingCredentials, votingCredentialRateLimits, votingRateLimits, votes } from "./voting";
