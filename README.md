@@ -8,6 +8,11 @@ security), [DATA-MODEL.md](./DATA-MODEL.md) (tables and constraints),
 "verify this yourself" isolation proofs), and
 [acceptance-report.txt](./acceptance-report.txt) (pass/fail evidence).
 
+## Team
+
+Rajeet Ash, Deepali Singh, Ayushman Pyne (team of 3). Submitted through the
+DOGFOOD Tally form.
+
 ## Stack
 
 - **App:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4
@@ -206,5 +211,6 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   passed 7/7. The seed contained all 40 official fixture projects including
   `Glass Signal`, with zero non-submitted fixtures. This is evidence for that
   setup; it does not resolve source eligibility or final submission readiness.
-  A reviewed five-minute demo video and final team/contact/submission
-  confirmations remain outstanding.
+  The lifecycle demo (`demo/artifacts/lifecycle.webm`) is recorded against the
+  production container image; narration review and the Tally submission remain
+  outstanding.

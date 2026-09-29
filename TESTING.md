@@ -99,7 +99,7 @@ yourself". The gist, all backend-enforced:
 |---|---|
 | Judge fetches another judge's evaluation | `403 FORBIDDEN` |
 | Participant POSTs `/rankings` | `403 FORBIDDEN` |
-| Organizer reads raw scores while judging | `403 FORBIDDEN` until locked, then `200` |
+| Organizer reads raw scores while judging | `200` before and after lock (official role matrix) |
 | Submit after deadline (any client) | `409 DEADLINE_PASSED` |
 | Anonymous exports | `401` |
 

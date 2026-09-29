@@ -1814,7 +1814,6 @@ export async function getEvaluation(
       roles,
       eventState: event.state as EventState,
       ownsEvaluation: assignment.judgeId === actor.userId,
-      judgingLocked: false,
     });
   }
 
@@ -1837,7 +1836,6 @@ export async function getEvaluation(
     roles,
     eventState: event.state as EventState,
     ownsEvaluation: assignment.judgeId === actor.userId,
-    judgingLocked: evaluation.state === "LOCKED",
   });
 
   const criteria = await loadCriteria(evaluation.rubricId);

@@ -247,7 +247,7 @@ export default async function OrganizerPage({
         <Card>
           <CardHeader
             title="Judging progress"
-            description="How much of the judging work is done. Individual scores stay private."
+            description="How much of the judging work is done."
           />
           <CardBody>
             <Progress
@@ -293,22 +293,10 @@ export default async function OrganizerPage({
                 {coverage.completed} / {coverage.total}
               </span>
             </p>
-            {doc.scoresHidden ? (
-              <Alert
-                tone="warning"
-                testId="scores-hidden-note"
-                className="mt-4"
-              >
-                Judge scores are hidden while judging is in progress. You can see
-                completion but not individual scores.
-              </Alert>
-            ) : (
-              <Alert tone="info" className="mt-4">
-                Individual judge scores stay hidden. Ranked scores and
-                per-criterion breakdowns appear under &ldquo;Latest
-                scores&rdquo; once a ranking snapshot exists.
-              </Alert>
-            )}
+            <Alert tone="info" className="mt-4">
+              Organizers can see every judge&rsquo;s raw scores at any stage in
+              &ldquo;Judge assignments&rdquo;. Judges only ever see their own.
+            </Alert>
           </CardBody>
         </Card>
 
@@ -1178,6 +1166,9 @@ export default async function OrganizerPage({
                       <th scope="col" className="py-2 pr-4 font-medium">
                         Submitted
                       </th>
+                      <th scope="col" className="py-2 pr-4 font-medium">
+                        Scores
+                      </th>
                       <th scope="col" className="py-2 font-medium">
                         Actions
                       </th>
@@ -1197,6 +1188,16 @@ export default async function OrganizerPage({
                         </td>
                         <td className="py-2.5 pr-4 text-fg-subtle">
                           {formatDate(item.submittedAt)}
+                        </td>
+                        <td
+                          className="tabular py-2.5 pr-4 text-caption text-fg-muted"
+                          data-testid="assignment-scores"
+                        >
+                          {item.scores.length > 0
+                            ? item.scores
+                                .map((s) => `${s.criterion} ${s.score}`)
+                                .join(" · ")
+                            : "—"}
                         </td>
                         <td className="py-2.5">
                           <div className="flex flex-wrap items-center gap-2">

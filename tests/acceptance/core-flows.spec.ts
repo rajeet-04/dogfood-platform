@@ -239,11 +239,11 @@ test("organizer journey: rubric → assign → progress → lock → ranking →
     [8, 9],
   );
 
-  // Progress is visible but raw scores are withheld during judging
+  // Progress and raw per-judge scores are visible to organizers during judging
   await page.reload();
   await expect(page.getByTestId("coverage-total")).toHaveText("1");
   await expect(page.getByTestId("coverage-completed")).toHaveText("1 / 1");
-  await expect(page.getByTestId("scores-hidden-note")).toBeVisible();
+  await expect(page.getByTestId("assignment-scores").first()).toContainText("Impact 8");
   await expect(page.locator("input[data-criterion-id]")).toHaveCount(0);
 
   // Lock, rank, publish

@@ -1,5 +1,5 @@
 DOGFOOD 2026 acceptance report
-portal: http://dfcheck-web:3000
+portal: http://localhost:3000
 claimed: T1 T2
 fixtures: fixtures.json
 

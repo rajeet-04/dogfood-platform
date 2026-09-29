@@ -92,22 +92,11 @@ describe("permission matrix", () => {
     ).toBe(true);
   });
 
-  it("denies an organizer from inspecting raw evaluations while JUDGING", () => {
+  it("lets an organizer inspect raw evaluations at any stage", () => {
     expect(
       can(actor("o1"), ACTION.EVALUATION_READ, ctx({
         roles: ["ORGANIZER"],
         eventState: "JUDGING",
-        judgingLocked: false,
-      })),
-    ).toBe(false);
-  });
-
-  it("lets an organizer inspect raw evaluations after judging is locked", () => {
-    expect(
-      can(actor("o1"), ACTION.EVALUATION_READ, ctx({
-        roles: ["ORGANIZER"],
-        eventState: "RESULTS_READY",
-        judgingLocked: true,
       })),
     ).toBe(true);
   });

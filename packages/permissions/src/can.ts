@@ -14,7 +14,6 @@ export type PermissionContext = {
   ownsProject?: boolean;
   isAssigned?: boolean;
   ownsEvaluation?: boolean;
-  judgingLocked?: boolean;
 };
 
 export function can(
@@ -26,8 +25,7 @@ export function can(
 
   if (context.resourceEventId !== context.eventId) return false;
 
-  const { roles, ownsProject, isAssigned, ownsEvaluation, judgingLocked } =
-    context;
+  const { roles, ownsProject, isAssigned, ownsEvaluation } = context;
 
   switch (action) {
     case "event:configure":
@@ -65,9 +63,8 @@ export function can(
       return roles.includes("JUDGE") && isAssigned === true;
 
     case "evaluation:read":
-      if (roles.includes("JUDGE")) return ownsEvaluation === true;
-      if (roles.includes("ORGANIZER")) return judgingLocked === true;
-      return false;
+      if (roles.includes("ORGANIZER")) return true;
+      return roles.includes("JUDGE") && ownsEvaluation === true;
 
     default:
       return false;

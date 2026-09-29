@@ -75,6 +75,7 @@ export type OrganizerDocument = {
     projectTitle: string;
     status: string;
     submittedAt: Date | null;
+    scores: Array<{ criterion: string; score: number }>;
   }>;
   coverage: {
     total: number;
@@ -92,7 +93,6 @@ export type OrganizerDocument = {
     publishedAt: Date | null;
   }>;
   publishedRankingSnapshotId: string | null;
-  scoresHidden: boolean;
   certificates: Array<{
     id: string;
     displayName: string;
@@ -228,6 +228,26 @@ export async function getOrganizerDocument(
     evaluationRows.map((evaluation) => [evaluation.assignmentId, evaluation]),
   );
 
+  const scoreRows = evaluationRows.length
+    ? await db
+        .select()
+        .from(schema.evaluationScores)
+        .where(
+          inArray(
+            schema.evaluationScores.evaluationId,
+            evaluationRows.map((e) => e.id),
+          ),
+        )
+    : [];
+  const criterionName = new Map(criteria.map((c) => [c.id, c.name]));
+  const criterionOrder = new Map(criteria.map((c) => [c.id, c.sortOrder]));
+  const scoresByEvaluation = new Map<string, typeof scoreRows>();
+  for (const row of scoreRows) {
+    const list = scoresByEvaluation.get(row.evaluationId) ?? [];
+    list.push(row);
+    scoresByEvaluation.set(row.evaluationId, list);
+  }
+
   const snapshots = await db
     .select()
     .from(schema.rankingSnapshots)
@@ -332,6 +352,16 @@ export async function getOrganizerDocument(
         projectTitle: revision?.title ?? "(no revision)",
         status: assignment.status,
         submittedAt: evaluation?.submittedAt ?? null,
+        scores: (evaluation ? scoresByEvaluation.get(evaluation.id) ?? [] : [])
+          .sort(
+            (a, b) =>
+              (criterionOrder.get(a.criterionId) ?? 0) -
+              (criterionOrder.get(b.criterionId) ?? 0),
+          )
+          .map((row) => ({
+            criterion: criterionName.get(row.criterionId) ?? "Criterion",
+            score: Number(row.score),
+          })),
       };
     }),
     coverage: assignmentRows.reduce(
@@ -368,7 +398,6 @@ export async function getOrganizerDocument(
       publishedAt: snapshot.publishedAt,
     })),
     publishedRankingSnapshotId: event.publishedRankingSnapshotId,
-    scoresHidden: event.state === "JUDGING",
     certificates: certificateRows.map((certificate) => ({
       id: certificate.id,
       displayName: certificate.displayName,

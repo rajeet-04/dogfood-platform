@@ -204,13 +204,9 @@ contents or timing.
 
 The official site's published role matrix permits organizers and admins to
 read own and peer scores, other-track data, aggregates, and audit data. The
-current application uses a stricter direct-evaluation policy: its permission
-engine allows organizer `evaluation:read` only when that specific evaluation
-is `LOCKED`. This is a deliberate current-code variance to the site matrix;
-the official seven-check runner does not test organizer score timing. The
-separate `evaluations.csv` access path described above currently exposes
-existing score summaries before lock, so the lock policy is not a complete
-confidentiality boundary across every organizer endpoint.
+application follows it: organizer `evaluation:read` is allowed at any stage,
+and the organizer dashboard shows each judge's per-criterion scores in the
+assignments table. Judges still read only their own evaluations.
 
 | Actor | Official site: own / peer scores | Current app: direct evaluation read | Other-track work | Aggregate/progress | Audit log |
 |---|---|---|---|---|---|
