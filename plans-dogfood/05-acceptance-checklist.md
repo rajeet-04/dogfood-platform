@@ -42,7 +42,7 @@
 - [ ] Resource IDs from another event are rejected.
 - [ ] Judge can access only explicitly assigned projects.
 - [ ] Judge cannot read another judge's raw evaluation.
-- [ ] Organizer cannot read individual raw scores while judging is active.
+- [ ] Organizer can read individual raw scores at any stage (official role matrix); judges still cannot read peers.
 - [ ] Platform admin behavior is explicit and audited.
 
 ## Participant workflow
@@ -82,7 +82,7 @@
 
 ## Rankings
 
-- [ ] Organizer can see completion progress without raw active scores.
+- [ ] Organizer can see completion progress and per-assignment scores while judging.
 - [ ] Ranking generation requires valid judging state.
 - [ ] RankingSnapshot persists configuration and algorithm versions.
 - [ ] Re-reading snapshot does not recompute it.

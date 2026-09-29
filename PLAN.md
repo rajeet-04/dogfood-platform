@@ -18,15 +18,14 @@
 
 ## Current local verification checkpoint — 2026-09-29
 
-Rerun at ~05:45 UTC on the current source, including the judge-administration REST routes and the "Ledger" UI redesign (`DESIGN.md`). The unresolved raw-score policy proposal remains excluded. Historical checks below are retained as context and may predate current code.
+Rerun on the current source after the T4 parity work and the T3 open-link hardening. Historical checks below are retained as context and may predate current code.
 
-- `bun run test` against `dogfood_test` — 63 files, 352 tests passed (two consecutive clean runs).
-- `bun run --filter @dogfood/db typecheck`, `@dogfood/judging`, `@dogfood/web`, and `@dogfood/exports` — all passed.
-- `podman build -t localhost/dogfood-platform:current .` — passed, including Next.js production compilation and TypeScript.
-- Fresh Podman runtime on a throwaway network with a disposable PostgreSQL database — migrations applied and all 40 official fixtures seeded, including `Glass Signal`.
-- Official `plans-dogfood/official/run.py` — 7/7 T1/T2 checks passed, run from a `python:3.12-slim` container on that network with only `portal.base_url` pointed at the app alias; unedited output in [`acceptance-report.txt`](acceptance-report.txt).
-- Full Playwright browser acceptance — 13 passed, 1 opt-in visual case skipped. The separate `VISUAL_QA=1` responsive sweep passed with no visual problems or console errors.
-- `bash demo/run-lifecycle.sh` — lifecycle journey passed; `demo/artifacts/lifecycle.webm` re-recorded (4:48) on the redesigned UI. It is a silent recording; narration and final review are still open.
+- `bun run test` against `dogfood_test` — 64 files, 359 tests passed, including the UI/API/OpenAPI/audit parity contract (`tests/unit/web/api-parity.test.ts`).
+- TypeScript checks for all 18 packages and `apps/web` — passed.
+- `podman compose up -d --build` — production image built and the Compose stack started with migrations applied and official fixtures seeded; `/.well-known/dogfood-judge-records.json` served from the production image.
+- Official `plans-dogfood/official/run.py` against `localhost:3000` — 7/7 T1/T2 checks passed; unedited output in [`acceptance-report.txt`](acceptance-report.txt). T3/T4 are claimed and reported as "claimed but not verified" because the checker has no probes for them.
+- Full Playwright browser acceptance — 13 passed, 1 opt-in visual case skipped.
+- Lifecycle demo `demo/artifacts/lifecycle.webm` (4:42) was recorded against the production container image in the previous checkpoint; it is a silent recording.
 
 ### Historical verification before the current-source checkpoint
 
