@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ButtonLink } from "./ui/button";
 
 export function NotAllowed({
   message,
@@ -9,17 +9,16 @@ export function NotAllowed({
 }) {
   return (
     <main className="mx-auto max-w-md px-4 py-20 text-center">
-      <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
-        403
+      <p className="tabular text-caption font-semibold tracking-[0.08em] text-danger-fg uppercase">
+        403 · access denied
       </p>
-      <h1 className="mt-2 text-xl font-bold tracking-tight">Access denied</h1>
-      <p className="mt-2 text-sm text-slate-600">{message}</p>
-      <Link
-        href={backHref}
-        className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-      >
+      <h1 className="mt-3 text-title font-semibold text-fg">
+        Not on this roster
+      </h1>
+      <p className="mt-2 text-body text-fg-muted">{message}</p>
+      <ButtonLink href={backHref} variant="secondary" size="md" className="mt-6">
         Go back
-      </Link>
+      </ButtonLink>
     </main>
   );
 }
