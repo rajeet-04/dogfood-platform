@@ -11,6 +11,10 @@ const WRITE_LIMIT_PER_MINUTE = 10;
 const ABUSE_WINDOW_MS = 60 * 60 * 1000;
 const DEFAULT_NETWORK_VOTE_LIMIT = 2_000;
 const DEFAULT_EVENT_VOTE_LIMIT = 10_000;
+// Open-link voter identities are minted by the server; these cap how fast new
+// identities can be created (a new identity is the only way to vote again).
+const DEFAULT_NETWORK_MINT_LIMIT = 200;
+const DEFAULT_EVENT_MINT_LIMIT = 5_000;
 type EventRow = typeof schema.events.$inferSelect;
 type CommentRow = typeof schema.projectComments.$inferSelect;
 
@@ -109,7 +113,12 @@ async function findCredential(eventId: string, rawToken: string | undefined, acc
   return credential ?? null;
 }
 
-export async function ensureOpenLinkCredential(eventId: string, currentToken?: string): Promise<{ token: string; expiresAt: Date }> {
+/**
+ * Returns the browser's open-link voter credential, minting a server-side one
+ * when the browser has none. Only minted tokens can vote, so a client cannot
+ * invent identities; minting is capped per event and per trusted network.
+ */
+export async function ensureOpenLinkCredential(eventId: string, currentToken?: string, abuse?: { networkHash?: string }): Promise<{ token: string; expiresAt: Date }> {
   const event = await eventForVoting(eventId);
   const config = await getVotingConfig(eventId);
   if (config.accessMode !== "OPEN_LINK") throw new DogfoodError("CONFLICT", "Open-link voting is not enabled");
@@ -117,9 +126,22 @@ export async function ensureOpenLinkCredential(eventId: string, currentToken?: s
   if (event.state !== "JUDGING" || !config.opensAt || !config.closesAt || now < config.opensAt || now >= config.closesAt) {
     throw new DogfoodError("CONFLICT", "Community voting is not open");
   }
-  const token = currentToken && /^[A-Za-z0-9_-]{43}$/.test(currentToken) ? currentToken : randomBytes(32).toString("base64url");
+  const existing = await findCredential(eventId, currentToken, "OPEN_LINK");
+  if (existing) return { token: currentToken!, expiresAt: existing.expiresAt };
+
+  await consumeAbuseRateLimit(eventId, abuse?.networkHash, "mint");
+  const token = randomBytes(32).toString("base64url");
   const expiresAt = config.closesAt;
+  await db.insert(schema.votingCredentials).values({
+    eventId, accessMode: "OPEN_LINK", tokenHash: tokenHash(token), expiresAt,
+  });
   return { token, expiresAt };
+}
+
+async function requireOpenLinkCredential(eventId: string, rawCredential: string | undefined): Promise<string> {
+  const credential = await findCredential(eventId, rawCredential, "OPEN_LINK");
+  if (!credential) throw new DogfoodError("UNAUTHENTICATED", "Voting link is unavailable; reload the ballot");
+  return credential.tokenHash;
 }
 
 export async function createVotingInvitation(actor: Actor, eventId: string, emailInput: string): Promise<{ invitation: VotingInvitation; token: string }> {
@@ -268,8 +290,7 @@ export async function getVotingBallot(actor: Actor | null, eventId: string, rawC
     if (!actor) throw new DogfoodError("UNAUTHENTICATED", "Sign in to vote in this event");
   } else {
     if (config.accessMode === "OPEN_LINK") {
-      if (!rawCredential || !/^[A-Za-z0-9_-]{43}$/.test(rawCredential)) throw new DogfoodError("UNAUTHENTICATED", "Voting link is unavailable; reload the ballot");
-      voterTokenHash = tokenHash(rawCredential);
+      voterTokenHash = await requireOpenLinkCredential(eventId, rawCredential);
     } else {
       const credential = await findCredential(eventId, rawCredential, "EMAIL_GATED");
       if (!credential) throw new DogfoodError("UNAUTHENTICATED", "Enter a valid voting invitation code");
@@ -332,27 +353,33 @@ function configuredLimit(name: string, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-async function consumeAbuseRateLimit(eventId: string, networkHash?: string): Promise<void> {
+async function consumeAbuseRateLimit(eventId: string, networkHash?: string, action: "vote" | "mint" = "vote"): Promise<void> {
   const now = new Date();
   const windowStart = new Date(Math.floor(now.getTime() / ABUSE_WINDOW_MS) * ABUSE_WINDOW_MS);
-  const scopes = [
+  const scopes = action === "vote" ? [
     { scope: "EVENT", keyHash: "event", limit: configuredLimit("DOGFOOD_VOTING_EVENT_LIMIT_PER_HOUR", DEFAULT_EVENT_VOTE_LIMIT) },
     ...(networkHash ? [{ scope: "NETWORK", keyHash: networkHash, limit: configuredLimit("DOGFOOD_VOTING_NETWORK_LIMIT_PER_HOUR", DEFAULT_NETWORK_VOTE_LIMIT) }] : []),
+  ] as const : [
+    { scope: "EVENT", keyHash: "event", limit: configuredLimit("DOGFOOD_VOTING_LINK_EVENT_LIMIT_PER_HOUR", DEFAULT_EVENT_MINT_LIMIT) },
+    ...(networkHash ? [{ scope: "NETWORK", keyHash: networkHash, limit: configuredLimit("DOGFOOD_VOTING_LINK_NETWORK_LIMIT_PER_HOUR", DEFAULT_NETWORK_MINT_LIMIT) }] : []),
   ] as const;
   for (const { scope, keyHash, limit } of scopes) {
     const [bucket] = await db.insert(schema.votingAbuseRateLimits).values({
-      eventId, scope, keyHash, action: "vote", windowStart, count: 1,
+      eventId, scope, keyHash, action, windowStart, count: 1,
     }).onConflictDoUpdate({
       target: [schema.votingAbuseRateLimits.eventId, schema.votingAbuseRateLimits.scope, schema.votingAbuseRateLimits.keyHash, schema.votingAbuseRateLimits.action, schema.votingAbuseRateLimits.windowStart],
       set: { count: sql`${schema.votingAbuseRateLimits.count} + 1` },
     }).returning({ count: schema.votingAbuseRateLimits.count });
     if (bucket.count <= limit) continue;
+    const prefix = action === "mint" ? "vote.link" : "vote";
     await appendRateLimitAuditOnce({
-      eventId, actorId: null, action: scope === "NETWORK" ? "vote.network_rate_limited" : "vote.event_rate_limited",
-      resourceType: "vote", identity: `${scope}:${keyHash}`, windowStart,
+      eventId, actorId: null, action: scope === "NETWORK" ? `${prefix}.network_rate_limited` : `${prefix}.event_rate_limited`,
+      resourceType: "vote", identity: `${action}:${scope}:${keyHash}`, windowStart,
       metadata: { scope, limit, windowStart: windowStart.toISOString() },
     });
-    throw new DogfoodError("RATE_LIMITED", "This event has reached its voting limit for the hour");
+    throw new DogfoodError("RATE_LIMITED", action === "mint"
+      ? "Too many new voters from this network right now; try again later"
+      : "This event has reached its voting limit for the hour");
   }
 }
 
@@ -428,8 +455,7 @@ export async function castVote(actor: Actor | null, eventId: string, projectId: 
     if (!actor) throw new DogfoodError("UNAUTHENTICATED", "Sign in to vote in this event");
   } else {
     if (config.accessMode === "OPEN_LINK") {
-      if (!rawCredential || !/^[A-Za-z0-9_-]{43}$/.test(rawCredential)) throw new DogfoodError("UNAUTHENTICATED", "Voting link is unavailable; reload the ballot");
-      voterTokenHash = tokenHash(rawCredential);
+      voterTokenHash = await requireOpenLinkCredential(eventId, rawCredential);
     } else {
       const credential = await findCredential(eventId, rawCredential, "EMAIL_GATED");
       if (!credential) throw new DogfoodError("UNAUTHENTICATED", "Enter a valid voting invitation code");

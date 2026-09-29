@@ -1,4 +1,4 @@
-import { listCustomQuestions, updateCustomQuestion } from "@dogfood/events";
+import { listCustomQuestions, removeCustomQuestion, updateCustomQuestion } from "@dogfood/events";
 import { z } from "@dogfood/validation";
 
 import { api, json, readJsonBody, requireApiActor, throwValidation } from "../../../../../../../server/api/http";
@@ -18,5 +18,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ev
     await updateCustomQuestion(actor, eventId, questionId, parsed.data);
     const questions = await listCustomQuestions(actor, eventId);
     return json({ question: questions.find((question) => question.id === questionId) });
+  });
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ eventId: string; questionId: string }> }): Promise<Response> {
+  return api(request, async () => {
+    const { eventId, questionId } = await params;
+    const actor = await requireApiActor(request);
+    await removeCustomQuestion(actor, eventId, questionId);
+    return json({ deleted: true });
   });
 }

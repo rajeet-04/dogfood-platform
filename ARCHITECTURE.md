@@ -73,13 +73,14 @@ Community voting is bounded in `packages/voting` and defaults to
 authenticated-account access. Organizers can also choose `OPEN_LINK` or
 `EMAIL_GATED`. Votes are unique per account, invitation credential, or open-link
 token. Signed-in project team members are rejected in every mode. Open-link GETs
-validate event state and the active voting window, then return/reuse a 32-byte
-token in an event-path-scoped HttpOnly cookie; issuance is stateless and stores
-no database row. Votes and rate-limit buckets store only the token hash. This
-avoids persistent writes from ballot reads, but open-link is intentionally
-public: callers can omit/reset the cookie or submit fresh valid-length tokens,
-so token-based limits do not prevent Sybil stuffing and no IP/global throttle is
-implemented. Email-gated codes are 32-byte single-use bearer tokens stored as
+validate event state and the active voting window, then reuse the cookie's
+token only if the server minted it; otherwise they mint a 32-byte token, store
+its hash as an `OPEN_LINK` voting credential, and set it in an
+event-path-scoped HttpOnly cookie. Ballot and vote calls reject tokens with no
+stored credential. Minting is capped per event and per trusted network prefix
+each hour, and votes have their own event/network caps. Open-link is still
+intentionally public: clearing the cookie yields a new identity within those
+caps, so the limits bound volume rather than prove unique people. Email-gated codes are 32-byte single-use bearer tokens stored as
 hashes; organizers share them manually, the email is an unverified label, and
 no mail is sent. Results remain restricted during active judging and until the
 configured close, subject to event state.
@@ -148,10 +149,10 @@ OpenAPI contract is useful but UI/API parity remains partial.
   email, but the application does not verify email ownership. Invitations are
   shared manually and expire after seven days.
 - Authenticated voting uses one account identity per event and rejects a
-  signed-in project team member's vote in all modes. Open-link mode accepts any
-  fresh 43-character base64url token as an anonymous identity; only its hash is
-  stored with a vote/rate bucket. Resetting/omitting the cookie or supplying
-  another token obtains another vote identity; there is no IP/global throttle.
+  signed-in project team member's vote in all modes. Open-link mode accepts only
+  server-minted tokens (stored as SHA-256 hashes); minting is capped per event
+  and per trusted network prefix per hour. Clearing the cookie obtains another
+  identity within those caps.
   Email-gated vote codes are manual bearer credentials; their email labels are
   not verified. Neither anonymous mode provides Sybil resistance.
 - Addressed threats: role escalation, IDOR, cross-event access, judge score

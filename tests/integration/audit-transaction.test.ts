@@ -215,7 +215,8 @@ describe("transactional audit trail", () => {
     const own = await queryAudit(organizer, event.id);
     const otherRows = await queryAudit(organizer, other.id);
     expect(own.length).toBeGreaterThan(0);
-    expect(otherRows).toHaveLength(0);
+    // Only the other event's own creation, none of the first event's rows.
+    expect(otherRows.map((row) => row.action)).toEqual(["event.create"]);
   });
 
   it("audits organizer and judge recusals without recording their reason", async () => {

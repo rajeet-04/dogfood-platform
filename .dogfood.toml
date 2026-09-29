@@ -6,7 +6,8 @@ base_url = "http://localhost:3000"
 
 [tiers]
 # Verified 2026-09-29 on a fresh isolated Podman runtime: official T1/T2 checker 7/7.
-# T3 and T4 remain partial; do not add them to claimed until complete.
+# T3 and T4 are implemented (see PLAN.md), but this checker has no T3/T4 probes,
+# so claiming them here would only print "claimed but not verified".
 # Eligibility is unresolved: current source includes byte-identical pre-kickoff code.
 # This config is local checker evidence, not a competition submission.
 claimed = ["T1", "T2"]

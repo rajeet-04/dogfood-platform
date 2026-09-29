@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, db, eq, inArray, schema } from "@dogfood/db";
 import {
+  lockAllEvaluations,
   lockEvaluation,
   reopenEvaluation,
   saveEvaluationDraft,
@@ -133,32 +133,15 @@ export async function lockAllSubmissionsAction(
   _formData: FormData,
 ): Promise<FormState | undefined> {
   const actor = await requireActor();
-  const rows = await db
-    .select({
-      id: schema.evaluations.id,
-      assignmentId: schema.evaluations.assignmentId,
-    })
-    .from(schema.evaluations)
-    .innerJoin(
-      schema.judgeAssignments,
-      eq(schema.judgeAssignments.id, schema.evaluations.assignmentId),
-    )
-    .where(
-      and(
-        eq(schema.judgeAssignments.eventId, eventId),
-        inArray(schema.evaluations.state, ["IN_PROGRESS", "SUBMITTED"]),
-      ),
-    );
-  if (rows.length === 0) {
+  let locked: number;
+  try {
+    ({ locked } = await lockAllEvaluations(actor, eventId));
+  } catch (err) {
+    return { error: describeError(err) };
+  }
+  if (locked === 0) {
     return { error: "No submitted evaluations to lock." };
   }
-  for (const row of rows) {
-    try {
-      await lockEvaluation(actor, eventId, row.assignmentId);
-    } catch (err) {
-      return { error: describeError(err) };
-    }
-  }
   revalidatePath(`/events/${eventId}/organizer`);
-  return { success: `Locked ${rows.length} evaluation${rows.length === 1 ? "" : "s"}.` };
+  return { success: `Locked ${locked} evaluation${locked === 1 ? "" : "s"}.` };
 }

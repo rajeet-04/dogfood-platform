@@ -236,6 +236,15 @@ export async function createProject(
         .set({ currentRevisionId: revision.id })
         .where(eq(schema.projects.id, project.id));
 
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "project.create",
+        resourceType: "project",
+        resourceId: project.id,
+        metadata: { teamId: team.id, revisionId: revision.id },
+      });
+
       return project.id;
     });
 

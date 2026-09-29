@@ -1,3 +1,4 @@
+import { appendAuditEvent } from "@dogfood/audit";
 import { and, db, eq, schema } from "@dogfood/db";
 import { getJudgeQueue } from "@dogfood/judging";
 import { DogfoodError, z } from "@dogfood/validation";
@@ -71,24 +72,34 @@ export async function POST(
       throw new DogfoodError("FORBIDDEN", "Both projects must be assigned to you");
     }
     const [projectAId, projectBId] = [winnerProjectId, loserProjectId].sort();
-    const [comparison] = await db.insert(schema.pairwiseComparisons).values({
-      eventId,
-      judgeId: actor.userId,
-      projectAId,
-      projectBId,
-      winnerProjectId,
-    }).onConflictDoUpdate({
-      target: [
-        schema.pairwiseComparisons.eventId,
-        schema.pairwiseComparisons.judgeId,
-        schema.pairwiseComparisons.projectAId,
-        schema.pairwiseComparisons.projectBId,
-      ],
-      set: { winnerProjectId, updatedAt: new Date() },
-    }).returning({
-      winnerProjectId: schema.pairwiseComparisons.winnerProjectId,
-      projectAId: schema.pairwiseComparisons.projectAId,
-      projectBId: schema.pairwiseComparisons.projectBId,
+    const comparison = await db.transaction(async (tx) => {
+      const [saved] = await tx.insert(schema.pairwiseComparisons).values({
+        eventId,
+        judgeId: actor.userId,
+        projectAId,
+        projectBId,
+        winnerProjectId,
+      }).onConflictDoUpdate({
+        target: [
+          schema.pairwiseComparisons.eventId,
+          schema.pairwiseComparisons.judgeId,
+          schema.pairwiseComparisons.projectAId,
+          schema.pairwiseComparisons.projectBId,
+        ],
+        set: { winnerProjectId, updatedAt: new Date() },
+      }).returning({
+        winnerProjectId: schema.pairwiseComparisons.winnerProjectId,
+        projectAId: schema.pairwiseComparisons.projectAId,
+        projectBId: schema.pairwiseComparisons.projectBId,
+      });
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "pairwise.compare",
+        resourceType: "pairwise_comparison",
+        metadata: { winnerProjectId, loserProjectId },
+      });
+      return saved;
     });
 
     return json({

@@ -104,10 +104,11 @@ PostgreSQL 17 + Drizzle ORM. All configuration below is generated from
 - **voting_credentials** — `id` pk, `event_id` fk→events (cascade),
   `access_mode` (`OPEN_LINK` or `EMAIL_GATED`), unique `token_hash`, optional
   normalized `email` label, `created_by`, `created_at`, `expires_at`,
-  `revoked_at`. This table stores issued email invitations; its active
-  event/email index prevents duplicate active invitation labels. Email
-  ownership is not verified. Open-link browser identities are stateless and do
-  not create a credential row on ballot GET.
+  `revoked_at`. This table stores issued email invitations and server-minted
+  open-link voter tokens (no email, no creator, expiring at the voting close).
+  Its active event/email index prevents duplicate active invitation labels.
+  Email ownership is not verified. Ballot and vote calls reject open-link
+  tokens that have no row here.
 - **votes** — `id` pk, `event_id` fk→events (cascade), nullable `voter_id`
   fk→users (restrict), nullable `credential_id` fk→voting_credentials
   (restrict), nullable `voter_token_hash`, `project_id` fk→projects (cascade),
@@ -125,10 +126,13 @@ PostgreSQL 17 + Drizzle ORM. All configuration below is generated from
 - **voting_credential_rate_limits** — `event_id`, nullable `credential_id`,
   nullable `voter_token_hash`, `action`, minute `window_start`, and `count`.
   A check requires exactly one anonymous identity; partial unique indexes form
-  per-invitation or per-token buckets. Open-link GETs no longer persist a row,
-  but each fresh token used to vote gets a fresh bucket. There is no IP/global
-  limit, and anonymous tokens can be replaced or fabricated, so this does not
-  prevent Sybil ballot stuffing.
+  per-invitation or per-token buckets. Each newly minted token gets a fresh
+  bucket, so this limits repeat writes per identity, not identities.
+- **voting_abuse_rate_limits** — `event_id`, `scope` (`EVENT` or `NETWORK`),
+  `key_hash` (HMAC of an IPv4 `/24` or IPv6 `/64`; `event` for the event
+  scope), `action` (`vote` or `mint` for open-link identity creation), hourly
+  `window_start`, and `count`. These caps bound anonymous volume; they do not
+  prove unique people.
 
 ### audit
 
