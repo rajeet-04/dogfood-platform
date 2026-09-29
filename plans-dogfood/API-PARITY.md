@@ -1,7 +1,7 @@
 # API inventory and UI/API parity audit
 
 **Audited:** 2026-09-29 against the route handlers and Server Actions in this checkout.
-**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 65 application route modules (62 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 87 implemented HTTP operations.
+**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 69 application route modules (66 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 91 implemented HTTP operations.
 
 ## What has an HTTP API
 
@@ -13,7 +13,7 @@ The contract was assembled from `apps/web/app/api/**/route.ts`. It records metho
 
 The official API First criterion requires every UI action to be available as REST and documented, contract tests, and no business behavior available only through private Server Actions ([phase 11 bonus definition](phases/phase-11-bonuses.md#api-first-3)). This checkout does **not** meet that criterion yet. Several UI commands still call private Next.js Server Actions or server-side domain services:
 
-- **Accounts and membership:** register/login/logout/account switching; join an event; add/change/remove event members.
+- **Accounts and membership:** join an event; add/change/remove event members.
 - **Teams and submissions:** lock all projects. Team detail, invite, join, and leave actions, plus project revision, submit, withdraw, and individual lock operations have REST routes.
 - **Event setup:** edit submission and judging dates. Track and custom-question CRUD/order, event lifecycle transitions, registration-window updates, and organizer-managed event details are covered by REST routes.
 - **Judge administration:** apply/withdraw/decide judge applications and deactivate judges; create/modify/activate rubrics and criteria; begin/reopen/lock evaluations and lock all submissions. Assignment CRUD itself has API routes.
@@ -23,6 +23,8 @@ The official API First criterion requires every UI action to be available as RES
 Some page navigation and form flows are therefore server-rendered or Server Action backed even when a related operation exists in REST (for example, create event, create project draft, evaluation save/submit, ranking generation, and certificate issue). A related endpoint does not make the whole workflow API-parity complete.
 
 ### Implemented in this audit
+
+Account registration and login are available at `POST /api/v1/auth/register` and `/login`; both call the existing auth services and set the same HttpOnly active-session and saved-account cookies as the UI. Login preserves the generic invalid-credentials response. `POST /api/v1/auth/logout` clears only the active browser cookie, matching the UI behavior that retains saved sessions for later switching. `POST /api/v1/auth/switch` accepts only a session token already stored in the HttpOnly saved-account list and resolves it through the existing auth service. Responses never return raw session tokens; authentication responses are marked `Cache-Control: no-store`. The routes and cookie contract are in OpenAPI.
 
 `PUT /api/v1/events/{eventId}` now replaces the organizer-managed detail fields (description, website, prize information, timeline, schedule, rules, and maximum team size). The request requires every field so omission cannot silently clear a saved value; nullable fields accept `null` to clear. It requires a session and the existing event configure permission, runs the same service normalization and audit path as the UI action, and returns the updated detail fields. `POST /api/v1/events/{eventId}/transition` and `PUT /api/v1/events/{eventId}/registration-window` now reuse the lifecycle and settings services; detail reads include registration windows. Both mutations require organizer permissions and retain the service's transition validation, audit, and notification behavior. Track and custom-question management and other gaps above remain open.
 

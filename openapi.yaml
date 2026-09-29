@@ -12,6 +12,8 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Auth
+  - name: Operations
   - name: Events
   - name: Gallery
   - name: Teams and projects
@@ -21,6 +23,88 @@ tags:
   - name: Assets and exports
   - name: Webhooks
 paths:
+  /api/v1/auth/register:
+    post:
+      operationId: registerAccount
+      tags: [Auth]
+      summary: Register an account and start a session
+      description: Creates an account through the shared auth service and sets HttpOnly dogfood_session and dogfood_accounts cookies. The response never returns the raw session token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterAccount' }
+      responses:
+        '201':
+          description: Account created and session cookies set
+          headers:
+            Set-Cookie: { schema: { type: string }, description: Sets the active session and saved account list as HttpOnly, SameSite=Lax cookies. Secure is added in production. }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthUserResponse' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/auth/login:
+    post:
+      operationId: loginAccount
+      tags: [Auth]
+      summary: Log in and start a session
+      description: Authenticates credentials through the shared auth service and sets HttpOnly dogfood_session and dogfood_accounts cookies. Invalid credentials use one generic error. The response never returns the raw session token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginAccount' }
+      responses:
+        '200':
+          description: Authenticated and session cookies set
+          headers:
+            Set-Cookie: { schema: { type: string }, description: Sets the active session and saved account list as HttpOnly, SameSite=Lax cookies. Secure is added in production. }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthUserResponse' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutAccount
+      tags: [Auth]
+      summary: Clear the active browser session
+      description: Matches the UI sign-out action by clearing dogfood_session while retaining saved account sessions in dogfood_accounts. The server-side session is retained for account switching.
+      security: []
+      responses:
+        '200':
+          description: Active browser session cleared
+          headers:
+            Set-Cookie: { schema: { type: string }, description: Expires dogfood_session immediately. }
+          content:
+            application/json:
+              schema: { type: object, required: [signedOut], properties: { signedOut: { const: true } } }
+  /api/v1/auth/switch:
+    post:
+      operationId: switchAccount
+      tags: [Auth]
+      summary: Switch to a saved account session
+      description: Accepts a session token only when it is present in the browser's HttpOnly dogfood_accounts list and still resolves to an active account. The token is never returned in JSON.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SwitchAccount' }
+      responses:
+        '200':
+          description: Active session switched
+          headers:
+            Set-Cookie: { schema: { type: string }, description: Sets the selected saved session as dogfood_session. }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/AuthUser' }
+        default: { $ref: '#/components/responses/ApiError' }
   /embed/gallery:
     get:
       operationId: getEmbeddableGallery
@@ -1372,6 +1456,37 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    AuthUser:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        isPlatformAdmin: { type: boolean }
+    AuthUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user: { $ref: '#/components/schemas/AuthUser' }
+    RegisterAccount:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        displayName: { type: string, minLength: 1 }
+    LoginAccount:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
+    SwitchAccount:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 1, description: Raw session token from a previously saved dogfood_accounts session; accepted only if present in that cookie. }
     ApiError:
       type: object
       required: [error]
