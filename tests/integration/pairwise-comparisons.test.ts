@@ -1,3 +1,4 @@
+import { db, eq, schema } from "@dogfood/db";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createSession, registerUser } from "@dogfood/auth";
@@ -228,5 +229,12 @@ describe("assigned judge pairwise comparisons", () => {
       { params: Promise.resolve({ eventId: event.id }) },
     );
     expect(rejected.status).toBe(403);
+
+    // Policy: pairwise is a separate, organizer-published ranking and never mixes with rubric scoring.
+    const [rubricEvent] = await db.select({ published: schema.events.publishedRankingSnapshotId })
+      .from(schema.events).where(eq(schema.events.id, event.id));
+    expect(rubricEvent.published).toBeNull();
+    const rubricRows = await db.select({ id: schema.evaluations.id }).from(schema.evaluations);
+    expect(rubricRows).toHaveLength(0);
   });
 });

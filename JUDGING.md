@@ -200,6 +200,27 @@ does not filter the evaluation CSV. The official checker verifies only that
 the organizer CSV route returns a CSV response; it does not check export
 contents or timing.
 
+## Pairwise mode (organizer-selected, never mixed with the rubric)
+
+Pairwise is an alternative judging mode, not an add-on to the weighted rubric.
+
+- **Selection:** the organizer chooses pairwise by generating and publishing a
+  pairwise snapshot (`POST .../pairwise-ranking`, then `.../publish`). Until then
+  the public `pairwise-results` route returns 404 and the rubric ranking is the
+  only published result.
+- **Separate data:** judges' choices live in `pairwise_comparisons`; rubric
+  scores live in `evaluations`. A pairwise choice never creates or edits an
+  evaluation, and publishing a pairwise snapshot never sets the event's rubric
+  `publishedRankingSnapshotId`.
+- **No mixing:** the Bradley-Terry estimator reads only comparisons. Its output
+  is never blended with, normalized against, or added to rubric totals. The two
+  rankings are published side by side and are compared, not merged.
+- **Reproducibility:** each snapshot stores its input comparisons, configuration
+  and algorithm version, so anyone can re-run the estimator on the stored input.
+- **Verified by:** `tests/integration/pairwise-comparisons.test.ts` (asserts no
+  rubric evaluations exist and no rubric snapshot is published after pairwise
+  choices and publication) and `tests/unit/ranking/pairwise.test.ts`.
+
 ## Role isolation and explicit policy variance
 
 The official site's published role matrix permits organizers and admins to

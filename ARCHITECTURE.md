@@ -113,9 +113,9 @@ pipelined by `packages/ranking/src/service.ts`. Details and math live in
 `JUDGING.md`. Every generated snapshot persists scoring, normalization, and
 ranking versions plus configuration; re-reading a snapshot never recomputes it.
 The ranking package also contains a tested Bradley–Terry-style pairwise
-estimator and an organizer API endpoint. The product lacks comparison
-collection, persisted judge comparison sessions, and judge-facing pairwise UI;
-this is a partial bonus implementation, not an end-to-end pairwise judging mode.
+estimator. Judges record assigned, track-scoped comparisons (UI and API);
+organizers generate reproducible snapshots and publish one. Pairwise is a
+separate mode that never mixes with rubric scores (see `JUDGING.md`).
 
 ## Organizer confidentiality
 
