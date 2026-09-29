@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import {
   expect,
@@ -10,6 +10,88 @@ import {
 async function clickCentered(locator: Locator): Promise<void> {
   await locator.evaluate((element) => element.scrollIntoView({ block: "center" }));
   await locator.click();
+}
+
+async function showDemoEvidence(
+  page: Page,
+  title: string,
+  detail: string,
+  imageDataUrl?: string,
+): Promise<void> {
+  await page.evaluate(({ title, detail, imageDataUrl }) => {
+    document.querySelector('[data-testid="demo-evidence-card"]')?.remove();
+    const card = document.createElement("aside");
+    card.dataset.testid = "demo-evidence-card";
+    card.setAttribute("aria-label", title);
+    Object.assign(card.style, {
+      position: "fixed",
+      zIndex: "2147483647",
+      left: "50%",
+      top: "50%",
+      transform: "translate(-50%, -50%)",
+      width: "min(1120px, calc(100vw - 64px))",
+      maxHeight: "calc(100vh - 64px)",
+      overflow: "auto",
+      padding: "20px",
+      border: "1px solid #d8d9e4",
+      borderRadius: "16px",
+      background: "#ffffff",
+      color: "#171625",
+      boxShadow: "0 24px 80px rgba(21, 17, 46, .28)",
+      font: "500 16px/1.45 ui-sans-serif, system-ui, sans-serif",
+    });
+    const eyebrow = document.createElement("div");
+    eyebrow.textContent = "DOGFOOD · LIVE DEMO EVIDENCE";
+    Object.assign(eyebrow.style, {
+      color: "#5b50b8",
+      fontSize: "12px",
+      fontWeight: "700",
+      letterSpacing: ".08em",
+      marginBottom: "6px",
+    });
+    const heading = document.createElement("h2");
+    heading.textContent = title;
+    Object.assign(heading.style, { fontSize: "22px", margin: "0 0 6px" });
+    const caption = document.createElement("p");
+    caption.textContent = detail;
+    Object.assign(caption.style, { color: "#55536a", margin: "0 0 14px", whiteSpace: "pre-line" });
+    card.append(eyebrow, heading, caption);
+    if (imageDataUrl) {
+      const image = document.createElement("img");
+      image.src = imageDataUrl;
+      image.alt = `${title} captured from the live browser session`;
+      Object.assign(image.style, {
+        display: "block",
+        width: "100%",
+        maxHeight: "min(64vh, 650px)",
+        objectFit: "contain",
+        objectPosition: "top center",
+        border: "1px solid #e3e2eb",
+        borderRadius: "10px",
+      });
+      card.append(image);
+    }
+    document.body.append(card);
+  }, { title, detail, imageDataUrl });
+
+  await expect(page.getByTestId("demo-evidence-card")).toBeVisible();
+  await page.waitForTimeout(4_000);
+  await page.getByTestId("demo-evidence-card").evaluate((element) => element.remove());
+}
+
+async function showSessionEvidence(
+  sourcePage: Page,
+  organizerPage: Page,
+  title: string,
+  detail: string,
+): Promise<void> {
+  const screenshot = await sourcePage.screenshot({ type: "jpeg", quality: 82, animations: "disabled" });
+  await showDemoEvidence(
+    organizerPage,
+    title,
+    detail,
+    `data:image/jpeg;base64,${screenshot.toString("base64")}`,
+  );
 }
 
 test("five-minute event lifecycle: create, submit, score, publish", async ({
@@ -30,6 +112,12 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await organizerPage.getByRole("button", { name: "Register" }).click();
   await organizerPage.waitForURL("**/events");
   await organizerPage.goto("/events/new");
+  await showSessionEvidence(
+    organizerPage,
+    organizerPage,
+    "Create an event",
+    "Captured from Morgan's organizer session before creating the event.",
+  );
   await organizerPage.getByLabel("Slug").fill(`demo-${Date.now()}`);
   await organizerPage.getByLabel("Name").fill("Dogfood Five Minute Demo");
   await organizerPage
@@ -42,10 +130,10 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await expect(organizerPage.getByRole("heading", { name: "Organizer dashboard" })).toBeVisible();
   await organizerPage.getByRole("button", { name: "Advance to Registration" }).click();
   await expect(organizerPage.getByTestId("event-state")).toHaveText("Registration");
-  await organizerPage.waitForTimeout(49_000);
+  await organizerPage.waitForTimeout(41_000);
 
   // A participant creates an account, joins this event, and forms a team.
-  const participantContext = await browser.newContext({ viewport: { width: 1365, height: 900 } });
+  const participantContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const participantPage = await participantContext.newPage();
   await participantPage.goto("/register");
   await participantPage.getByLabel("Email").fill(participantEmail);
@@ -60,10 +148,16 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await participantPage.getByLabel("Team name").fill("Team Daybreak");
   await participantPage.getByRole("button", { name: "Create team" }).click();
   await expect(participantPage.getByText("Team Daybreak")).toBeVisible();
-  await participantPage.waitForTimeout(49_000);
+  await showSessionEvidence(
+    participantPage,
+    organizerPage,
+    "Participant team",
+    "Captured from Avery's signed-in participant session after creating Team Daybreak.",
+  );
+  await participantPage.waitForTimeout(41_000);
 
   // Register a judge, then let the organizer advance the event and grant the role.
-  const judgeContext = await browser.newContext({ viewport: { width: 1365, height: 900 } });
+  const judgeContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const judgePage = await judgeContext.newPage();
   await judgePage.goto("/register");
   await judgePage.getByLabel("Email").fill(judgeEmail);
@@ -73,7 +167,7 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await judgePage.waitForURL("**/events");
 
   // This second judge is a real event member, but will receive no assignment.
-  const unassignedJudgeContext = await browser.newContext({ viewport: { width: 1365, height: 900 } });
+  const unassignedJudgeContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const unassignedJudgePage = await unassignedJudgeContext.newPage();
   await unassignedJudgePage.goto("/register");
   await unassignedJudgePage.getByLabel("Email").fill(unassignedJudgeEmail);
@@ -94,7 +188,13 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await expect(participantPage.getByRole("heading", { name: "Harborlight" })).toBeVisible();
   await participantPage.getByRole("button", { name: "Submit saved revision" }).click();
   await expect(participantPage.getByTestId("project-state")).toHaveText("SUBMITTED");
-  await participantPage.waitForTimeout(49_000);
+  await showSessionEvidence(
+    participantPage,
+    organizerPage,
+    "Participant submission",
+    "Captured from Avery's browser after Harborlight reached SUBMITTED.",
+  );
+  await participantPage.waitForTimeout(41_000);
 
   await organizerPage.getByLabel("Email", { exact: true }).fill(judgeEmail);
   await organizerPage.getByLabel("Role for new member").selectOption("JUDGE");
@@ -133,7 +233,7 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await projectSelect.selectOption({ index: 0 });
   await organizerPage.getByRole("button", { name: "Assign judge" }).click();
   await expect(organizerPage.getByTestId("coverage-total")).toHaveText("1");
-  await organizerPage.waitForTimeout(49_000);
+  await organizerPage.waitForTimeout(41_000);
 
   // The judge scores in their own browser session.
   await judgePage.goto(`/events/${eventId}/judge`);
@@ -165,12 +265,23 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   }, evaluationPath);
   expect(assignedJudgeApi.status, "assigned judge can read their evaluation over the raw API").toBe(200);
   expect(unassignedJudgeApi.status, "unassigned judge is denied by the raw API").toBe(403);
+  await showDemoEvidence(
+    organizerPage,
+    "Backend judge isolation",
+    `GET ${evaluationPath}\nAssigned judge session: HTTP ${assignedJudgeApi.status} OK\nUnassigned judge session: HTTP ${unassignedJudgeApi.status} Forbidden`,
+  );
   await expect(judgePage.getByRole("heading", { name: "Harborlight" })).toBeVisible();
   await judgePage.locator("input[data-criterion-id]").fill("9");
   await judgePage.getByLabel("Overall comment").fill("Clear community need and a focused solution.");
   await judgePage.getByRole("button", { name: "Submit evaluation" }).click();
   await expect(judgePage.getByTestId("assignment-status")).toHaveText("Submitted");
-  await judgePage.waitForTimeout(49_000);
+  await showSessionEvidence(
+    judgePage,
+    organizerPage,
+    "Judge evaluation",
+    "Captured from Jordan's assigned judge session after submitting the evaluation.",
+  );
+  await judgePage.waitForTimeout(41_000);
 
   // Organizer locks judging, generates the ranking, then publishes it publicly.
   await organizerPage.reload();
@@ -185,7 +296,16 @@ test("five-minute event lifecycle: create, submit, score, publish", async ({
   await clickCentered(organizerPage.getByRole("button", { name: "Advance to Published" }));
   await expect(organizerPage.getByTestId("event-state")).toHaveText("Published");
   await expect(organizerPage.getByTestId("results-row")).toHaveCount(1);
-  await organizerPage.waitForTimeout(49_000);
+  await participantPage.goto(`/events/${eventId}`);
+  await expect(participantPage.getByTestId("public-results")).toBeVisible();
+  await expect(participantPage.getByTestId("public-results").getByText("Harborlight")).toBeVisible();
+  await showSessionEvidence(
+    participantPage,
+    organizerPage,
+    "Published results",
+    "Captured from the public event page after the organizer published Harborlight's result.",
+  );
+  await organizerPage.waitForTimeout(41_000);
 
   await participantContext.close();
   await judgeContext.close();
