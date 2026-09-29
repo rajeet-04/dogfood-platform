@@ -29,9 +29,13 @@ export function canonicalJson(value: unknown): string {
     return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   }
   if (typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError("Payload objects must be plain JSON objects");
+    }
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, child]) => child !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right));
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
     return `{${entries
       .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
       .join(",")}}`;
@@ -51,6 +55,19 @@ export function publicKeyFingerprint(publicKey: string | KeyObject): string {
   return createHash("sha256").update(der).digest("hex");
 }
 
+export function isTrustedSignerFingerprint(
+  fingerprint: string,
+  configuredFingerprints = process.env.JUDGE_RECORD_TRUSTED_KEY_FINGERPRINTS,
+): boolean {
+  const trusted = new Set(
+    (configuredFingerprints ?? "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return trusted.has(fingerprint.toLowerCase());
+}
+
 export function signLedgerJudgeRecord<T extends object>(
   payload: T,
   privateKeyPem: string,
@@ -61,6 +78,7 @@ export function signLedgerJudgeRecord<T extends object>(
     .export({ type: "spki", format: "pem" })
     .toString();
   const canonicalPayload = canonicalJson(payload);
+  const immutablePayload = JSON.parse(canonicalPayload) as T;
   const signature = sign(
     null,
     Buffer.from(`${SIGNING_CONTEXT}${canonicalPayload}`),
@@ -72,7 +90,7 @@ export function signLedgerJudgeRecord<T extends object>(
     keyFingerprint: publicKeyFingerprint(publicKeyObject),
     publicKey,
     signature,
-    payload,
+    payload: immutablePayload,
   };
 }
 

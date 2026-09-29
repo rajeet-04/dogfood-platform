@@ -14,6 +14,11 @@ export type PublicJudgeRecord = {
   lastLockedAt: string;
 };
 
+export type EligibleJudgeRecord = {
+  judgeId: string;
+  payload: PublicJudgeRecord;
+};
+
 export function signPublicJudgeRecord<T extends object>(
   payload: T,
   privateKeyPem: string,
@@ -33,9 +38,9 @@ export function signPublicJudgeRecord<T extends object>(
   };
 }
 
-export async function listPublicJudgeRecords(
+export async function listEligiblePublicJudgeRecords(
   eventId: string,
-): Promise<PublicJudgeRecord[]> {
+): Promise<EligibleJudgeRecord[]> {
   const [event] = await db
     .select({
       slug: schema.events.slug,
@@ -107,17 +112,26 @@ export async function listPublicJudgeRecords(
     .map(([judgeId, judge]) => {
       const dates = judge.lockedAt.sort((a, b) => a.getTime() - b.getTime());
       return {
-        version: "dogfood.judge-participation.v1" as const,
-        recordId: createHash("sha256")
-          .update(`${eventId}:${judgeId}`)
-          .digest("hex"),
-        eventSlug: event.slug,
-        eventName: event.name,
-        judgeDisplayName: judge.displayName,
-        lockedEvaluations: dates.length,
-        firstLockedAt: dates[0]!.toISOString(),
-        lastLockedAt: dates.at(-1)!.toISOString(),
+        judgeId,
+        payload: {
+          version: "dogfood.judge-participation.v1" as const,
+          recordId: createHash("sha256")
+            .update(`${eventId}:${judgeId}`)
+            .digest("hex"),
+          eventSlug: event.slug,
+          eventName: event.name,
+          judgeDisplayName: judge.displayName,
+          lockedEvaluations: dates.length,
+          firstLockedAt: dates[0]!.toISOString(),
+          lastLockedAt: dates.at(-1)!.toISOString(),
+        },
       };
     })
-    .sort((a, b) => a.judgeDisplayName.localeCompare(b.judgeDisplayName));
+    .sort((a, b) => a.payload.judgeDisplayName.localeCompare(b.payload.judgeDisplayName));
+}
+
+export async function listPublicJudgeRecords(
+  eventId: string,
+): Promise<PublicJudgeRecord[]> {
+  return (await listEligiblePublicJudgeRecords(eventId)).map((entry) => entry.payload);
 }

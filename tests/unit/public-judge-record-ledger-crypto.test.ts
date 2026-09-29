@@ -2,6 +2,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  isTrustedSignerFingerprint,
   publicLedgerRecordIsVisible,
   publicKeyFingerprint,
   signLedgerJudgeRecord,
@@ -19,12 +20,17 @@ function keyPair() {
 describe("public judge record ledger crypto", () => {
   it("verifies immutable canonical payloads and rejects tampering", () => {
     const { privateKey } = keyPair();
-    const signed = signLedgerJudgeRecord(
-      { version: "dogfood.judge-participation.v1", count: 3, judge: "Ada" },
+    const payload = { version: "dogfood.judge-participation.v1", count: 3, judge: "Ada" };
+    const signed = signLedgerJudgeRecord(payload, privateKey);
+    const reordered = signLedgerJudgeRecord(
+      { judge: "Ada", version: "dogfood.judge-participation.v1", count: 3 },
       privateKey,
     );
 
     expect(verifyLedgerJudgeRecord(signed)).toBe(true);
+    expect(signed.signature).toBe(reordered.signature);
+    payload.count = 8;
+    expect(signed.payload.count).toBe(3);
     expect(
       verifyLedgerJudgeRecord({
         ...signed,
@@ -48,6 +54,11 @@ describe("public judge record ledger crypto", () => {
     expect(publicKeyFingerprint(rotated.publicKey)).not.toBe(
       publicKeyFingerprint(first.publicKey),
     );
+  });
+
+  it("trusts only fingerprints supplied through the independent pin configuration", () => {
+    expect(isTrustedSignerFingerprint("aabb", "AABB, ccdd")).toBe(true);
+    expect(isTrustedSignerFingerprint("aabb", undefined)).toBe(false);
   });
 
   it("exposes only published records whose revocation timestamp is absent", () => {
