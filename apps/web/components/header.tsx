@@ -33,14 +33,26 @@ function Wordmark() {
       href="/"
       className="group flex shrink-0 items-center gap-2 rounded-md"
     >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 32 32"
+        className="size-7 shrink-0 rounded-sm shadow-xs"
+      >
+        <rect width="32" height="32" fill="#FF3D6E" />
+        <path
+          fill="#0B1020"
+          fillRule="evenodd"
+          d="M6.5 4.5h9.8c5.9 0 9.7 4.7 9.7 11.5s-3.8 11.5-9.7 11.5H6.5zM14 11v10h2c2.5 0 4-1.9 4-5s-1.5-5-4-5z"
+        />
+      </svg>
+      <span className="font-display text-subheading font-semibold tracking-tight text-fg">
+        DOGFOOD
+      </span>
       <span
         aria-hidden="true"
-        className="grid size-7 place-items-center rounded-md bg-accent text-micro font-bold text-accent-fg shadow-xs"
+        className="tabular hidden text-micro text-fg-faint sm:inline"
       >
-        DF
-      </span>
-      <span className="text-subheading font-semibold tracking-tight text-fg">
-        DOGFOOD
+        /ledger
       </span>
     </Link>
   );

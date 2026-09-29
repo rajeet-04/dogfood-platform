@@ -1,11 +1,28 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------------- *
- * DOGFOOD DESIGN SYSTEM
+ * DOGFOOD DESIGN SYSTEM — THE LEDGER
  *
  * A single, restrained token layer. Components never hardcode a colour or a
  * radius: they reference the semantic variables below so light and dark stay
  * in lockstep and the whole product reads as one system.
+ *
+ * <!-- impeccable:direction seed=dogfood-ledger-2026-09-29 -->
+ * THESIS: DOGFOOD is signed infrastructure, not a hackathon flyer — the UI
+ * reads like the judging ledger and audit trail it actually is.
+ * OWN-WORLD: near-black graphite-navy canvas, two committed accents (signal
+ * magenta for action/live state, verified teal for locked/success data),
+ * monospace for every measured value, bracketed state labels as structure.
+ * STORY: a visitor reads DOGFOOD as real infrastructure under audit; a
+ * participant sees exactly what is done and owed; judges and organizers get
+ * dense, scannable, trustworthy data screens.
+ * FIRST VIEWPORT: the event lifecycle renders as a real state-machine strip,
+ * not a marketing hero.
+ * FORM: committed colour strategy, full palette, monospace data type,
+ * hairline/bracket structure.
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the
+ * finish review, the verdict, DESIGN.md, and every shipping raster carrying
+ * its provenance.
  *
  * Layers, bottom to top:
  *   1. primitives  - brand ramp + neutral ramp
@@ -19,65 +36,80 @@
 /* == 1. PRIMITIVES ======================================================== */
 
 @theme {
-  /* Brand: a deep indigo with a violet lean. Used for primary actions, the
-     active navigation item and focus rings. Nothing else. */
-  --color-brand-50: oklch(0.97 0.014 285);
-  --color-brand-100: oklch(0.943 0.028 285);
-  --color-brand-200: oklch(0.894 0.05 284);
-  --color-brand-300: oklch(0.821 0.078 283);
-  --color-brand-400: oklch(0.722 0.117 282);
-  --color-brand-500: oklch(0.629 0.152 280);
-  --color-brand-600: oklch(0.548 0.163 279);
-  --color-brand-700: oklch(0.472 0.148 278);
-  --color-brand-800: oklch(0.404 0.123 277);
-  --color-brand-900: oklch(0.35 0.101 277);
-  --color-brand-950: oklch(0.245 0.077 277);
+  /* Signal: the ledger's one hot colour. Primary actions, live/active state,
+     focus rings. A committed magenta, never decorative. */
+  --color-brand-50: oklch(0.967 0.014 9);
+  --color-brand-100: oklch(0.936 0.032 8);
+  --color-brand-200: oklch(0.881 0.062 8);
+  --color-brand-300: oklch(0.804 0.11 8);
+  --color-brand-400: oklch(0.72 0.18 9);
+  --color-brand-500: oklch(0.635 0.23 9);
+  --color-brand-600: oklch(0.565 0.225 7);
+  --color-brand-700: oklch(0.487 0.196 6);
+  --color-brand-800: oklch(0.402 0.157 5);
+  --color-brand-900: oklch(0.325 0.117 4);
+  --color-brand-950: oklch(0.222 0.076 4);
 
-  /* Neutrals: a very slightly cool grey. Carries almost all the UI. */
+  /* Verified: the counterweight accent. Locked evaluations, success,
+     published snapshots — a cold, certain teal. */
+  --color-teal-50: oklch(0.968 0.024 191);
+  --color-teal-100: oklch(0.93 0.05 190);
+  --color-teal-200: oklch(0.865 0.078 189);
+  --color-teal-300: oklch(0.78 0.098 188);
+  --color-teal-400: oklch(0.7 0.11 187);
+  --color-teal-500: oklch(0.62 0.115 187);
+  --color-teal-600: oklch(0.535 0.105 187);
+  --color-teal-700: oklch(0.452 0.088 188);
+  --color-teal-800: oklch(0.372 0.07 189);
+  --color-teal-900: oklch(0.302 0.055 190);
+
+  /* Ink: graphite-navy neutrals. The canvas leans cool and dark by default —
+     the ledger's native light. */
   --color-ink-0: oklch(1 0 0);
-  --color-ink-25: oklch(0.992 0.002 264);
-  --color-ink-50: oklch(0.978 0.003 264);
-  --color-ink-100: oklch(0.958 0.004 264);
-  --color-ink-150: oklch(0.938 0.005 264);
-  --color-ink-200: oklch(0.912 0.006 264);
-  --color-ink-300: oklch(0.856 0.007 264);
-  --color-ink-400: oklch(0.702 0.011 264);
-  --color-ink-500: oklch(0.573 0.013 264);
-  --color-ink-600: oklch(0.478 0.014 264);
-  --color-ink-700: oklch(0.398 0.013 264);
-  --color-ink-800: oklch(0.311 0.012 264);
-  --color-ink-900: oklch(0.226 0.011 264);
-  --color-ink-950: oklch(0.166 0.01 264);
-  --color-ink-1000: oklch(0.113 0.009 264);
+  --color-ink-25: oklch(0.99 0.002 264);
+  --color-ink-50: oklch(0.973 0.004 264);
+  --color-ink-100: oklch(0.947 0.006 264);
+  --color-ink-150: oklch(0.917 0.007 264);
+  --color-ink-200: oklch(0.878 0.009 264);
+  --color-ink-300: oklch(0.792 0.011 264);
+  --color-ink-400: oklch(0.63 0.013 264);
+  --color-ink-500: oklch(0.512 0.014 264);
+  --color-ink-600: oklch(0.42 0.015 264);
+  --color-ink-700: oklch(0.338 0.016 264);
+  --color-ink-800: oklch(0.264 0.017 264);
+  --color-ink-900: oklch(0.202 0.018 264);
+  --color-ink-950: oklch(0.164 0.018 264);
+  --color-ink-1000: oklch(0.128 0.016 264);
 
-  /* Status ramps. Desaturated enough to sit beside the neutrals. */
-  --color-success-50: oklch(0.972 0.017 155);
-  --color-success-100: oklch(0.936 0.036 155);
-  --color-success-500: oklch(0.627 0.146 155);
-  --color-success-600: oklch(0.556 0.135 155);
-  --color-success-700: oklch(0.478 0.117 155);
-  --color-success-900: oklch(0.302 0.077 155);
+  /* Status ramps. Desaturated enough to sit beside the neutrals, tuned onto
+     the same 264 axis as ink so nothing reads as a bolted-on library colour. */
+  --color-success-50: oklch(0.965 0.03 158);
+  --color-success-100: oklch(0.928 0.058 158);
+  --color-success-500: oklch(0.63 0.15 155);
+  --color-success-600: oklch(0.552 0.138 155);
+  --color-success-700: oklch(0.466 0.117 156);
+  --color-success-900: oklch(0.296 0.075 157);
 
-  --color-warning-50: oklch(0.977 0.024 85);
-  --color-warning-100: oklch(0.945 0.05 85);
-  --color-warning-500: oklch(0.732 0.145 71);
-  --color-warning-600: oklch(0.652 0.144 66);
-  --color-warning-700: oklch(0.545 0.128 62);
-  --color-warning-900: oklch(0.336 0.079 59);
+  --color-warning-50: oklch(0.973 0.032 85);
+  --color-warning-100: oklch(0.94 0.062 82);
+  --color-warning-500: oklch(0.74 0.155 66);
+  --color-warning-600: oklch(0.66 0.152 56);
+  --color-warning-700: oklch(0.552 0.135 46);
+  --color-warning-900: oklch(0.336 0.084 44);
 
-  --color-danger-50: oklch(0.971 0.014 20);
-  --color-danger-100: oklch(0.936 0.031 20);
-  --color-danger-500: oklch(0.606 0.19 25);
-  --color-danger-600: oklch(0.553 0.184 26);
-  --color-danger-700: oklch(0.479 0.159 26);
-  --color-danger-900: oklch(0.316 0.107 24);
+  --color-danger-50: oklch(0.967 0.02 22);
+  --color-danger-100: oklch(0.928 0.042 22);
+  --color-danger-500: oklch(0.598 0.2 26);
+  --color-danger-600: oklch(0.545 0.194 25);
+  --color-danger-700: oklch(0.47 0.166 24);
+  --color-danger-900: oklch(0.31 0.108 22);
 
-  --color-info-50: oklch(0.972 0.014 245);
-  --color-info-100: oklch(0.937 0.03 245);
-  --color-info-500: oklch(0.623 0.155 250);
-  --color-info-600: oklch(0.564 0.152 253);
-  --color-info-700: oklch(0.488 0.13 255);
-  --color-info-900: oklch(0.302 0.09 256);
+  --color-info-50: oklch(0.968 0.018 238);
+  --color-info-100: oklch(0.93 0.038 238);
+  --color-info-500: oklch(0.62 0.15 248);
+  --color-info-600: oklch(0.558 0.148 251);
+  --color-info-700: oklch(0.48 0.128 254);
+  --color-info-900: oklch(0.3 0.088 255);
 }
 
 /* == 2. SEMANTIC ROLES =================================================== */
@@ -85,67 +117,81 @@
 :root {
   color-scheme: light;
 
-  --df-canvas: var(--color-ink-50);
-  --df-surface: var(--color-ink-0);
-  --df-surface-raised: var(--color-ink-0);
-  --df-surface-sunken: var(--color-ink-50);
-  --df-surface-hover: var(--color-ink-50);
-  --df-surface-active: var(--color-ink-100);
+  /* Light companion: paper-cool, not a return to the old indigo/white admin
+     look. Same two committed accents, re-tuned for contrast on a light
+     ground. */
+  --df-canvas: oklch(0.975 0.004 264);
+  --df-surface: oklch(1 0 0);
+  --df-surface-raised: oklch(1 0 0);
+  --df-surface-sunken: oklch(0.955 0.006 264);
+  --df-surface-hover: oklch(0.947 0.007 264);
+  --df-surface-active: oklch(0.918 0.009 264);
   --df-surface-inverse: var(--color-ink-900);
 
-  --df-fg: var(--color-ink-900);
-  --df-fg-muted: var(--color-ink-600);
-  --df-fg-subtle: var(--color-ink-500);
-  --df-fg-faint: var(--color-ink-400);
-  --df-fg-onAccent: var(--color-ink-0);
+  --df-fg: oklch(0.19 0.017 264);
+  --df-fg-muted: oklch(0.42 0.016 264);
+  --df-fg-subtle: oklch(0.512 0.014 264);
+  --df-fg-faint: oklch(0.63 0.012 264);
+  --df-fg-onAccent: oklch(0.99 0 0);
   --df-fg-inverse: var(--color-ink-50);
 
-  --df-border: var(--color-ink-200);
-  --df-border-subtle: var(--color-ink-150);
-  --df-border-strong: var(--color-ink-300);
+  --df-border: oklch(0.878 0.009 264);
+  --df-border-subtle: oklch(0.928 0.007 264);
+  --df-border-strong: oklch(0.78 0.012 264);
 
-  --df-accent: var(--color-brand-600);
-  --df-accent-hover: var(--color-brand-700);
-  --df-accent-active: var(--color-brand-800);
-  --df-accent-fg: var(--color-ink-0);
-  --df-accent-soft: var(--color-brand-50);
-  --df-accent-soft-fg: var(--color-brand-700);
-  --df-accent-border: var(--color-brand-200);
+  --df-accent: oklch(0.55 0.215 9);
+  --df-accent-hover: oklch(0.485 0.2 7);
+  --df-accent-active: oklch(0.42 0.175 6);
+  --df-accent-fg: oklch(0.99 0 0);
+  --df-accent-soft: oklch(0.955 0.028 9);
+  --df-accent-soft-fg: oklch(0.42 0.175 6);
+  --df-accent-border: oklch(0.87 0.06 9);
 
-  --df-ring: var(--color-brand-500);
+  --df-accent2: oklch(0.5 0.1 188);
+  --df-accent2-soft: oklch(0.94 0.03 188);
+  --df-accent2-soft-fg: oklch(0.38 0.08 189);
+  --df-accent2-border: oklch(0.83 0.055 188);
+
+  --df-ring: oklch(0.55 0.215 9);
 }
 
 .dark {
   color-scheme: dark;
 
   /* Layered darks: canvas sits below surface, sunken sits below both. Never
-     pure black - pure black kills depth cues between nested surfaces. */
-  --df-canvas: oklch(0.174 0.009 268);
-  --df-surface: oklch(0.216 0.011 268);
-  --df-surface-raised: oklch(0.253 0.012 268);
-  --df-surface-sunken: oklch(0.145 0.008 268);
-  --df-surface-hover: oklch(0.263 0.012 268);
-  --df-surface-active: oklch(0.302 0.013 268);
+     pure black - pure black kills depth cues between nested surfaces. This is
+     the ledger's native register; light above is the companion, not the lead. */
+  --df-canvas: oklch(0.155 0.017 264);
+  --df-surface: oklch(0.196 0.019 264);
+  --df-surface-raised: oklch(0.234 0.021 264);
+  --df-surface-sunken: oklch(0.118 0.015 264);
+  --df-surface-hover: oklch(0.246 0.021 264);
+  --df-surface-active: oklch(0.284 0.023 264);
   --df-surface-inverse: var(--color-ink-100);
 
-  --df-fg: oklch(0.972 0.003 264);
-  --df-fg-muted: oklch(0.732 0.012 264);
-  --df-fg-subtle: oklch(0.638 0.013 264);
-  --df-fg-faint: oklch(0.532 0.013 264);
+  --df-fg: oklch(0.965 0.004 264);
+  --df-fg-muted: oklch(0.735 0.012 264);
+  --df-fg-subtle: oklch(0.605 0.013 264);
+  --df-fg-faint: oklch(0.478 0.014 264);
   --df-fg-onAccent: oklch(0.99 0 0);
   --df-fg-inverse: var(--color-ink-900);
 
-  --df-border: oklch(0.318 0.013 268);
-  --df-border-subtle: oklch(0.278 0.012 268);
-  --df-border-strong: oklch(0.408 0.014 268);
+  --df-border: oklch(0.322 0.021 264);
+  --df-border-subtle: oklch(0.264 0.019 264);
+  --df-border-strong: oklch(0.41 0.023 264);
 
   --df-accent: var(--color-brand-500);
   --df-accent-hover: var(--color-brand-400);
   --df-accent-active: var(--color-brand-300);
   --df-accent-fg: oklch(0.99 0 0);
-  --df-accent-soft: oklch(0.3 0.055 280);
-  --df-accent-soft-fg: var(--color-brand-200);
-  --df-accent-border: oklch(0.4 0.08 280);
+  --df-accent-soft: oklch(0.29 0.085 9);
+  --df-accent-soft-fg: oklch(0.87 0.1 11);
+  --df-accent-border: oklch(0.4 0.13 8);
+
+  --df-accent2: var(--color-teal-400);
+  --df-accent2-soft: oklch(0.28 0.06 188);
+  --df-accent2-soft-fg: oklch(0.83 0.08 188);
+  --df-accent2-border: oklch(0.38 0.075 188);
 
   --df-ring: var(--color-brand-400);
 }
@@ -178,6 +224,13 @@
   --color-accent-soft-fg: var(--df-accent-soft-fg);
   --color-accent-border: var(--df-accent-border);
 
+  /* The verified counterweight — teal. Locked evaluations, published
+     snapshots, confirmed states. */
+  --color-accent2: var(--df-accent2);
+  --color-accent2-soft: var(--df-accent2-soft);
+  --color-accent2-soft-fg: var(--df-accent2-soft-fg);
+  --color-accent2-border: var(--df-accent2-border);
+
   /* Status soft/fg pairs: a tinted background with a readable foreground,
      contrast-checked in both themes. */
   --color-success-soft: var(--color-success-50);
@@ -204,68 +257,70 @@
   --color-neutral-fg: var(--color-ink-700);
   --color-neutral-border: var(--color-ink-200);
 
-  --color-accent-2-soft: oklch(0.972 0.014 300);
-  --color-accent-2-fg: var(--color-brand-800);
-  --color-accent-2-border: oklch(0.916 0.03 300);
+  /* Legacy "accent-2" alias some judging/organizer screens reference —
+     mapped onto the verified teal so nothing regresses to violet. */
+  --color-accent-2-soft: var(--df-accent2-soft);
+  --color-accent-2-fg: var(--df-accent2-soft-fg);
+  --color-accent-2-border: var(--df-accent2-border);
 }
 
 .dark {
-  --color-success-soft: oklch(0.29 0.05 155);
-  --color-success-fg: var(--color-success-100);
-  --color-success-border: oklch(0.38 0.07 155);
+  --color-success-soft: oklch(0.285 0.052 155);
+  --color-success-fg: oklch(0.86 0.09 152);
+  --color-success-border: oklch(0.38 0.072 155);
   --color-success-solid: var(--color-success-500);
 
-  --color-warning-soft: oklch(0.31 0.058 71);
-  --color-warning-fg: var(--color-warning-100);
-  --color-warning-border: oklch(0.4 0.07 66);
+  --color-warning-soft: oklch(0.305 0.06 60);
+  --color-warning-fg: oklch(0.87 0.09 74);
+  --color-warning-border: oklch(0.4 0.075 58);
   --color-warning-solid: var(--color-warning-500);
 
-  --color-danger-soft: oklch(0.3 0.068 25);
-  --color-danger-fg: var(--color-danger-100);
-  --color-danger-border: oklch(0.4 0.1 25);
+  --color-danger-soft: oklch(0.298 0.07 24);
+  --color-danger-fg: oklch(0.85 0.09 20);
+  --color-danger-border: oklch(0.4 0.1 24);
   --color-danger-solid: var(--color-danger-500);
 
-  --color-info-soft: oklch(0.29 0.058 250);
-  --color-info-fg: var(--color-info-100);
-  --color-info-border: oklch(0.38 0.075 252);
+  --color-info-soft: oklch(0.288 0.06 251);
+  --color-info-fg: oklch(0.84 0.075 240);
+  --color-info-border: oklch(0.38 0.076 252);
   --color-info-solid: var(--color-info-500);
 
   --color-neutral-soft: var(--color-ink-800);
   --color-neutral-fg: var(--color-ink-300);
   --color-neutral-border: var(--color-ink-700);
-
-  --color-accent-2-soft: oklch(0.3 0.06 300);
-  --color-accent-2-fg: var(--color-brand-100);
-  --color-accent-2-border: oklch(0.4 0.07 300);
 }
 
 /* == 3. TYPOGRAPHY ======================================================== */
 
 @theme {
   --font-sans:
-    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    var(--font-display), var(--font-body), ui-sans-serif, system-ui,
+    sans-serif;
   --font-mono:
-    var(--font-mono-stack), ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    var(--font-data), ui-monospace, SFMono-Regular, "SF Mono", Menlo,
     Consolas, "Liberation Mono", monospace;
 
-  /* Named levels. Deliberately tight tracking on large sizes, relaxed leading
-     on body copy. Nothing above 30px - admin screens are not marketing pages. */
-  --text-display: 1.875rem;
-  --text-display--line-height: 2.25rem;
-  --text-display--letter-spacing: -0.022em;
+  /* Named levels. Display sits on the Unbounded voice; everything else on
+     Hanken Grotesk. Deliberately tight tracking on large sizes, relaxed
+     leading on body copy. */
+  --text-display: 2.5rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--letter-spacing: -0.012em;
 
   --text-title: 1.5rem;
-  --text-title--line-height: 2rem;
-  --text-title--letter-spacing: -0.018em;
+  --text-title--line-height: 1.9rem;
+  --text-title--letter-spacing: -0.01em;
 
   --text-heading: 1.125rem;
   --text-heading--line-height: 1.625rem;
-  --text-heading--letter-spacing: -0.012em;
+  --text-heading--letter-spacing: -0.006em;
 
   --text-subheading: 0.9375rem;
   --text-subheading--line-height: 1.375rem;
-  --text-subheading--letter-spacing: -0.006em;
+  --text-subheading--letter-spacing: -0.003em;
 
   --text-body: 0.875rem;
   --text-body--line-height: 1.5rem;
@@ -278,19 +333,36 @@
 
   --text-micro: 0.6875rem;
   --text-micro--line-height: 1rem;
-  --text-micro--letter-spacing: 0.06em;
+  --text-micro--letter-spacing: 0.08em;
 }
 
 /* == 4. SHAPE, RING, MOTION ============================================== */
 
 @theme {
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  /* A ledger has corners, not bubbles: small, consistent radii instead of
+     the soft admin-dashboard curve. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
 
   /* Shadows carry elevation only, never decoration. */
+  --shadow-xs: 0 1px 2px 0 rgb(6 8 16 / 0.22);
+  --shadow-sm:
+    0 1px 2px -1px rgb(6 8 16 / 0.28), 0 1px 3px 0 rgb(6 8 16 / 0.2);
+  --shadow-md:
+    0 2px 4px -2px rgb(6 8 16 / 0.3), 0 4px 10px -3px rgb(6 8 16 / 0.28);
+  --shadow-lg:
+    0 4px 8px -4px rgb(6 8 16 / 0.34), 0 12px 26px -8px rgb(6 8 16 / 0.4);
+  --shadow-pop:
+    0 1px 2px 0 rgb(6 8 16 / 0.2), 0 8px 24px -6px rgb(6 8 16 / 0.44);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root {
   --shadow-xs: 0 1px 2px 0 rgb(16 18 28 / 0.04);
   --shadow-sm:
     0 1px 2px -1px rgb(16 18 28 / 0.06), 0 1px 3px 0 rgb(16 18 28 / 0.05);
@@ -300,9 +372,6 @@
     0 4px 8px -4px rgb(16 18 28 / 0.08), 0 12px 26px -8px rgb(16 18 28 / 0.12);
   --shadow-pop:
     0 1px 2px 0 rgb(16 18 28 / 0.05), 0 8px 24px -6px rgb(16 18 28 / 0.14);
-
-  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* == BASE ================================================================= */
@@ -361,6 +430,7 @@
   h4 {
     text-wrap: balance;
     color: var(--df-fg);
+    font-family: var(--font-display);
   }
 
   p {
@@ -368,12 +438,13 @@
   }
 
   ::selection {
-    background-color: color-mix(in oklab, var(--df-accent) 22%, transparent);
+    background-color: color-mix(in oklab, var(--df-accent) 32%, transparent);
     color: var(--df-fg);
   }
 
-  /* Numeric data lines up column-to-column. */
+  /* Numeric data lines up column-to-column, in the data face. */
   .tabular {
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
@@ -381,7 +452,7 @@
     cursor: not-allowed;
   }
 
-  /* Consistent, unobtrusive scrollbars. */
+  /* Consistent, unobtrusive scrollbars, tuned to the ledger palette. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--df-border-strong) transparent;
@@ -437,15 +508,38 @@
     list-style: none;
   }
 
-  /* Award/certificate hero band. Both stops come from the semantic accent
-     tokens, so it stays legible when the theme flips. */
+  /* Award/certificate hero band: the ledger's two accents meeting, never a
+     decorative gradient. */
   .bg-award-band {
     background-image: linear-gradient(
-      135deg,
+      120deg,
       var(--df-accent-active) 0%,
-      var(--df-accent) 48%,
-      color-mix(in oklab, var(--df-accent) 55%, var(--color-brand-400)) 100%
+      var(--df-accent) 46%,
+      var(--df-accent2) 100%
     );
+  }
+
+  /* Bracketed label: the dossier motif for a state or identifier. */
+  .df-bracket {
+    position: relative;
+    padding-inline: 0.6em;
+  }
+
+  .df-bracket::before,
+  .df-bracket::after {
+    position: absolute;
+    top: 0;
+    color: var(--df-fg-faint);
+  }
+
+  .df-bracket::before {
+    content: "[";
+    left: 0;
+  }
+
+  .df-bracket::after {
+    content: "]";
+    right: 0;
   }
 
   .disclosure > summary::-webkit-details-marker {

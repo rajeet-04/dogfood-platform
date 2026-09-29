@@ -19,6 +19,28 @@ function idOrEmpty(value: unknown): string {
   return z.string().uuid().safeParse(value).success ? value as string : "";
 }
 
+/**
+ * Cards without a submitted thumbnail still need to read as distinct entries
+ * in a wall of forty — a single flat accent tile reads as one broken image
+ * repeated, not a gallery. Pick a tone deterministically from the project id
+ * so the same project always renders the same tile.
+ */
+const PLACEHOLDER_TONES = [
+  "bg-accent-soft text-accent-soft-fg",
+  "bg-accent2-soft text-accent2-soft-fg",
+  "bg-warning-soft text-warning-fg",
+  "bg-info-soft text-info-fg",
+  "bg-success-soft text-success-fg",
+] as const;
+
+function placeholderTone(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return PLACEHOLDER_TONES[hash % PLACEHOLDER_TONES.length];
+}
+
 export default async function ProjectsPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const params = await searchParams;
   const filters = {
@@ -81,19 +103,33 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
         <>
           <p className="mb-3 text-small text-fg-subtle">{projects.length} project{projects.length === 1 ? "" : "s"}</p>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {projects.map((project, index) => (
               <li key={project.id}>
                 <Link href={`/projects/${project.id}`} className="group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-                  <div className="flex aspect-[16/10] items-center justify-center overflow-hidden bg-accent-soft">
+                  <div
+                    className={`relative flex aspect-[16/10] items-center justify-center overflow-hidden ${
+                      project.thumbnailAssetId ? "bg-surface-sunken" : placeholderTone(project.id)
+                    }`}
+                  >
                     {project.thumbnailAssetId ? (
                       <img src={`/api/v1/assets/${project.thumbnailAssetId}`} alt="" loading="lazy" className="size-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" />
                     ) : (
-                      <span aria-hidden="true" className="px-6 text-center text-2xl font-semibold tracking-tight text-accent-soft-fg">{project.title}</span>
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="tabular absolute top-3 left-3 text-caption opacity-70"
+                        >
+                          P-{String(index + 1).padStart(3, "0")}
+                        </span>
+                        <span aria-hidden="true" className="font-display px-6 text-center text-2xl font-semibold tracking-tight">
+                          {project.title}
+                        </span>
+                      </>
                     )}
                   </div>
                   <div className="flex flex-1 flex-col p-4">
-                    <p className="text-caption text-fg-subtle">{project.eventName}{project.trackName ? ` · ${project.trackName}` : ""}</p>
-                    <h2 className="mt-1.5 text-subheading font-semibold text-fg group-hover:text-accent-hover">{project.title}</h2>
+                    <p className="tabular text-caption text-fg-faint">[{project.eventName}{project.trackName ? ` / ${project.trackName}` : ""}]</p>
+                    <h2 className="font-display mt-1.5 text-subheading font-semibold text-fg group-hover:text-accent-hover">{project.title}</h2>
                     <p className="mt-1 line-clamp-2 flex-1 text-small text-fg-muted">{project.tagline || project.description}</p>
                     <div className="mt-4 flex items-center justify-between gap-2 border-t border-line-subtle pt-3 text-caption text-fg-subtle">
                       <span>{project.teamName}</span>
