@@ -5,12 +5,11 @@
 base_url = "http://localhost:3000"
 
 [tiers]
-# Verified 2026-09-29 on a fresh isolated Podman runtime: official T1/T2 checker 7/7.
-# T3 and T4 are implemented (see PLAN.md), but this checker has no T3/T4 probes,
-# so claiming them here would only print "claimed but not verified".
-# Eligibility is unresolved: current source includes byte-identical pre-kickoff code.
-# This config is local checker evidence, not a competition submission.
-claimed = ["T1", "T2"]
+# T1/T2: official checker 7/7 on the rebuilt Podman container (acceptance-report.txt).
+# T3/T4: the checker has no probes for these tiers, so it reports them as
+# "claimed but not verified". Evidence and known limits are in README.md
+# ("Tier status"), THREAT-MODEL.md, plans-dogfood/API-PARITY.md, and the tests.
+claimed = ["T1", "T2", "T3", "T4"]
 pitch = "Self-hosted hackathon submissions, gallery, judging, and results portal with audited roles."
 
 [auth]

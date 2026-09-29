@@ -134,9 +134,11 @@ responses share the stable envelope in `apps/web/server/errors/map-error.ts`:
 { "error": { "code": "EVALUATION_LOCKED", "message": "...", "requestId": "..." } }
 ```
 
-`openapi.yaml` documents 52 HTTP methods. Several organizer/participant
-workflows still use server actions without equivalent REST operations, so the
-OpenAPI contract is useful but UI/API parity remains partial.
+`openapi.yaml` documents 117 HTTP operations. Every UI Server Action has a REST
+twin calling the same service, and `tests/unit/web/api-parity.test.ts` checks
+Server Action → route mapping, route ↔ OpenAPI parity, and that every domain
+mutation writes an audit event (which queues webhooks). Response bodies still
+use permissive schemas.
 
 ## Security assumptions and handled threats
 

@@ -13,6 +13,31 @@ security), [DATA-MODEL.md](./DATA-MODEL.md) (tables and constraints),
 Rajeet Ash, Deepali Singh, Ayushman Pyne (team of 3). Submitted through the
 DOGFOOD Tally form.
 
+## Tier status
+
+The official checker only probes T1 and T2; T3 and T4 evidence is listed here
+so it can be checked by hand.
+
+- **T1 Core, T2 Judging:** official checker 7/7
+  ([acceptance-report.txt](./acceptance-report.txt)), plus Vitest integration
+  tests and Playwright flows.
+- **T3 Public:** voting with authenticated (default), open-link, or
+  email-invitation access; comments; tallies hidden from all but organizers
+  while voting is open; randomized ballot order; one vote per identity;
+  self-vote denial; per-identity, per-event, and per-network rate limits;
+  server-minted open-link tokens with capped identity minting; duplicate and
+  rate-limit attempts in a readable voting audit log. Not built: the optional
+  quadratic mode. Accepted limits are in [THREAT-MODEL.md](./THREAT-MODEL.md).
+  Tests: `tests/integration/voting.test.ts`, `tests/acceptance/voting.spec.ts`.
+- **T4 Stretch:** REST API with a twin for every UI action and an OpenAPI
+  contract ([openapi.yaml](./openapi.yaml)); signed webhooks for every
+  mutation ([plans-dogfood/WEBHOOKS.md](./plans-dogfood/WEBHOOKS.md));
+  certificates; Ed25519-signed judge participation records with a
+  `/.well-known` key document and a standalone verifier; an embeddable gallery
+  at `/embed/gallery`; JSON/CSV project archive export and import. Parity is
+  enforced by `tests/unit/web/api-parity.test.ts`; limits are in
+  [plans-dogfood/API-PARITY.md](./plans-dogfood/API-PARITY.md).
+
 ## Stack
 
 - **App:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4
