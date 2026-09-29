@@ -83,6 +83,7 @@ export async function removeEventTrack(actor: Actor, eventId: string, trackId: s
     for (const [sortOrder, remaining] of tracks.entries()) {
       await tx.update(schema.eventTracks).set({ sortOrder }).where(eq(schema.eventTracks.id, remaining.id));
     }
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.track.delete", resourceType: "event_track", resourceId: trackId, metadata: { name: track.name } });
   });
 }
 
@@ -153,11 +154,14 @@ export async function moveCustomQuestion(actor: Actor, eventId: string, question
 export async function removeCustomQuestion(actor: Actor, eventId: string, questionId: string): Promise<void> {
   const event = await requireOrganizer(actor, eventId);
   if (!event.customQuestions.some((question) => question.id === questionId)) throw new DogfoodError("NOT_FOUND", "Question not found");
-  await db.update(schema.events).set({
-    customQuestions: event.customQuestions
-      .filter((question) => question.id !== questionId)
-      .sort((a, b) => a.order - b.order)
-      .map((question, order) => ({ ...question, order })),
-    updatedAt: new Date(),
-  }).where(eq(schema.events.id, eventId));
+  await db.transaction(async (tx) => {
+    await tx.update(schema.events).set({
+      customQuestions: event.customQuestions
+        .filter((question) => question.id !== questionId)
+        .sort((a, b) => a.order - b.order)
+        .map((question, order) => ({ ...question, order })),
+      updatedAt: new Date(),
+    }).where(eq(schema.events.id, eventId));
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "event.custom_question.delete", resourceType: "custom_question", resourceId: questionId });
+  });
 }

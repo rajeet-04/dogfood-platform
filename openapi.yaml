@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     HTTP API exposed by this checkout, including /api/v1, operational probes, and
-    the public gallery embed. Session-authenticated operations use the
+    the public gallery embed, and the judge-record trust anchor under /.well-known. Session-authenticated operations use the
     dogfood_session cookie. Error responses use the shared error envelope.
 servers:
   - url: /
@@ -517,6 +517,14 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: deleteEventTrack
+      tags: [Events]
+      summary: Delete an unused track
+      description: Requires event configure permission. Returns 409 when a project revision uses the track; remaining tracks are renumbered.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/tracks/{trackId}/order:
     parameters:
       - { $ref: '#/components/parameters/eventId' }
@@ -584,6 +592,14 @@ paths:
                 prompt: { type: string, minLength: 1, maxLength: 300 }
                 required: { type: boolean }
                 visibility: { type: string, enum: [PUBLIC, ORGANIZER_ONLY] }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: deleteCustomQuestion
+      tags: [Events]
+      summary: Delete a custom submission question
+      description: Requires event configure permission. Remaining questions are renumbered.
       responses:
         '200': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
@@ -1311,6 +1327,14 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/JsonObject' }
         default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: revokeCertificates
+      tags: [Prizes and certificates]
+      summary: Revoke the event's issued certificates
+      description: Requires event configure permission. Returns { revoked } with the number of certificates revoked.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/certificates/{certificateId}:
     parameters:
       - { name: certificateId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1496,6 +1520,229 @@ paths:
         '200': { description: Database and migrations are ready, content: { application/json: { schema: { type: object, required: [status, database, migrations], properties: { status: { const: ready }, database: { const: ok }, migrations: { const: applied } } } } } }
         '503': { description: Database or migrations are unavailable, content: { application/json: { schema: { type: object, required: [status, database], properties: { status: { const: unavailable }, database: { const: unreachable } } } } } }
 
+  /.well-known/dogfood-judge-records.json:
+    get:
+      operationId: getJudgeRecordIssuerKeys
+      tags: [Judging]
+      summary: Published trust anchor for signed judge records
+      description: Public. Returns the issuer origin, the active Ed25519 signing key (SPKI PEM and SHA-256 SPKI fingerprint, or null when signing is not configured), and every trusted signer fingerprint. Verifiers fetch this over HTTPS from the issuer origin (or pin a fingerprint out of band) and check records with scripts/verify-judge-record.ts.
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/auth/sign-out:
+    post:
+      operationId: signOutAccounts
+      tags: [Auth]
+      summary: Revoke one saved account session or all of them
+      description: Revokes sessions server side (unlike logout, which only clears the browser cookie). A token must be the active session or present in the HttpOnly dogfood_accounts list. Updates dogfood_accounts and switches the active session to the next saved account, or clears it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { oneOf: [ { type: object, required: [token], additionalProperties: false, properties: { token: { type: string, minLength: 1 } } }, { type: object, required: [all], additionalProperties: false, properties: { all: { const: true } } } ] }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/notifications/read:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [Events]
+      summary: Mark all of the caller's notifications read
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/notifications/{notificationId}/read:
+    parameters:
+      - { name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: markNotificationRead
+      tags: [Events]
+      summary: Mark one of the caller's notifications read
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-applications:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: getJudgeApplications
+      tags: [Judging]
+      summary: Read the caller's judge application, or all applications for organizers
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: applyAsJudge
+      tags: [Judging]
+      summary: Apply to judge the event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { rationale: { type: string, maxLength: 2000 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: withdrawJudgeApplication
+      tags: [Judging]
+      summary: Withdraw the caller's pending judge application
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judge-applications/{applicationId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: applicationId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: decideJudgeApplication
+      tags: [Judging]
+      summary: Approve or reject a judge application
+      description: Requires organizer permission. Approval grants the JUDGE role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [decision], properties: { decision: { type: string, enum: [approve, reject] } } }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/judges/{userId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deactivateJudge
+      tags: [Judging]
+      summary: Deactivate a judge's event membership
+      description: Requires organizer permission.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/rubrics:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    get:
+      operationId: listRubrics
+      tags: [Judging]
+      summary: List rubric versions and criteria
+      description: Requires organizer permission.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: createRubric
+      tags: [Judging]
+      summary: Create the next rubric version
+      description: Requires event configure permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 120 } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/rubrics/{rubricId}/criteria:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: rubricId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: addRubricCriterion
+      tags: [Judging]
+      summary: Add a weighted criterion to a rubric
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name, weight, minScore, maxScore], properties: { name: { type: string, minLength: 1, maxLength: 120 }, description: { type: string }, weight: { type: number }, minScore: { type: number }, maxScore: { type: number }, optional: { type: boolean } } }
+      responses:
+        '201': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/rubrics/{rubricId}/activate:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: rubricId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: activateRubric
+      tags: [Judging]
+      summary: Make a rubric version the active one
+      description: Requires event configure permission; criterion weights must be valid.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/evaluations/{assignmentId}/start:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: startEvaluation
+      tags: [Judging]
+      summary: Start (or resume) the assigned judge's evaluation
+      description: Only the assigned judge. Idempotent for an evaluation already in progress.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/evaluations/{assignmentId}/reopen:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: reopenEvaluation
+      tags: [Judging]
+      summary: Reopen a submitted evaluation for revision
+      description: Only the assigned judge, while judging is open. Returns 409 unless the evaluation is SUBMITTED; locked evaluations cannot be reopened.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/evaluations/{assignmentId}/lock:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: lockEvaluation
+      tags: [Judging]
+      summary: Lock one submitted evaluation
+      description: Requires event configure permission. Returns 409 unless the evaluation is SUBMITTED.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/bulk/evaluations/lock:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: lockAllEvaluations
+      tags: [Judging]
+      summary: Lock every submitted evaluation in the event
+      description: Requires event configure permission. In-progress evaluations are left untouched. Returns { locked } with the count.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/bulk/projects/lock:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: lockAllProjects
+      tags: [Teams and projects]
+      summary: Lock every submitted project after the submission deadline
+      description: Requires event configure permission. Returns { locked } with the count.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/rankings/{snapshotId}/publish:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: snapshotId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: publishRankingSnapshot
+      tags: [Judging]
+      summary: Publish a score-based ranking snapshot
+      description: Requires organizer permission. Moves the event to RESULTS_READY.
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        default: { $ref: '#/components/responses/ApiError' }
 components:
   securitySchemes:
     sessionCookie:

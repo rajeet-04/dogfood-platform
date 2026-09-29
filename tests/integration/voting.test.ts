@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomBytes } from "node:crypto";
 
 import { createSession, registerUser } from "@dogfood/auth";
 import { createWebhookEndpoint, queryAudit } from "@dogfood/audit";
@@ -91,13 +92,16 @@ describe("authenticated public voting", () => {
     expect(trustedVotingNetworkHash("not-an-ip")).toBeUndefined();
   });
 
-  it("keeps open-link issuance stateless and hashes the browser token on one vote", async () => {
+  it("mints open-link tokens server-side and hashes the browser token on one vote", async () => {
     const { event, organizer, participant, project } = await votingEvent();
     await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
     const issued = await ensureOpenLinkCredential(event.id);
     const issuedAgain = await ensureOpenLinkCredential(event.id, issued.token);
     expect(issuedAgain.token).toBe(issued.token);
-    expect(await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id))).toHaveLength(0);
+    const credentials = await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id));
+    expect(credentials).toHaveLength(1);
+    expect(credentials[0]).toMatchObject({ accessMode: "OPEN_LINK", email: null, createdBy: null });
+    expect(credentials[0].tokenHash).not.toBe(issued.token);
     const ballot = await getVotingBallot(null, event.id, issued.token);
     expect(ballot.accessMode).toBe("OPEN_LINK");
     expect(ballot.hasVoted).toBe(false);
@@ -132,9 +136,9 @@ describe("authenticated public voting", () => {
       .rejects.toMatchObject({ code: "RATE_LIMITED" });
 
     const rows = await db.select().from(schema.votingAbuseRateLimits).where(eq(schema.votingAbuseRateLimits.eventId, event.id));
-    expect(rows.find((row) => row.scope === "NETWORK")?.count).toBe(3);
+    expect(rows.find((row) => row.action === "vote" && row.scope === "NETWORK")?.count).toBe(3);
     // The event bucket counts valid vote attempts, including attempts blocked by a network cap.
-    expect(rows.find((row) => row.scope === "EVENT")?.count).toBe(3);
+    expect(rows.find((row) => row.action === "vote" && row.scope === "EVENT")?.count).toBe(3);
   });
 
   it("caps total event votes even when requests use different trusted networks", async () => {
@@ -152,7 +156,36 @@ describe("authenticated public voting", () => {
     await expect(castVote(null, event.id, project.id, credential.token, { networkHash: "network-new" }))
       .rejects.toMatchObject({ code: "RATE_LIMITED" });
     const rows = await db.select().from(schema.votingAbuseRateLimits).where(eq(schema.votingAbuseRateLimits.eventId, event.id));
-    expect(rows.find((row) => row.scope === "EVENT")?.count).toBe(3);
+    expect(rows.find((row) => row.action === "vote" && row.scope === "EVENT")?.count).toBe(3);
+  });
+
+  it("rejects well-formed open-link tokens the server never minted", async () => {
+    const { event, organizer, project } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const forged = randomBytes(32).toString("base64url");
+    await expect(getVotingBallot(null, event.id, forged)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(castVote(null, event.id, project.id, forged)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    // A forged cookie is replaced with a fresh server-minted token rather than adopted.
+    const reissued = await ensureOpenLinkCredential(event.id, forged);
+    expect(reissued.token).not.toBe(forged);
+    await castVote(null, event.id, project.id, reissued.token);
+    expect(await db.select().from(schema.votes).where(eq(schema.votes.eventId, event.id))).toHaveLength(1);
+  });
+
+  it("caps open-link identity minting per trusted network and audits the first refusal", async () => {
+    vi.stubEnv("DOGFOOD_VOTING_LINK_NETWORK_LIMIT_PER_HOUR", "2");
+    const { event, organizer } = await votingEvent();
+    await updateVotingConfig(organizer, event.id, { accessMode: "OPEN_LINK", opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 60 * 60_000) });
+    const first = await ensureOpenLinkCredential(event.id, undefined, { networkHash: "network-a" });
+    await ensureOpenLinkCredential(event.id, undefined, { networkHash: "network-a" });
+    await expect(ensureOpenLinkCredential(event.id, undefined, { networkHash: "network-a" })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(ensureOpenLinkCredential(event.id, undefined, { networkHash: "network-a" })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    // Returning browsers keep their identity, and other networks are unaffected.
+    expect((await ensureOpenLinkCredential(event.id, first.token, { networkHash: "network-a" })).token).toBe(first.token);
+    await ensureOpenLinkCredential(event.id, undefined, { networkHash: "network-b" });
+    expect(await db.select().from(schema.votingCredentials).where(eq(schema.votingCredentials.eventId, event.id))).toHaveLength(3);
+    const audits = await db.select().from(schema.auditEvents).where(and(eq(schema.auditEvents.eventId, event.id), eq(schema.auditEvents.action, "vote.link.network_rate_limited")));
+    expect(audits).toHaveLength(1);
   });
 
   it("passes the configured reverse-proxy IP into the network voter throttle", async () => {

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 
+import { appendAuditEvent } from "@dogfood/audit";
 import { and, db, eq, or, schema } from "@dogfood/db";
 import type { Actor } from "@dogfood/shared";
 import { DogfoodError } from "@dogfood/validation";
@@ -60,16 +61,26 @@ export async function uploadProjectAsset(actor: Actor, eventId: string, file: Fi
   }
 
   try {
-    const [asset] = await db.insert(schema.assets).values({
-      eventId,
-      uploadedBy: actor.userId,
-      storageKey: stored.path,
-      originalName: stored.name,
-      mimeType: stored.contentType,
-      byteSize: stored.size,
-      sha256: stored.sha256,
-    }).returning();
-    return asset;
+    return await db.transaction(async (tx) => {
+      const [asset] = await tx.insert(schema.assets).values({
+        eventId,
+        uploadedBy: actor.userId,
+        storageKey: stored.path,
+        originalName: stored.name,
+        mimeType: stored.contentType,
+        byteSize: stored.size,
+        sha256: stored.sha256,
+      }).returning();
+      await appendAuditEvent(tx, {
+        eventId,
+        actorId: actor.userId,
+        action: "asset.upload",
+        resourceType: "asset",
+        resourceId: asset.id,
+        metadata: { mimeType: asset.mimeType, byteSize: asset.byteSize, sha256: asset.sha256 },
+      });
+      return asset;
+    });
   } catch (error) {
     await deleteUpload(stored.path);
     throw error;

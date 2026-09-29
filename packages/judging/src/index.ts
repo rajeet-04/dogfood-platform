@@ -33,6 +33,7 @@ export {
   saveEvaluationDraft,
   reopenEvaluation,
   submitEvaluation,
+  lockAllEvaluations,
   lockEvaluation,
   getEvaluation,
   isJudgingClosed,

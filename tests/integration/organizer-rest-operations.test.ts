@@ -11,6 +11,10 @@ import {
   scoreBothJudges,
 } from "../fixtures/ranking-scenario";
 import * as bulkProjectLockRoute from "../../apps/web/app/api/v1/events/[eventId]/bulk/projects/lock/route";
+import * as bulkEvaluationLockRoute from "../../apps/web/app/api/v1/events/[eventId]/bulk/evaluations/lock/route";
+import * as startEvaluationRoute from "../../apps/web/app/api/v1/events/[eventId]/evaluations/[assignmentId]/start/route";
+import * as reopenEvaluationRoute from "../../apps/web/app/api/v1/events/[eventId]/evaluations/[assignmentId]/reopen/route";
+import * as lockEvaluationRoute from "../../apps/web/app/api/v1/events/[eventId]/evaluations/[assignmentId]/lock/route";
 import * as publishRankingRoute from "../../apps/web/app/api/v1/events/[eventId]/rankings/[snapshotId]/publish/route";
 
 const BASE = "http://dogfood.local";
@@ -158,5 +162,72 @@ describe("organizer REST operations", () => {
     expect(unchangedSnapshot.publishedAt).toBeNull();
     expect(event.publishedRankingSnapshotId).toBeNull();
     expect(audits.some((entry) => entry.action === "ranking.publish")).toBe(false);
+  });
+
+  it("runs the evaluation lifecycle over REST and emits webhook-visible audit events", async () => {
+    const scenario = await rankingScenario();
+    const { event, organizer, judgeA, judgeB, projectAId } = scenario;
+    const assignmentId = scenario.assignments[`${judgeA.userId}-${projectAId}`];
+    const judgeCookie = await cookieFor(judgeA.userId);
+    const organizerCookie = await cookieFor(organizer.userId);
+    const path = `/api/v1/events/${event.id}/evaluations/${assignmentId}`;
+    const params = { eventId: event.id, assignmentId };
+
+    const started = await invoke(startEvaluationRoute.POST, request("POST", `${path}/start`, judgeCookie), params);
+    expect(started.response.status).toBe(200);
+    expect(started.body.evaluation.state).toBe("IN_PROGRESS");
+
+    const denied = await invoke(
+      startEvaluationRoute.POST,
+      request("POST", `${path}/start`, await cookieFor(judgeB.userId)),
+      params,
+    );
+    expect(denied.response.status).toBe(403);
+
+    await scoreBothJudges(scenario);
+    const reopened = await invoke(reopenEvaluationRoute.POST, request("POST", `${path}/reopen`, judgeCookie), params);
+    expect(reopened.response.status).toBe(200);
+    expect(reopened.body.evaluation.state).toBe("IN_PROGRESS");
+
+    const judgeLock = await invoke(lockEvaluationRoute.POST, request("POST", `${path}/lock`, judgeCookie), params);
+    expect(judgeLock.response.status).toBe(403);
+    const reopenedLock = await invoke(lockEvaluationRoute.POST, request("POST", `${path}/lock`, organizerCookie), params);
+    expect(reopenedLock.response.status).toBe(409);
+
+    const otherId = scenario.assignments[`${judgeB.userId}-${projectAId}`];
+    const locked = await invoke(
+      lockEvaluationRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/evaluations/${otherId}/lock`, organizerCookie),
+      { eventId: event.id, assignmentId: otherId },
+    );
+    expect(locked.response.status).toBe(200);
+    expect(locked.body.evaluation.state).toBe("LOCKED");
+
+    const bulk = await invoke(
+      bulkEvaluationLockRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/bulk/evaluations/lock`, organizerCookie),
+      { eventId: event.id },
+    );
+    expect(bulk.response.status).toBe(200);
+    // The reopened (in-progress) evaluation is left for the judge to resubmit.
+    expect(bulk.body).toEqual({ locked: 2 });
+    const bulkDenied = await invoke(
+      bulkEvaluationLockRoute.POST,
+      request("POST", `/api/v1/events/${event.id}/bulk/evaluations/lock`, judgeCookie),
+      { eventId: event.id },
+    );
+    expect(bulkDenied.response.status).toBe(403);
+
+    const audits = await db.select({ action: schema.auditEvents.action })
+      .from(schema.auditEvents).where(eq(schema.auditEvents.eventId, event.id));
+    expect(audits.map((entry) => entry.action)).toEqual(expect.arrayContaining([
+      "rubric.create",
+      "rubric.criterion.create",
+      "rubric.activate",
+      "project.create",
+      "evaluation.start",
+      "evaluation.reopen",
+      "evaluation.lock",
+    ]));
   });
 });

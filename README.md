@@ -91,11 +91,15 @@ the address attached to an invitation is not verified. Signed-in members of a
 project's team cannot vote for it in any mode. Votes are unique per account,
 invitation, or open-link token, and writes are rate-limited per identity.
 
-**Anonymous-voting limit:** open-link mode is intentionally public. A client can
-omit/reset the cookie or supply a fresh valid-length token and obtain another
-anonymous identity; there is no IP/global throttle. Per-token limits and
-uniqueness do not stop Sybil ballot stuffing. Email invitation links are bearer
-credentials and can be forwarded. Use authenticated accounts for events that
+**Anonymous-voting limit:** open-link mode is intentionally public. Open-link
+voter tokens are minted and stored (as hashes) by the server, so a client cannot
+invent identities: a forged or unknown cookie is refused and replaced. Minting a
+new identity is capped per event (default 5,000/hour) and, behind a trusted
+proxy, per network prefix (default 200/hour); the first refusal in each window
+is audited. Votes also have event-wide and per-network hourly caps. A client
+that clears its cookie can still get another identity inside those caps, so
+this is volume control, not proof of a unique person. Email invitation links
+are bearer credentials and can be forwarded. Use authenticated accounts for events that
 need stronger voter accountability. Tallies are restricted during active
 judging and before the configured close time, subject to event-state policy.
 
@@ -192,11 +196,17 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
   (a comma-separated list of SHA-256 SPKI fingerprints). Without a configured
   trust pin, responses explicitly report `untrusted-key`; the signature alone
   does not prove who issued it. Key rotation requires an out-of-band trust update.
-- [`openapi.yaml`](./openapi.yaml) documents 87 HTTP operations in this checkout.
-  UI/server-action workflows are not all available through the REST API, so
-  full UI/API parity is not complete.
-- Tracks have organizer and participant UI plus server-action support; there are
-  no standalone versioned REST endpoints for track management.
+  The issuer's active key and pins are published at
+  `/.well-known/dogfood-judge-records.json`, and
+  `bun scripts/verify-judge-record.ts <record-url> [--pin <fingerprint>]`
+  verifies a record independently (see [JUDGING.md](./JUDGING.md)).
+- [`openapi.yaml`](./openapi.yaml) documents 117 HTTP operations. Every UI
+  Server Action has a REST twin, OpenAPI matches the implemented routes
+  exactly, and every domain mutation emits an audit event (and so a webhook);
+  `tests/unit/web/api-parity.test.ts` enforces all three. Response bodies still
+  use permissive schemas, and bulk import creates projects only (no events,
+  teams, or binary assets). See
+  [plans-dogfood/API-PARITY.md](./plans-dogfood/API-PARITY.md).
 - Compose fixture accounts are synthetic, local-only test identities; they
   cannot sign in with passwords and their fixed cookies must never be deployed.
 - The official checker, fixtures, and schema are checked in under

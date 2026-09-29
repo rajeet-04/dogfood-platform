@@ -6,7 +6,8 @@
     "exports":  {
                     ".":  "./src/index.ts",
                     "./public-record-ledger": "./src/public-record-ledger.ts",
-                    "./public-records": "./src/public-records.ts"
+                    "./public-records": "./src/public-records.ts",
+                    "./public-record-ledger-crypto": "./src/public-record-ledger-crypto.ts"
                 },
     "scripts":  {
                     "typecheck":  "tsc --noEmit"

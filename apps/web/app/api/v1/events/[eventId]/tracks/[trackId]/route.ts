@@ -1,4 +1,4 @@
-import { listEventTracks, updateEventTrack } from "@dogfood/events";
+import { listEventTracks, removeEventTrack, updateEventTrack } from "@dogfood/events";
 import { z } from "@dogfood/validation";
 
 import { api, json, readJsonBody, requireApiActor, throwValidation } from "../../../../../../../server/api/http";
@@ -14,5 +14,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ev
     await updateEventTrack(actor, eventId, trackId, parsed.data.name);
     const tracks = await listEventTracks(actor, eventId);
     return json({ track: tracks.find((track) => track.id === trackId) });
+  });
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ eventId: string; trackId: string }> }): Promise<Response> {
+  return api(request, async () => {
+    const { eventId, trackId } = await params;
+    const actor = await requireApiActor(request);
+    await removeEventTrack(actor, eventId, trackId);
+    return json({ deleted: true });
   });
 }

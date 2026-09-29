@@ -1,4 +1,6 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+// Circular with ./service, which is safe: both sides only call each other at runtime.
+import { appendAuditEvent } from "./service";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import https from "node:https";
@@ -165,14 +167,22 @@ export async function createWebhookEndpoint(
     throw new DogfoodError("VALIDATION_FAILED", "Wildcard subscription must be used by itself");
   }
   const secret = randomBytes(32).toString("base64url");
-  const [row] = await db.insert(schema.webhookEndpoints).values({
-    eventId,
-    createdBy: actor.userId,
-    url,
-    secret,
-    eventTypes,
-  }).returning();
-  if (!row) throw new Error("Webhook endpoint insert returned no row");
+  const id = randomUUID();
+  const row = await db.transaction(async (tx) => {
+    // Audit first so existing endpoints hear about the new one, but the new
+    // endpoint is not sent its own creation.
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "webhook.create", resourceType: "webhook_endpoint", resourceId: id, metadata: { url, eventTypes } });
+    const [inserted] = await tx.insert(schema.webhookEndpoints).values({
+      id,
+      eventId,
+      createdBy: actor.userId,
+      url,
+      secret,
+      eventTypes,
+    }).returning();
+    if (!inserted) throw new Error("Webhook endpoint insert returned no row");
+    return inserted;
+  });
   return { endpoint: publicEndpoint(row), signingSecret: secret };
 }
 
@@ -198,20 +208,27 @@ export async function updateWebhookEndpoint(
     .where(and(eq(schema.webhookEndpoints.eventId, eventId), eq(schema.webhookEndpoints.id, endpointId))).limit(1);
   if (!existing) throw new DogfoodError("NOT_FOUND", "Webhook endpoint not found");
   const secret = input.rotateSecret ? randomBytes(32).toString("base64url") : existing.secret;
-  const [row] = await db.update(schema.webhookEndpoints).set({
-    ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
-    ...(input.rotateSecret ? { secret } : {}),
-  }).where(eq(schema.webhookEndpoints.id, endpointId)).returning();
-  if (!row) throw new Error("Webhook endpoint update returned no row");
+  const row = await db.transaction(async (tx) => {
+    const [updated] = await tx.update(schema.webhookEndpoints).set({
+      ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+      ...(input.rotateSecret ? { secret } : {}),
+    }).where(eq(schema.webhookEndpoints.id, endpointId)).returning();
+    if (!updated) throw new Error("Webhook endpoint update returned no row");
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "webhook.update", resourceType: "webhook_endpoint", resourceId: endpointId, metadata: { enabled: updated.enabled, rotatedSecret: Boolean(input.rotateSecret) } });
+    return updated;
+  });
   return { endpoint: publicEndpoint(row), ...(input.rotateSecret ? { signingSecret: secret } : {}) };
 }
 
 export async function deleteWebhookEndpoint(actor: Actor, eventId: string, endpointId: string): Promise<void> {
   await requireOrganizer(actor, eventId);
-  const rows = await db.delete(schema.webhookEndpoints)
-    .where(and(eq(schema.webhookEndpoints.eventId, eventId), eq(schema.webhookEndpoints.id, endpointId)))
-    .returning({ id: schema.webhookEndpoints.id });
-  if (!rows.length) throw new DogfoodError("NOT_FOUND", "Webhook endpoint not found");
+  await db.transaction(async (tx) => {
+    const rows = await tx.delete(schema.webhookEndpoints)
+      .where(and(eq(schema.webhookEndpoints.eventId, eventId), eq(schema.webhookEndpoints.id, endpointId)))
+      .returning({ id: schema.webhookEndpoints.id, url: schema.webhookEndpoints.url });
+    if (!rows.length) throw new DogfoodError("NOT_FOUND", "Webhook endpoint not found");
+    await appendAuditEvent(tx, { eventId, actorId: actor.userId, action: "webhook.delete", resourceType: "webhook_endpoint", resourceId: endpointId, metadata: { url: rows[0].url } });
+  });
 }
 
 export async function queueWebhookDeliveries(

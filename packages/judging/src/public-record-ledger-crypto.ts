@@ -122,3 +122,98 @@ export function publicLedgerRecordIsVisible(record: {
 }): boolean {
   return record.publishedAt !== null && record.revokedAt === null;
 }
+
+export const JUDGE_RECORD_KEYS_PATH = "/.well-known/dogfood-judge-records.json";
+
+export type JudgeRecordIssuerKeys = {
+  version: "dogfood.judge-record-keys.v1";
+  issuer: string;
+  activeKey: { algorithm: "Ed25519"; keyFingerprint: string; publicKey: string } | null;
+  /** Current key plus independently pinned (for example retired) fingerprints. */
+  trustedFingerprints: string[];
+};
+
+/**
+ * The issuer's published trust anchor, served at JUDGE_RECORD_KEYS_PATH on the
+ * deployment's own origin. Verifiers trust a record when its fingerprint is
+ * listed here (fetched over HTTPS from the issuer origin) or pinned locally.
+ */
+export function judgeRecordIssuerKeys(
+  issuer: string,
+  privateKeyPem = process.env.JUDGE_RECORD_SIGNING_PRIVATE_KEY,
+  configuredFingerprints = process.env.JUDGE_RECORD_TRUSTED_KEY_FINGERPRINTS,
+): JudgeRecordIssuerKeys {
+  const activeKey = privateKeyPem
+    ? (() => {
+        const key = createPublicKey(privateKeyPem.replace(/\\n/g, "\n"));
+        return {
+          algorithm: "Ed25519" as const,
+          keyFingerprint: publicKeyFingerprint(key),
+          publicKey: key.export({ type: "spki", format: "pem" }).toString(),
+        };
+      })()
+    : null;
+  const trusted = new Set(
+    (configuredFingerprints ?? "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (activeKey) trusted.add(activeKey.keyFingerprint);
+  return {
+    version: "dogfood.judge-record-keys.v1",
+    issuer,
+    activeKey,
+    trustedFingerprints: [...trusted].sort(),
+  };
+}
+
+export type JudgeRecordVerdict = {
+  status: "valid" | "revoked" | "invalid";
+  signatureValid: boolean;
+  issuerTrusted: boolean;
+  keyFingerprint: string | null;
+  reason?: string;
+};
+
+/**
+ * Checks a `GET /api/v1/judge-records/{id}` response body without trusting the
+ * server that returned it: recomputes the payload hash, verifies the Ed25519
+ * signature, and compares the signer against the caller's trusted fingerprints.
+ */
+export function verifyJudgeRecordResponse(
+  body: unknown,
+  trustedFingerprints: Iterable<string>,
+): JudgeRecordVerdict {
+  const response = body as {
+    status?: string;
+    record?: Record<string, unknown>;
+    revocationReceipt?: Record<string, unknown>;
+  };
+  const revoked = response?.status === "revoked";
+  const signed = revoked ? response.revocationReceipt : response?.record;
+  if (!signed || typeof signed !== "object") {
+    return { status: "invalid", signatureValid: false, issuerTrusted: false, keyFingerprint: null, reason: "No signed record in response" };
+  }
+  const keyFingerprint = typeof signed.keyFingerprint === "string" ? signed.keyFingerprint.toLowerCase() : null;
+  let hashMatches = false;
+  try {
+    hashMatches = createHash("sha256").update(canonicalJson(signed.payload)).digest("hex") === signed.payloadHash;
+  } catch {
+    hashMatches = false;
+  }
+  const signatureValid = hashMatches && verifyLedgerJudgeRecord(signed as unknown as SignedPublicJudgeRecord);
+  const trusted = new Set([...trustedFingerprints].map((entry) => entry.trim().toLowerCase()));
+  const issuerTrusted = keyFingerprint !== null && trusted.has(keyFingerprint);
+  const payload = signed.payload as Record<string, unknown> | undefined;
+  const expectedVersion = revoked
+    ? "dogfood.judge-participation-revocation.v1"
+    : "dogfood.judge-participation.v1";
+  if (!signatureValid || payload?.version !== expectedVersion) {
+    return { status: "invalid", signatureValid: false, issuerTrusted, keyFingerprint, reason: "Signature or payload hash does not verify" };
+  }
+  if (!issuerTrusted) {
+    return { status: "invalid", signatureValid, issuerTrusted, keyFingerprint, reason: "Signer key is not in the trusted fingerprints" };
+  }
+  return { status: revoked ? "revoked" : "valid", signatureValid, issuerTrusted, keyFingerprint };
+}

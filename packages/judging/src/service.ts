@@ -328,11 +328,21 @@ export async function createRubric(
     .orderBy(desc(schema.rubrics.version))
     .limit(1);
 
-  const [created] = await db
-    .insert(schema.rubrics)
-    .values({ eventId, name: input.name, version: (existing[0]?.version ?? 0) + 1 })
-    .returning();
-  return created;
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(schema.rubrics)
+      .values({ eventId, name: input.name, version: (existing[0]?.version ?? 0) + 1 })
+      .returning();
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "rubric.create",
+      resourceType: "rubric",
+      resourceId: created.id,
+      metadata: { name: created.name, version: created.version },
+    });
+    return created;
+  });
 }
 
 export async function addCriterion(
@@ -370,20 +380,30 @@ export async function addCriterion(
     : 0;
   const sortOrder = input.sortOrder ?? nextSort;
 
-  const [created] = await db
-    .insert(schema.rubricCriteria)
-    .values({
-      rubricId: rubric.id,
-      name: input.name,
-      description: input.description ?? null,
-      weight: String(input.weight),
-      minScore: String(input.minScore),
-      maxScore: String(input.maxScore),
-      isOptional: input.optional ?? false,
-      sortOrder,
-    })
-    .returning();
-  return created;
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(schema.rubricCriteria)
+      .values({
+        rubricId: rubric.id,
+        name: input.name,
+        description: input.description ?? null,
+        weight: String(input.weight),
+        minScore: String(input.minScore),
+        maxScore: String(input.maxScore),
+        isOptional: input.optional ?? false,
+        sortOrder,
+      })
+      .returning();
+    await appendAuditEvent(tx, {
+      eventId: rubric.eventId,
+      actorId: actor.userId,
+      action: "rubric.criterion.create",
+      resourceType: "rubric_criterion",
+      resourceId: created.id,
+      metadata: { rubricId: rubric.id, name: created.name, weight: created.weight },
+    });
+    return created;
+  });
 }
 
 export async function activateRubric(
@@ -423,11 +443,20 @@ export async function activateRubric(
       .update(schema.rubrics)
       .set({ active: false })
       .where(eq(schema.rubrics.eventId, eventId));
-    return tx
+    const updated = await tx
       .update(schema.rubrics)
       .set({ active: true })
       .where(eq(schema.rubrics.id, rubric.id))
       .returning();
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "rubric.activate",
+      resourceType: "rubric",
+      resourceId: rubric.id,
+      metadata: { version: rubric.version },
+    });
+    return updated;
   });
   return activated;
 }
@@ -1528,6 +1557,16 @@ export async function saveEvaluationDraft(
         .set({ status: "IN_PROGRESS" })
         .where(eq(schema.judgeAssignments.id, assignment.id));
     }
+    // Scores stay out of the payload: webhook receivers learn that a draft
+    // changed, not what it says.
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "evaluation.draft_save",
+      resourceType: "evaluation",
+      resourceId: evaluation.id,
+      metadata: { assignmentId, reopened: reopening },
+    });
   });
 
   const fresh = await loadEvaluationByAssignment(assignmentId);
@@ -1589,6 +1628,14 @@ export async function reopenEvaluation(
       .update(schema.judgeAssignments)
       .set({ status: "IN_PROGRESS" })
       .where(eq(schema.judgeAssignments.id, assignment.id));
+    await appendAuditEvent(tx, {
+      eventId,
+      actorId: actor.userId,
+      action: "evaluation.reopen",
+      resourceType: "evaluation",
+      resourceId: evaluation.id,
+      metadata: { assignmentId },
+    });
   });
 
   const fresh = await loadEvaluationByAssignment(assignmentId);
@@ -1790,6 +1837,39 @@ export async function lockEvaluation(
     throw new DogfoodError("NOT_FOUND", "Evaluation not found");
   }
   return toEvaluationDetail(fresh, freshAssignment, criteria, scores);
+}
+
+/** Locks every submitted evaluation in the event; returns the count. */
+export async function lockAllEvaluations(
+  actor: Actor,
+  eventId: string,
+): Promise<{ locked: number }> {
+  const event = await loadEvent(eventId);
+  if (!event) throw new DogfoodError("NOT_FOUND", "Event not found");
+  await requireEventPermission(
+    actor,
+    eventId,
+    event.state as EventState,
+    ACTION.EVENT_CONFIGURE,
+  );
+
+  const rows = await db
+    .select({ assignmentId: schema.evaluations.assignmentId })
+    .from(schema.evaluations)
+    .innerJoin(
+      schema.judgeAssignments,
+      eq(schema.judgeAssignments.id, schema.evaluations.assignmentId),
+    )
+    .where(
+      and(
+        eq(schema.judgeAssignments.eventId, eventId),
+        eq(schema.evaluations.state, "SUBMITTED"),
+      ),
+    );
+  for (const row of rows) {
+    await lockEvaluation(actor, eventId, row.assignmentId);
+  }
+  return { locked: rows.length };
 }
 
 export async function getEvaluation(

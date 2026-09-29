@@ -5,6 +5,7 @@ import { resolveSession } from "@dogfood/auth";
 import { resetDb } from "../fixtures/db";
 import * as loginRoute from "../../apps/web/app/api/v1/auth/login/route";
 import * as logoutRoute from "../../apps/web/app/api/v1/auth/logout/route";
+import * as signOutRoute from "../../apps/web/app/api/v1/auth/sign-out/route";
 import * as registerRoute from "../../apps/web/app/api/v1/auth/register/route";
 import * as switchRoute from "../../apps/web/app/api/v1/auth/switch/route";
 
@@ -128,5 +129,34 @@ describe("account authentication REST API", () => {
     const firstAccounts = cookies(first).find((value) => value.startsWith("dogfood_accounts="))?.split(";", 1)[0];
     const denied = await switchRoute.POST(request("POST", "/api/v1/auth/switch", { token: secondToken }, firstAccounts));
     expect(denied.status).toBe(403);
+  });
+
+  it("revokes one saved account or every saved account server side", async () => {
+    const first = await registerRoute.POST(request("POST", "/api/v1/auth/register", {
+      email: "signout-first@example.test", password: "password123", displayName: "First",
+    }));
+    const firstJar = cookieJar(cookies(first));
+    const firstToken = firstJar.match(/(?:^|; )dogfood_session=([^;]+)/)?.[1]!;
+    const second = await registerRoute.POST(request("POST", "/api/v1/auth/register", {
+      email: "signout-second@example.test", password: "password123", displayName: "Second",
+    }, firstJar));
+    const jar = cookieJar(cookies(second), firstJar);
+    const secondToken = jar.match(/(?:^|; )dogfood_session=([^;]+)/)?.[1]!;
+
+    const foreign = await signOutRoute.POST(request("POST", "/api/v1/auth/sign-out", { token: "not-saved" }, jar));
+    expect(foreign.status).toBe(403);
+
+    const one = await signOutRoute.POST(request("POST", "/api/v1/auth/sign-out", { token: secondToken }, jar));
+    expect(one.status).toBe(200);
+    expect(await json(one)).toEqual({ signedOut: 1 });
+    expect(await resolveSession(secondToken)).toBeNull();
+    expect(await resolveSession(firstToken)).not.toBeNull();
+    const afterOne = cookieJar(cookies(one), jar);
+    expect(afterOne).toContain(`dogfood_session=${firstToken}`);
+
+    const all = await signOutRoute.POST(request("POST", "/api/v1/auth/sign-out", { all: true }, afterOne));
+    expect(all.status).toBe(200);
+    expect(await resolveSession(firstToken)).toBeNull();
+    expect(cookies(all).some((value) => value.startsWith("dogfood_session=;") && value.includes("Max-Age=0"))).toBe(true);
   });
 });

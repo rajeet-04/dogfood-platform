@@ -5,6 +5,7 @@ import {
 } from "../../lib/session-cookie";
 import {
   parseAccounts,
+  removeAccount,
   serializeAccounts,
   upsertAccount,
   type SavedAccount,
@@ -70,6 +71,20 @@ export function rememberAccountCookie(
 export function savedAccountTokens(request: Request): Set<string> {
   return new Set(
     parseAccounts(requestCookie(request, ACCOUNTS_COOKIE)).map((item) => item.token),
+  );
+}
+
+export function currentSessionToken(request: Request): string | undefined {
+  return requestCookie(request, SESSION_COOKIE) || undefined;
+}
+
+export function forgetAccountsCookie(request: Request, tokens: Set<string>): string {
+  let saved = parseAccounts(requestCookie(request, ACCOUNTS_COOKIE));
+  for (const token of tokens) saved = removeAccount(saved, token);
+  return cookie(
+    ACCOUNTS_COOKIE,
+    encodeURIComponent(serializeAccounts(saved)),
+    SESSION_MAX_AGE,
   );
 }
 

@@ -213,7 +213,7 @@ assignments table. Judges still read only their own evaluations.
 | Visitor | Denied / denied | Denied | Denied for private assigned work | No unpublished aggregate | Denied |
 | Participant | Denied / denied | Denied | Denied for private assigned work | No unpublished aggregate | Denied |
 | Judge | Own only | Own evaluation only, with assignment and track-scope checks | Denied when scoped outside their tracks; no scope rows means event-wide | No unpublished aggregate | Denied |
-| Organizer | Permitted / permitted | All evaluations only after each is locked (**stricter than site matrix**) | Permitted | Assignment progress while judging; organizer ranking snapshots | Permitted |
+| Organizer | Permitted / permitted | All evaluations at any stage, matching the site matrix | Permitted | Assignment progress while judging; organizer ranking snapshots | Permitted |
 | Platform admin | Permitted / permitted | Permission engine bypass; service-specific checks still apply | Permitted | Permitted | Permitted |
 
 Published results are readable from the results read model after publication;
@@ -230,3 +230,20 @@ Judge A's evaluation. Also request the progress view as an organizer and
 confirm it contains counts/statuses without rubric score values. The official
 runner checks the peer-score denial and organizer CSV response; the
 database-free fixture proof above checks the arithmetic separately.
+
+### Verify a public judge participation record
+
+Published judge records are Ed25519-signed. The issuer publishes its active
+key fingerprint and trust pins at `/.well-known/dogfood-judge-records.json`.
+To check a record without trusting the server's own verdict:
+
+```sh
+bun scripts/verify-judge-record.ts https://<host>/api/v1/judge-records/<recordId>
+# or pin a fingerprint you obtained out of band
+bun scripts/verify-judge-record.ts <record-url> --pin <sha256-spki-fingerprint>
+```
+
+The script recomputes the payload hash, verifies the signature, and checks the
+signing key against the pins. It prints `valid`, `revoked` (a signed
+revocation receipt), or `invalid` with a reason, and exits non-zero when
+invalid.

@@ -254,6 +254,15 @@ export async function createEvent(
         userId: actor.userId,
         role: "ORGANIZER",
       });
+      // Recorded for the audit trail; no webhook endpoint can exist yet.
+      await appendAuditEvent(tx, {
+        eventId: created.id,
+        actorId: actor.userId,
+        action: "event.create",
+        resourceType: "event",
+        resourceId: created.id,
+        metadata: { slug: created.slug, name: created.name },
+      });
 
       return created;
     });
