@@ -1,6 +1,7 @@
 import {
   issueCertificates,
   listCertificates,
+  revokeCertificates,
 } from "@dogfood/certificates";
 
 import { api, json, requireApiActor } from "../../../../../../server/api/http";
@@ -40,5 +41,17 @@ export async function POST(
     return json({ issued: result.issued, snapshotId: result.snapshotId }, {
       status: 201,
     });
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ eventId: string }> },
+): Promise<Response> {
+  return api(request, async () => {
+    const { eventId } = await params;
+    const actor = await requireApiActor(request);
+    const result = await revokeCertificates(actor, eventId);
+    return json({ revoked: result.revoked });
   });
 }
