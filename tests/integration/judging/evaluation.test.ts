@@ -479,7 +479,7 @@ describe("evaluation workflow", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("hides raw evaluation data from organizers until the evaluation is locked", async () => {
+  it("lets organizers read raw evaluation data before and after lock", async () => {
     const { event, organizer, judgeA, assignmentAId } = await scenario();
 
     await startEvaluation(judgeA, event.id, assignmentAId);
@@ -492,9 +492,9 @@ describe("evaluation workflow", () => {
       scores: scoresFor(criteria),
     });
 
-    await expect(
-      getEvaluation(organizer, event.id, assignmentAId),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const submitted = await getEvaluation(organizer, event.id, assignmentAId);
+    expect(submitted.state).toBe("SUBMITTED");
+    expect(submitted.criteria.some((c) => c.score !== null)).toBe(true);
 
     await lockEvaluation(organizer, event.id, assignmentAId);
     const visible = await getEvaluation(organizer, event.id, assignmentAId);

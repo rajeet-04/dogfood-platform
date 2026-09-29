@@ -118,9 +118,10 @@ this is a partial bonus implementation, not an end-to-end pairwise judging mode.
 
 ## Organizer confidentiality
 
-During active judging an organizer sees completion/progress only. Individual
-raw judge scores are withheld until the evaluation is locked (enforced server
-side; organizer `evaluation:read` requires `judgingLocked === true`).
+Following the official role matrix, organizers and platform admins may read
+every judge's raw scores at any stage (`evaluation:read` for `ORGANIZER`).
+Judges can read only their own evaluations; judge-to-judge and cross-track
+reads stay denied server side.
 
 ## API surface
 

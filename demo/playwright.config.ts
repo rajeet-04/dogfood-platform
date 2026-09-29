@@ -1,9 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 const appUrl = process.env.APP_URL ?? "http://localhost:3001";
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
+// The app itself runs from the production container started by run-lifecycle.sh.
+if (!process.env.DATABASE_URL) {
   throw new Error("Set DATABASE_URL through demo/run-lifecycle.sh");
 }
 
@@ -21,20 +20,5 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
     video: { mode: "on", size: { width: 1280, height: 800 } },
     trace: "off",
-  },
-  webServer: {
-    command: "bun run --cwd apps/web dev",
-    cwd: "..",
-    port: 3001,
-    reuseExistingServer: false,
-    timeout: 120_000,
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
-      APP_URL: appUrl,
-      PORT: "3001",
-      DOGFOOD_MODE: "local",
-      DOGFOOD_SEED_FIXTURES: "0",
-    },
   },
 });

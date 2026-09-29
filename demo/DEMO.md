@@ -9,7 +9,9 @@ bash demo/run-lifecycle.sh
 ```
 
 The script starts a uniquely named Podman PostgreSQL container with no volume,
-applies the current migrations to that disposable database, starts the app on
+applies the current migrations to that disposable database, starts the
+production app image (`dogfood-platform-web:latest`, built by
+`podman compose up -d --build`; override with `DEMO_IMAGE`) on
 `127.0.0.1:3001`, and runs the dedicated Playwright journey. It never attaches
 to or removes the normal `dogfood-platform` Compose database or uploads volume.
 Use `DEMO_DB_PORT=55440` if the default demo database port is occupied. The
