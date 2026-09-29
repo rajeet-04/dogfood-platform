@@ -228,11 +228,14 @@ describe("authenticated public voting", () => {
 
   it("blocks a project team member without consuming a vote rate bucket", async () => {
     const { event, organizer, participant, project } = await votingEvent();
-    await expect(castVote(participant, event.id, project.id)).rejects.toMatchObject({ code: "FORBIDDEN", message: "This vote is not allowed" });
+    const attempts = await Promise.all(Array.from({ length: 5 }, () =>
+      castVote(participant, event.id, project.id).catch((error: unknown) => error),
+    ));
+    expect(attempts.every((error) => (error as { code?: string }).code === "FORBIDDEN")).toBe(true);
     const buckets = await db.select().from(schema.votingRateLimits).where(eq(schema.votingRateLimits.eventId, event.id));
     expect(buckets).toHaveLength(0);
     const audit = await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.eventId, event.id));
-    expect(audit.map((row) => row.action)).toContain("vote.self_attempt");
+    expect(audit.filter((row) => row.action === "vote.self_attempt")).toHaveLength(1);
     expect(await votingAuditResponse(organizer, event.id)).not.toContain(project.id);
   });
 
