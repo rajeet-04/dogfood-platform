@@ -290,6 +290,74 @@ paths:
                 properties:
                   event: { $ref: '#/components/schemas/EventSummary' }
         default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/join:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: joinEvent
+      tags: [Events]
+      summary: Join an event as a participant
+      description: Requires an authenticated account and open event registration. Uses the event membership service, including the existing registration window, permission, and audit behavior. Repeating a join for an existing participant is idempotent.
+      responses:
+        '200':
+          description: Participant membership created or already present
+          content:
+            application/json:
+              schema: { type: object, required: [membership], properties: { membership: { $ref: '#/components/schemas/EventMembership' } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/members:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+    post:
+      operationId: addEventMember
+      tags: [Events]
+      summary: Add an event judge or organizer by email
+      description: Requires an authenticated organizer with member-invite permission. Participants join through the event page. Membership grants use the existing service, audit log, and notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddEventMember' }
+      responses:
+        '201':
+          description: Member added or existing membership updated
+          content:
+            application/json:
+              schema: { type: object, required: [membership], properties: { membership: { $ref: '#/components/schemas/EventMembership' } } }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/events/{eventId}/members/{userId}:
+    parameters:
+      - { $ref: '#/components/parameters/eventId' }
+      - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: changeEventMemberRole
+      tags: [Events]
+      summary: Change an event member role
+      description: Requires an authenticated organizer with member-invite permission. Uses the existing membership grant service, including conflict checks, audit logging, and notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangeEventMemberRole' }
+      responses:
+        '200':
+          description: Updated membership
+          content:
+            application/json:
+              schema: { type: object, required: [membership], properties: { membership: { $ref: '#/components/schemas/EventMembership' } } }
+        default: { $ref: '#/components/responses/ApiError' }
+    delete:
+      operationId: removeEventMember
+      tags: [Events]
+      summary: Remove an event member
+      description: Requires an authenticated organizer with member-remove permission. The existing service prevents removal of the last organizer and records the audit event and notification.
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema: { type: object, required: [removed], properties: { removed: { const: true } } }
+        default: { $ref: '#/components/responses/ApiError' }
   /api/v1/gallery:
     get:
       operationId: listGallery
@@ -1456,6 +1524,27 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
   schemas:
+    EventMembership:
+      type: object
+      required: [id, eventId, userId, role, isActive, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        role: { type: string, enum: [ORGANIZER, JUDGE, PARTICIPANT] }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    AddEventMember:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        role: { type: string, enum: [JUDGE, ORGANIZER] }
+    ChangeEventMemberRole:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [ORGANIZER, JUDGE, PARTICIPANT] }
     AuthUser:
       type: object
       required: [id, email, displayName]
