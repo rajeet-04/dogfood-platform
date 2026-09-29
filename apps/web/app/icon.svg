@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <title>DOGFOOD</title>
-  <!-- The wordmark's initial on the brand pink. Favicons render in isolation
-       with no access to the page's webfonts, so the Archivo Black "D" is drawn
-       as a path rather than <text> — otherwise it would silently fall back to
-       whatever heavy sans the viewer happens to have installed.
-       Counter is cut with fill-rule="evenodd". -->
-  <rect width="32" height="32" fill="#FF3D6E"/>
-  <path fill="#0B1020" fill-rule="evenodd"
-        d="M6.5 4.5h9.8c5.9 0 9.7 4.7 9.7 11.5s-3.8 11.5-9.7 11.5H6.5z
-           M14 11v10h2c2.5 0 4-1.9 4-5s-1.5-5-4-5z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><title>DOGFOOD</title><rect width="32" height="32" fill="#FF3D6E"/><path fill="#0B1020" fill-rule="evenodd" d="M6.5 4.5h9.8c5.9 0 9.7 4.7 9.7 11.5s-3.8 11.5-9.7 11.5H6.5z M14 11v10h2c2.5 0 4-1.9 4-5s-1.5-5-4-5z"/></svg>
