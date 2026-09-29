@@ -23,19 +23,23 @@ PLAYWRIGHT_BROWSERS_PATH=/private/tmp/dogfood-lifecycle-browsers bunx playwright
 ```
 
 The test records a browser video at `demo/artifacts/lifecycle.webm` when the
-run succeeds and the recording is at most 25 MB. Playwright's raw run output
+run succeeds and the recording is at most 25 MB. Its 1280×800 capture keeps
+the interface readable. Labeled evidence cards briefly show screenshots from
+the live participant and judge sessions, the real assigned/unassigned judge
+API responses, and the participant's public results view. These are recording
+overlays from the test harness, not product UI. Playwright's raw run output
 stays under the ignored `demo/artifacts/test-results/` directory.
 
 ## Five minute narration
 
 | Time | On screen | Narration |
 | --- | --- | --- |
-| 0:00–0:40 | Organizer creates the event and opens registration. | “The organizer starts an event from the product UI. The event receives its own public page and organizer dashboard.” |
-| 0:40–1:25 | Participant registers, joins, and creates a team. | “A participant joins through the event page, then creates a team while registration is open.” |
-| 1:25–2:10 | Organizer opens submissions; participant creates and submits Harborlight. | “The organizer opens submissions. The participant saves a project revision and submits it for judging.” |
+| 0:00–0:40 | Organizer creates the event and opens registration; a captured form card labels the organizer step. | “The organizer starts an event from the product UI. The event receives its own public page and organizer dashboard.” |
+| 0:40–1:25 | Participant registers, joins, and creates a team; the recording shows a live participant-session capture. | “A participant joins through the event page, then creates a team while registration is open.” |
+| 1:25–2:10 | Organizer opens submissions; participant creates and submits Harborlight, followed by a live-session capture showing SUBMITTED. | “The organizer opens submissions. The participant saves a project revision and submits it for judging.” |
 | 2:10–3:05 | Organizer adds an assigned judge and a second, unassigned judge, advances into judging, creates a rubric, and assigns the project. | “The organizer gives two judges event membership, defines a weighted criterion, and assigns the submitted project to one judge.” |
-| 3:05–3:45 | Assigned judge's raw API request succeeds; unassigned judge's raw API request is denied; assigned judge submits the evaluation. | “Assignment isolation is checked directly against the JSON API: the assigned judge can read the evaluation, while another event judge receives HTTP 403.” |
-| 3:45–5:00 | Organizer locks evaluations, generates the ranking, publishes results, and advances to Published. | “The organizer closes judging, freezes evaluations, builds the ranking snapshot, and publishes the result so participants can see the outcome.” |
+| 3:05–3:45 | Assigned judge's raw API request succeeds; unassigned judge's raw API request is denied, with both actual statuses shown; the judge-session capture confirms submission. | “Assignment isolation is checked directly against the JSON API: the assigned judge can read the evaluation, while another event judge receives HTTP 403.” |
+| 3:45–5:00 | Organizer locks evaluations, generates the ranking, publishes results, and advances to Published; a participant-session capture shows the public result. | “The organizer closes judging, freezes evaluations, builds the ranking snapshot, and publishes the result so participants can see the outcome.” |
 
 ## Seeded state
 

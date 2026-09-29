@@ -18,8 +18,8 @@ export default defineConfig({
   outputDir: "artifacts/test-results",
   use: {
     baseURL: appUrl,
-    viewport: { width: 1365, height: 900 },
-    video: "on",
+    viewport: { width: 1280, height: 800 },
+    video: { mode: "on", size: { width: 1280, height: 800 } },
     trace: "off",
   },
   webServer: {
