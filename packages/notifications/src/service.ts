@@ -164,6 +164,7 @@ export async function markRead(actor: Actor, notificationId: string): Promise<vo
       and(
         eq(schema.notifications.id, notificationId),
         eq(schema.notifications.userId, actor.userId),
+        isNull(schema.notifications.readAt),
       ),
     );
 }
