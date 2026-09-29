@@ -1,6 +1,7 @@
 # DOGFOOD Build Status and Remaining Work
 
-**Status date:** 2026-09-28  
+**Status date:** 2026-09-29
+
 **Official source:** [DOGFOOD requirements crosswalk](plans-dogfood/00-official-requirements.md), based on the event site and published spec.  
 **Event code window:** 2026-09-26 18:00 UTC to 2026-09-29 18:00 UTC.  
 **Purpose:** Track implementation present in this checkout separately from requirements still to complete or verify.
@@ -15,9 +16,19 @@
 - **Officially accepted** requires the published `run.py` report and evidence for advertised features the seven checks do not cover.
 - A checked task box records implementation present in this checkout only. It does not establish event eligibility, full local verification, or official acceptance; those statuses are stated separately.
 
-## Current local verification checkpoint — 2026-09-28
+## Current local verification checkpoint — 2026-09-29
 
-The last fully passing pre-embed code checkpoint passed the full Vitest suite and affected-package typechecks. Its fresh `final-local` production image build and isolated Podman runtime/checker smoke also passed, including the 7/7 official checker. These image results predate the embed widget and in-progress bulk route; full browser acceptance below predates signed judge records and pairwise comparison collection.
+The current source passed the full Vitest suite, focused package typechecks, a fresh production image build, an isolated Podman runtime smoke, and the official T1/T2 checker. The unresolved raw-score policy proposal was kept out of the source used for this checkpoint. Historical checks below are retained as context and may predate current code.
+
+- `bun run test` — 58 files, 340 tests passed.
+- `bun run --filter @dogfood/db typecheck`, `@dogfood/judging`, `@dogfood/web`, and `@dogfood/exports` — all passed.
+- `podman build -t localhost/dogfood-platform:current .` — passed, including Next.js production compilation and TypeScript.
+- Fresh internal-network Podman runtime with a disposable PostgreSQL database — migrations applied, `/api/ready` returned 200/ready, and the public gallery returned 200 with the official `Glass Signal` fixture.
+- Official `plans-dogfood/official/run.py` — 7/7 T1/T2 checks passed against that isolated runtime using a temporary config with only `portal.base_url` pointed at the internal app alias; output refreshed in [`acceptance-report.txt`](acceptance-report.txt).
+- `bunx vitest run tests/integration/public-judge-record-ledger.test.ts tests/unit/public-judge-record-ledger-crypto.test.ts` — 7/7 passed.
+- Full browser acceptance and the responsive visual sweep passed on an earlier source revision; rerun them after the latest UI/API changes before treating them as current evidence.
+
+### Historical verification before the current-source checkpoint
 
 - `bunx vitest run` — 51 files, 315 tests passed on the combined post-merge run.
 - `podman build -t localhost/dogfood-platform:final-local .` — passed, including Next.js production compilation and TypeScript.
@@ -108,12 +119,12 @@ The previous report records 65/65 unit checks, 71/71 integration checks, 3/3 Pla
 
 ### P5 — Stretch tiers and bonuses, only after P1–P4 are green
 
-- [~] **T3 Public (partial):** authenticated-account voting is the default; open-link and email-invitation access are also implemented, along with comments, randomized order, per-identity uniqueness, project-team self-vote denial for signed-in voters, configurable event-wide and opt-in trusted-network attempt caps, audit records, and tally privacy. Anonymous identities remain replaceable: open-link callers can omit/reset cookies or fabricate a fresh token, and distributed sources can evade network caps; invitation email ownership is unverified and links are manually shared. These controls reduce burst volume but do not prevent Sybil ballot stuffing. No quadratic voting.
-- [~] **T4 Stretch (partial):** certificate issuance, signed public judge participation records, a responsive iframe gallery, organizer JSON/CSV project archive export plus create-only import, and event webhooks exist. Judge records are still derived per request rather than persisted as immutable issuance/revocation artifacts. Archive import requires existing same-event teams, tracks, and image assets; it does not import events, teams, or binary assets. Webhooks deliver subscribed audit events with signed HTTPS requests and bounded retries, but not every UI action emits an audit event.
+- [~] **T3 Public (partial):** authenticated-account voting is the default; open-link and email-invitation access are also implemented, along with comments, randomized order, per-identity uniqueness, project-team self-vote denial for signed-in voters, configurable event-wide and opt-in trusted-network attempt caps, audit records, and tally privacy. Repeated rate-limit denials are deduplicated per hashed limiter identity/action/window to prevent audit and webhook amplification. Anonymous identities remain replaceable: open-link callers can omit/reset cookies or fabricate a fresh 43-character token, and distributed sources can evade network caps; invitation email ownership is unverified and links are manually shared. These controls reduce burst volume but do not prevent Sybil ballot stuffing. No quadratic voting.
+- [~] **T4 Stretch (partial):** certificate issuance, an immutable judge-record issuance/reissue/revocation ledger with signed public revocation receipts, a responsive iframe gallery, organizer JSON/CSV project archive export plus create-only import, and event webhooks exist. Signatures are cryptographically checked and responses report issuer trust only when a deployment pins the signer's SHA-256 SPKI fingerprint through `JUDGE_RECORD_TRUSTED_KEY_FINGERPRINTS`; no independently published official trust anchor or key-rotation authorization is configured or confirmed yet. Archive import requires existing same-event teams, tracks, and image assets; it does not import events, teams, or binary assets, and imports are rejected after judging starts to protect published ranking state. Webhooks deliver subscribed audit events with signed HTTPS requests and bounded retries, but not every UI action emits an audit event.
 - [x] **Normalization Proof (+5 tie-break):** `JUDGING.md` documents the raw/normalized fixture comparison, rank movement, method, sensitivity/limits, and the database-free reproducible proof script.
-- [~] **Pairwise Mode (+5 tie-break):** the tested Bradley–Terry-style estimator and organizer endpoint now accept explicit comparisons or persisted judge choices. Judges have a UI and authenticated API for assigned, track-scoped comparisons; each pair stores the judge's latest winner. The calculation does not publish or persist a ranking snapshot, so the bonus remains partial.
+- [~] **Pairwise Mode (+5 tie-break):** the tested Bradley–Terry-style estimator and organizer endpoint accept explicit comparisons or persisted judge choices. Judges have a UI and authenticated API for assigned, track-scoped comparisons; organizers can persist drafts and publish snapshots, and the public results route reads the latest publication. Per-event serialization keeps concurrent publication from forking the supersession chain. The bonus remains partial until organizer mode selection and the no-mixing-with-rubric policy are fully specified and independently verified.
 - [x] **Threat Model (+3 tie-break):** `THREAT-MODEL.md` records code-backed mitigations and accepted submission/voting/judging risks, including anonymous ballot stuffing.
-- [~] **API First (+3 tie-break):** `openapi.yaml` documents 70 HTTP operations and a parity audit exists. Event lifecycle transitions, registration-window edits, project revision/submission/withdrawal/individual locking, and webhook management/dispatch now have REST routes; many account, team-membership, event-setup, judge-administration, and read-side workflows still remain outside REST, so full UI/API parity is incomplete.
+- [~] **API First (+3 tie-break):** `openapi.yaml` documents 87 HTTP operations across 65 route modules and a parity audit exists. Event lifecycle transitions, registration-window edits, project revision/submission/withdrawal/individual locking, team membership, event tracks/custom questions, signed judge-record issue/reissue/revoke and verification, and webhook management/dispatch have REST routes; many account, judge-administration, and read-side workflows still remain outside REST, so full UI/API parity is incomplete.
 - [ ] Do not add bonuses to the weighted 1–5 score. These bonuses break ties only; they also help decide the $100 Best Judging Engine prize.
 
 ## Official scoring and awards reference
@@ -141,3 +152,4 @@ Main prizes: 1st $800, 2nd $500, 3rd $350, 4th $200, 5th $150, Best Judging Engi
 - 2026-09-28: Added voting event-wide and opt-in HMAC network-prefix hourly attempt caps; 20/20 voting integration tests and focused DB/voting/web typechecks passed. Anonymous voting remains Sybil-vulnerable; caps are volumetric controls only.
 - 2026-09-28: Added organizer event lifecycle and registration-window REST mutations using the existing permission, validation, audit, and notification services; event detail now returns registration windows. OpenAPI covers 61 operations; API First remains partial.
 - 2026-09-29: Documented project revision, submit, withdraw, and individual lock routes, plus organizer webhook configuration/dispatch and the bulk-import audit delivery. OpenAPI covers 70 operations; project bulk lock and full UI/API parity remain open.
+- 2026-09-29: Added track/custom-question and team REST actions, persisted pairwise ranking snapshots and serialized publication, durable judge-record issuance/reissue/revocation with signed status receipts and explicit trust pins, vote rate-limit audit deduplication, and a post-judging bulk-import guard. OpenAPI/API parity now covers 87 operations; UI/API parity, T3/T4 completion, the organizer score-policy decision, the reviewed demo, and competition eligibility remain open. Current verification: 58/340 Vitest, four package typechecks, fresh Podman build/runtime, and official T1/T2 checker 7/7 passed.
