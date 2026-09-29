@@ -170,15 +170,24 @@ Module boundaries are frozen in `specs/` and `phases/` of the planning pack; pur
 - Normalization offers `z-score` and `none` strategies only (per-judge batch).
 - Pairwise judging now has a judge UI, authenticated assigned-project comparison
   API, persisted latest choices, and an organizer calculation endpoint using
-  either those choices or explicit comparisons. The calculation does not create
-  a ranking snapshot, so pairwise results remain a separate partial capability.
-- Signed public judge participation records are available from
-  `GET /api/v1/events/:eventId/judge-records` after results are published. Set
-  `JUDGE_RECORD_SIGNING_PRIVATE_KEY` to an Ed25519 PKCS#8 PEM. Records are derived
-  from the current database state on request, not persisted as immutable issue or
-  revocation records; save a signed payload separately if you need a long-lived
-  proof artifact. An unset key returns 503.
-- [`openapi.yaml`](./openapi.yaml) documents 61 HTTP operations in this checkout.
+  either those choices or explicit comparisons. Organizers can create persisted
+  snapshots, review drafts, and publish a snapshot; publication is serialized
+  per event and the public results endpoint serves the latest published result.
+- Public judge participation records are issued as immutable signed ledger rows
+  after results are published. Organizers use
+  `POST /api/v1/events/:eventId/judge-records` with `issue`, `reissue`, or
+  `revoke`; `reissue` revokes and links the prior issuance. Event reads list only
+  published, non-revoked records. `GET /api/v1/judge-records/:recordId` verifies
+  active payloads and returns a signed revocation receipt with HTTP 410 after
+  revocation, without disclosing the revoked payload. Issuance and revocation
+  require `JUDGE_RECORD_SIGNING_PRIVATE_KEY` as an Ed25519 PKCS#8 PEM.
+- Clients can check signature integrity from the record's public key and
+  `keyFingerprint`. Issuer identity is trusted only when the fingerprint matches
+  an independently provisioned entry in `JUDGE_RECORD_TRUSTED_KEY_FINGERPRINTS`
+  (a comma-separated list of SHA-256 SPKI fingerprints). Without a configured
+  trust pin, responses explicitly report `untrusted-key`; the signature alone
+  does not prove who issued it. Key rotation requires an out-of-band trust update.
+- [`openapi.yaml`](./openapi.yaml) documents 87 HTTP operations in this checkout.
   UI/server-action workflows are not all available through the REST API, so
   full UI/API parity is not complete.
 - Tracks have organizer and participant UI plus server-action support; there are

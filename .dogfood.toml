@@ -5,7 +5,7 @@
 base_url = "http://localhost:3000"
 
 [tiers]
-# Verified locally on the current combined image: official T1/T2 checker 7/7.
+# Verified 2026-09-29 on a fresh isolated Podman runtime: official T1/T2 checker 7/7.
 # T3 and T4 remain partial; do not add them to claimed until complete.
 # Eligibility is unresolved: current source includes byte-identical pre-kickoff code.
 # This config is local checker evidence, not a competition submission.

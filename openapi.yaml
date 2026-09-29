@@ -779,26 +779,89 @@ paths:
     get:
       operationId: listPublicJudgeRecords
       tags: [Judging]
-      summary: Read signed public judge participation records
-      description: Public records are available after the event is published or archived and a ranking snapshot exists. Requires JUDGE_RECORD_SIGNING_PRIVATE_KEY containing an Ed25519 PKCS#8 PEM. Records are derived at request time; signatures remain verifiable for saved payloads, but this is not a persisted issuance or revocation ledger. The response contains no scores, comments, project identifiers, or track assignments.
+      summary: List published judge participation records
+      description: Publicly reads immutable issued records for this event. Each record reports signature validity separately from issuer trust. Issuer trust requires its SHA-256 SPKI fingerprint to match the deployment's JUDGE_RECORD_TRUSTED_KEY_FINGERPRINTS.
       security: []
       responses:
         '200':
-          description: Signed Ed25519 participation records
+          description: Published signed Ed25519 participation records
           content:
             application/json:
               schema:
                 type: object
-                required: [algorithm, keyId, publicKey, records]
+                required: [records]
                 properties:
-                  algorithm: { const: Ed25519 }
-                  keyId: { type: string, minLength: 24, maxLength: 24 }
-                  publicKey: { type: string, description: PEM-encoded Ed25519 SubjectPublicKeyInfo key }
                   records:
                     type: array
                     items: { $ref: '#/components/schemas/SignedJudgeRecord' }
+        default: { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: managePublicJudgeRecords
+      tags: [Judging]
+      summary: Issue, reissue, or revoke judge participation records
+      description: Requires an authenticated event organizer and JUDGE_RECORD_SIGNING_PRIVATE_KEY containing an Ed25519 PKCS#8 PEM. Reissue creates a linked immutable issuance and signed revocation receipt for its predecessor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [action]
+                  properties:
+                    action: { const: issue }
+                - type: object
+                  required: [action, judgeId]
+                  properties:
+                    action: { const: reissue }
+                    judgeId: { type: string, format: uuid }
+                - type: object
+                  required: [action, recordId, reason]
+                  properties:
+                    action: { const: revoke }
+                    recordId: { type: string, format: uuid }
+                    reason: { type: string, minLength: 3, maxLength: 500 }
+      responses:
+        '200': { $ref: '#/components/responses/JsonObject' }
+        '201': { $ref: '#/components/responses/JsonObject' }
+        '403': { $ref: '#/components/responses/ApiError' }
         '404': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
         '503': { description: Judge record signing is not configured }
+        default: { $ref: '#/components/responses/ApiError' }
+  /api/v1/judge-records/{recordId}:
+    parameters:
+      - { name: recordId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: verifyPublicJudgeParticipationRecord
+      tags: [Judging]
+      summary: Check a public judge record's current status
+      description: Publicly verifies the stored signature and reports issuer trust against the deployment's independent fingerprint pins. A revoked record returns its signed revocation receipt without the original payload.
+      security: []
+      responses:
+        '200':
+          description: Active signed record and current issuer trust status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, record, trustStatus]
+                properties:
+                  status: { const: published }
+                  record: { $ref: '#/components/schemas/SignedJudgeRecord' }
+                  trustStatus: { type: string, enum: [trusted, untrusted-key] }
+        '410':
+          description: Record was revoked; includes a signed receipt without the revoked payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, revocationReceipt, trustStatus]
+                properties:
+                  status: { const: revoked }
+                  revocationReceipt: { $ref: '#/components/schemas/SignedJudgeRecordRevocationReceipt' }
+                  trustStatus: { type: string, enum: [trusted, untrusted-key] }
+        '404': { $ref: '#/components/responses/ApiError' }
         default: { $ref: '#/components/responses/ApiError' }
   /api/v1/events/{eventId}/pairwise-ranking:
     parameters:
@@ -1360,8 +1423,9 @@ components:
         maxTeamSize: { type: [integer, 'null'], minimum: 2, maximum: 100 }
     SignedJudgeRecord:
       type: object
-      required: [payload, signature]
+      required: [id, payload, algorithm, keyFingerprint, publicKey, signature, payloadHash, issuedAt, signatureValid, issuerTrusted]
       properties:
+        id: { type: string, format: uuid }
         payload:
           type: object
           required: [version, recordId, eventSlug, eventName, judgeDisplayName, lockedEvaluations, firstLockedAt, lastLockedAt]
@@ -1374,7 +1438,35 @@ components:
             lockedEvaluations: { type: integer, minimum: 1 }
             firstLockedAt: { type: string, format: date-time }
             lastLockedAt: { type: string, format: date-time }
-        signature: { type: string, contentEncoding: base64url, description: Ed25519 signature over UTF-8 JSON.stringify(payload) }
+        algorithm: { const: Ed25519 }
+        keyFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: SHA-256 fingerprint of the SPKI public key }
+        publicKey: { type: string, description: PEM-encoded Ed25519 SubjectPublicKeyInfo key }
+        signature: { type: string, contentEncoding: base64url, description: Ed25519 signature over the canonical JSON payload }
+        payloadHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        issuedAt: { type: string, format: date-time }
+        signatureValid: { type: boolean, const: true }
+        issuerTrusted: { type: boolean, description: True only when keyFingerprint matches a deployment trust pin }
+    SignedJudgeRecordRevocationReceipt:
+      type: object
+      required: [payload, payloadHash, algorithm, keyFingerprint, publicKey, signature, revokedAt, signatureValid, issuerTrusted]
+      properties:
+        payload:
+          type: object
+          required: [version, recordId, eventSlug, status, revokedAt]
+          properties:
+            version: { const: dogfood.judge-participation-revocation.v1 }
+            recordId: { type: string, format: uuid }
+            eventSlug: { type: string }
+            status: { const: revoked }
+            revokedAt: { type: string, format: date-time }
+        payloadHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        algorithm: { const: Ed25519 }
+        keyFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        publicKey: { type: string, description: PEM-encoded Ed25519 SubjectPublicKeyInfo key }
+        signature: { type: string, contentEncoding: base64url, description: Ed25519 signature over the canonical JSON payload }
+        revokedAt: { type: string, format: date-time }
+        signatureValid: { type: boolean, const: true }
+        issuerTrusted: { type: boolean }
     PairwiseChoice:
       type: object
       required: [winnerProjectId, loserProjectId]

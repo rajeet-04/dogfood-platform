@@ -1,7 +1,7 @@
 # API inventory and UI/API parity audit
 
 **Audited:** 2026-09-29 against the route handlers and Server Actions in this checkout.
-**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 64 application route modules (61 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 85 implemented HTTP operations.
+**Contract:** [`../openapi.yaml`](../openapi.yaml) documents all 65 application route modules (62 under `/api/v1`, plus `/api/health`, `/api/ready`, and the HTML `/embed/gallery` widget) and all 87 implemented HTTP operations.
 
 ## What has an HTTP API
 
@@ -26,7 +26,7 @@ Some page navigation and form flows are therefore server-rendered or Server Acti
 
 `PUT /api/v1/events/{eventId}` now replaces the organizer-managed detail fields (description, website, prize information, timeline, schedule, rules, and maximum team size). The request requires every field so omission cannot silently clear a saved value; nullable fields accept `null` to clear. It requires a session and the existing event configure permission, runs the same service normalization and audit path as the UI action, and returns the updated detail fields. `POST /api/v1/events/{eventId}/transition` and `PUT /api/v1/events/{eventId}/registration-window` now reuse the lifecycle and settings services; detail reads include registration windows. Both mutations require organizer permissions and retain the service's transition validation, audit, and notification behavior. Track and custom-question management and other gaps above remain open.
 
-Pairwise judging now has authenticated judge `GET`/`POST /api/v1/events/{eventId}/pairwise-comparisons` for assigned, track-scoped projects and persisted latest pair choices. Organizer ranking calculation can use these stored choices when explicit comparisons are omitted. The signed public judge-record route is also in the inventory; it requires a configured Ed25519 key and derives records per request rather than maintaining an issuance/revocation ledger. These additions do not close the other API First gaps.
+Pairwise judging now has authenticated judge `GET`/`POST /api/v1/events/{eventId}/pairwise-comparisons` for assigned, track-scoped projects and persisted latest pair choices. Organizers can create and publish persisted ranking snapshots, and the public results route returns the latest published snapshot. Publication serializes per event to keep supersession links linear. Public judge participation records use an immutable issue/reissue/revoke ledger; direct verification returns signature validity separately from issuer trust and publishes a signed revocation receipt without the revoked payload. Issuer identity is trusted only when an independent deployment fingerprint pin matches. These additions do not close the other API First gaps.
 
 Project participants can `PATCH /api/v1/events/{eventId}/projects/{projectId}` to create a revision using an expected-current-revision guard, then `POST` to the `/submit` or `/withdraw` subroutes. Organizers can `POST` to `/lock` for one project; there is no bulk-lock API. These handlers call the submission domain services so team ownership, deadlines, completeness, and audit behavior stay shared with the UI.
 
