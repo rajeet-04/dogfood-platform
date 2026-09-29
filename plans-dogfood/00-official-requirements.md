@@ -35,7 +35,7 @@ Permissions are backend rules, not UI hiding. The site marks `+` as permitted an
 | Organizer | + | + | + | + | + |
 | Admin | + | + | + | + | + |
 
-This published matrix is the reason the existing organizer raw-score lock policy is called out as an open conflict below.
+The implementation follows this matrix (see the resolution note below).
 
 ## Main judging score
 
@@ -147,6 +147,6 @@ The intended first-place adoption is a fork that Raptors self-hosts for its even
 | Scoring, tie-break bonuses, cash awards | This document; `00-event-brief.md` | Keep product tiers distinct from award places; disclose scores and prizes in team planning. |
 | Rules, official fixtures/checker, submission artifacts | Phase 0 and Phase 8 | Compare official files, then record exact results in `acceptance-report.txt`. |
 
-**Open conflict to resolve in Phase 0:** the event site's role matrix permits organizers to see score/peer-score, other-track, aggregate, and audit data, while the pre-event architecture currently hides raw scores from organizers until judging is locked. The published seven-check suite does not test organizer score timing. Confirm the intended interpretation before claiming exact compliance; preserve peer-judge isolation regardless.
+**Resolved 2026-09-29:** the implementation follows the official role matrix. Organizers and admins can read raw per-judge scores at any stage; judges still see only their own scores, enforced in the backend. The earlier pre-event plan to hide raw scores from organizers until locking was dropped.
 
 **Eligibility issue to resolve before competition submission:** the current repository history includes implementation artifacts dated before the Sep 26 kickoff (the local acceptance report cites a Sep 25 commit). The event rules prohibit pre-window project code. Verify provenance and use only eligible in-window code for a DOGFOOD submission; do not assume that code present in the current checkout qualifies.
