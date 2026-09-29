@@ -408,9 +408,13 @@ async function rejectProjectTeamVote(actor: Actor, eventId: string, projectId: s
       eq(schema.projects.id, projectId), eq(schema.projects.eventId, eventId),
     )).limit(1);
   if (!membership) return;
-  await db.transaction((tx) => appendAuditEvent(tx, {
+  const now = new Date();
+  const windowStart = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
+  await appendRateLimitAuditOnce({
     eventId, actorId: null, action: "vote.self_attempt", resourceType: "vote",
-  }));
+    identity: `actor:${actor.userId}`, windowStart,
+    metadata: { scope: "ACCOUNT", windowStart: windowStart.toISOString() },
+  });
   throw new DogfoodError("FORBIDDEN", "This vote is not allowed");
 }
 
