@@ -138,6 +138,7 @@
       "name": "@dogfood/exports",
       "version": "0.1.0",
       "dependencies": {
+        "@dogfood/audit": "workspace:*",
         "@dogfood/db": "workspace:*",
         "@dogfood/permissions": "workspace:*",
         "@dogfood/shared": "workspace:*",
@@ -282,6 +283,7 @@
     "@dogfood/shared": ["@dogfood/shared@workspace:packages/shared"],
 
     "@dogfood/submissions": ["@dogfood/submissions@workspace:packages/submissions"],
+
     "@dogfood/teams": ["@dogfood/teams@workspace:packages/teams"],
 
     "@dogfood/validation": ["@dogfood/validation@workspace:packages/validation"],

@@ -1,6 +1,7 @@
 import {
   and,
   db,
+  desc,
   eq,
   inArray,
   schema,
@@ -320,9 +321,16 @@ export async function createRubric(
     ACTION.EVENT_CONFIGURE,
   );
 
+  const existing = await db
+    .select({ version: schema.rubrics.version })
+    .from(schema.rubrics)
+    .where(eq(schema.rubrics.eventId, eventId))
+    .orderBy(desc(schema.rubrics.version))
+    .limit(1);
+
   const [created] = await db
     .insert(schema.rubrics)
-    .values({ eventId, name: input.name, version: 1 })
+    .values({ eventId, name: input.name, version: (existing[0]?.version ?? 0) + 1 })
     .returning();
   return created;
 }
